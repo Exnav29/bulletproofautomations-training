@@ -18,3 +18,5 @@ build/
 *.pfx
 secrets.*
 local-secrets.*
+
+supabase/.temp/

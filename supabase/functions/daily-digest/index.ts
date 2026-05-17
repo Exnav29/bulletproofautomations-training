@@ -1,8 +1,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+const SUPABASE_URL = Deno.env.get('PROJECT_URL')
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SERVICE_ROLE_KEY')
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 const OWNER_EMAIL = Deno.env.get('OWNER_EMAIL')
 const FROM_EMAIL = Deno.env.get('FROM_EMAIL')
@@ -36,7 +36,7 @@ function rowsForBreakdown(items: Record<string, number>) {
 serve(async () => {
   try {
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required')
+      throw new Error('PROJECT_URL and SERVICE_ROLE_KEY are required')
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)

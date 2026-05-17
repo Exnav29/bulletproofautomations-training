@@ -42,8 +42,8 @@ Verify `bulletproofautomations.com` in Resend and configure the DNS records Rese
 
 Set these in Supabase for the functions:
 
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
+- `PROJECT_URL`
+- `SERVICE_ROLE_KEY`
 - `RESEND_API_KEY`
 - `FROM_EMAIL`
 - `OWNER_EMAIL`
@@ -84,6 +84,8 @@ Add repository secrets:
 
 - `SUPABASE_DAILY_DIGEST_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
+
+These GitHub Actions secret names can keep the `SUPABASE_` prefix. The reserved-prefix restriction applies to Supabase Edge Function custom secrets, where this project uses `PROJECT_URL` and `SERVICE_ROLE_KEY`.
 
 ## 13. Manually trigger the daily digest
 
