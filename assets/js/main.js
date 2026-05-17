@@ -8,8 +8,8 @@
 // Replace these with your public Supabase frontend values.
 // These are safe for browser use. Never put service role keys or API secrets here.
 // ============================================
-const SUPABASE_URL = 'https://YOUR_PROJECT_REF.supabase.co';
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_PUBLIC_KEY';
+const SUPABASE_URL = 'https://ftqcexzwppcozpyjwfqh.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ0cWNleHp3cHBjb3pweWp3ZnFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwMjU3MzgsImV4cCI6MjA5NDYwMTczOH0.Jj-eu6XMcPfAgZ91kSTpAYs1zlQNM95HvgdXgEoBR2w';
 
 let supabaseClient = null;
 
