@@ -1,0 +1,20 @@
+name: Daily Waitlist Digest
+
+on:
+  schedule:
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+jobs:
+  send-digest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Supabase daily digest function
+        run: |
+          curl -X POST "$SUPABASE_DAILY_DIGEST_URL" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -d '{}'
+        env:
+          SUPABASE_DAILY_DIGEST_URL: ${{ secrets.SUPABASE_DAILY_DIGEST_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

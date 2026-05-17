@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bulletproof Automations Training — Practical Training for Automation Builders</title>
+    <meta name="description" content="Practical workshops for automation builders who want to build, test, price, document, and deliver workflows that work beyond the demo.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/css/style.css">
+    <style>
+        .hero-home {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            padding-top: 100px;
+            position: relative;
+            overflow: hidden;
+        }
+        .hero-home::before {
+            content: '';
+            position: absolute;
+            top: -30%; right: -20%;
+            width: 600px; height: 600px;
+            background: radial-gradient(circle, rgba(212, 175, 55, 0.06) 0%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+        .hero-home::after {
+            content: '';
+            position: absolute;
+            bottom: -20%; left: -10%;
+            width: 500px; height: 500px;
+            background: radial-gradient(circle, rgba(45, 138, 78, 0.04) 0%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+        .hero-home .container { position: relative; z-index: 2; }
+        .hero-home h1 {
+            font-size: clamp(2.2rem, 5.5vw, 3.8rem);
+            max-width: 800px;
+            margin-bottom: 24px;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--gold-light) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .hero-home p.subtitle {
+            font-size: clamp(1.05rem, 2vw, 1.25rem);
+            color: var(--text-secondary);
+            max-width: 640px;
+            margin-bottom: 36px;
+            line-height: 1.6;
+        }
+        .hero-cta-group {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .positioning {
+            background: var(--bg-card);
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+        }
+        .positioning-box {
+            max-width: 800px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        .positioning-box p {
+            font-size: 1.15rem;
+            color: var(--text-secondary);
+            line-height: 1.7;
+        }
+        .workshops { background: var(--bg-card); }
+        .workshop-card {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 32px;
+            transition: var(--transition);
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        .workshop-card:hover {
+            border-color: var(--border-strong);
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-md);
+        }
+        .workshop-card .badge { margin-bottom: 16px; align-self: flex-start; }
+        .workshop-card h3 {
+            font-size: 1.3rem;
+            margin-bottom: 12px;
+        }
+        .workshop-card p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            line-height: 1.5;
+            flex-grow: 1;
+            margin-bottom: 20px;
+        }
+        .workshop-card .btn { align-self: flex-start; }
+        .workshop-card.coming-soon {
+            opacity: 0.7;
+        }
+        .workshop-card.coming-soon:hover {
+            opacity: 0.85;
+        }
+        .final-cta-home {
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .final-cta-home::before {
+            content: '';
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 700px; height: 700px;
+            background: radial-gradient(circle, rgba(212, 175, 55, 0.05) 0%, transparent 60%);
+            pointer-events: none;
+        }
+        .final-cta-home h2 {
+            font-size: clamp(1.8rem, 4vw, 2.6rem);
+            margin-bottom: 16px;
+            position: relative;
+            z-index: 2;
+        }
+        .final-cta-home p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            max-width: 560px;
+            margin: 0 auto 32px;
+            position: relative;
+            z-index: 2;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="site-header">
+    <div class="container">
+        <a href="/" class="brand">
+            <div class="brand-icon">⚡</div>
+            <span>Bulletproof Automations</span>
+        </a>
+        <nav class="nav-links">
+            <a href="/">Home</a>
+            <a href="/price-by-value">Workshops</a>
+            <a href="/price-by-value#waitlist">Join Waitlist</a>
+            <a href="https://bulletproofautomations.com">Main Site</a>
+        </nav>
+        <a href="/price-by-value#waitlist" class="btn btn-primary nav-cta">Join Waitlist</a>
+        <button class="mobile-menu-btn" aria-label="Menu">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+        </button>
+    </div>
+    <div class="mobile-nav">
+        <a href="/">Home</a>
+        <a href="/price-by-value">Workshops</a>
+        <a href="/price-by-value#waitlist">Join Waitlist</a>
+        <a href="https://bulletproofautomations.com">Main Site</a>
+    </div>
+</header>
+
+<!-- Hero -->
+<section class="hero-home">
+    <div class="container">
+        <div class="badge badge-gold animate-in" style="margin-bottom:20px;">
+            <span style="width:8px;height:8px;background:var(--green-light);border-radius:50%;animation:pulse 2s infinite;"></span>
+            <span>Training Hub for Automation Builders</span>
+        </div>
+        <h1 class="animate-in delay-1">Training for Builders Who Want Their Automations to Survive Real Clients.</h1>
+        <p class="subtitle animate-in delay-2">Practical workshops for automation builders who want to build, test, price, document, and deliver workflows that work beyond the demo.</p>
+        <div class="hero-cta-group animate-in delay-3">
+            <a href="/price-by-value" class="btn btn-primary btn-large">View Featured Workshop</a>
+            <a href="/price-by-value#waitlist" class="btn btn-secondary btn-large">Join the Waitlist</a>
+        </div>
+    </div>
+</section>
+
+<!-- Positioning -->
+<section class="positioning">
+    <div class="container">
+        <div class="positioning-box reveal">
+            <p>Bulletproof Automations Training helps automation builders move beyond impressive demos and start building business-ready workflows. The focus is practical: <strong style="color:var(--text-primary);">pricing, testing, documentation, delivery, client handoff, and production readiness.</strong></p>
+        </div>
+    </div>
+</section>
+
+<!-- Workshops -->
+<section class="workshops" id="workshops">
+    <div class="container">
+        <div class="section-header reveal">
+            <h2>Current and Upcoming Trainings</h2>
+            <p>Hands-on workshops designed for builders who want real-world skills.</p>
+        </div>
+        <div class="grid-3">
+            <!-- Featured -->
+            <div class="workshop-card card-featured reveal">
+                <span class="badge badge-gold">Featured Workshop</span>
+                <h3>Price by Value</h3>
+                <p>How to stop undercharging for AI automations and price workflows based on the business outcomes they create.</p>
+                <a href="/price-by-value" class="btn btn-primary">View Workshop</a>
+            </div>
+            <!-- Coming Soon 1 -->
+            <div class="workshop-card coming-soon reveal">
+                <span class="badge badge-blue">Coming Soon</span>
+                <h3>Bulletproof Workflow QA</h3>
+                <p>How to test workflows before client delivery so they survive messy data, API failures, bad inputs, and real-world business chaos.</p>
+                <button class="btn btn-secondary" disabled style="opacity:0.5;cursor:not-allowed;">Coming Soon</button>
+            </div>
+            <!-- Coming Soon 2 -->
+            <div class="workshop-card coming-soon reveal">
+                <span class="badge badge-blue">Coming Soon</span>
+                <h3>Workflow Documentation for Client Handoffs</h3>
+                <p>How to document automations so clients, teams, and future maintainers can actually understand and use them.</p>
+                <button class="btn btn-secondary" disabled style="opacity:0.5;cursor:not-allowed;">Coming Soon</button>
+            </div>
+            <!-- Coming Soon 3 -->
+            <div class="workshop-card coming-soon reveal">
+                <span class="badge badge-blue">Coming Soon</span>
+                <h3>n8n Production Readiness</h3>
+                <p>How to prepare workflows for monitoring, error handling, retries, credentials, maintenance, and real-world deployment.</p>
+                <button class="btn btn-secondary" disabled style="opacity:0.5;cursor:not-allowed;">Coming Soon</button>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Final CTA -->
+<section class="final-cta-home">
+    <div class="container">
+        <h2 class="reveal">Start With the Training That Helps Builders Make More Money.</h2>
+        <p class="reveal">The first featured workshop teaches builders how to price AI automations based on business value, not hours worked.</p>
+        <a href="/price-by-value" class="btn btn-primary btn-large reveal">Join the Price by Value Waitlist</a>
+    </div>
+</section>
+
+<!-- Footer -->
+<footer class="site-footer">
+    <div class="container">
+        <p><span class="accent">Bulletproof Automations Training</span> — Practical training for automation builders.</p>
+    </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/main.js"></script>
+</body>
+</html>

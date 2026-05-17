@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Price by Value — Stop Undercharging for AI Automations | Bulletproof Automations Training</title>
+    <meta name="description" content="Ghana-focused workshop for AI automation builders. Learn how to price n8n and AI workflows based on business value, not hours worked.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <style>
+        .hero-workshop {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            padding-top: 100px;
+            position: relative;
+            overflow: hidden;
+        }
+        .hero-workshop::before {
+            content: '';
+            position: absolute;
+            top: -40%; right: -15%;
+            width: 600px; height: 600px;
+            background: radial-gradient(circle, rgba(212, 175, 55, 0.07) 0%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+        .hero-workshop::after {
+            content: '';
+            position: absolute;
+            bottom: -25%; left: -15%;
+            width: 500px; height: 500px;
+            background: radial-gradient(circle, rgba(45, 138, 78, 0.05) 0%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+        .hero-workshop .container { position: relative; z-index: 2; }
+        .hero-workshop h1 {
+            font-size: clamp(2.4rem, 6vw, 4rem);
+            max-width: 780px;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--gold-light) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .hero-workshop .subtitle {
+            font-size: clamp(1.05rem, 2vw, 1.25rem);
+            color: var(--text-secondary);
+            max-width: 620px;
+            margin-bottom: 28px;
+            line-height: 1.6;
+        }
+        .hero-proof {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            margin-bottom: 32px;
+            position: relative;
+            max-width: 640px;
+        }
+        .hero-proof::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--gold), var(--green-light));
+            border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+        }
+        .hero-proof p {
+            font-size: 1.05rem;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+        .hero-proof strong { color: var(--gold-light); font-style: normal; }
+        .hero-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 32px;
+        }
+        .hero-meta span {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: 100px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+        .hero-cta-group {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+        .hero-urgency {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+        .hero-urgency svg { color: var(--red-light); flex-shrink: 0; }
+
+        /* Problem Section */
+        .problem { background: var(--bg-card); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+        .problem-grid { max-width: 900px; margin: 0 auto; }
+        .problem-card h3 { font-size: 1.2rem; margin-bottom: 10px; color: var(--gold-light); }
+        .problem-card p { color: var(--text-secondary); font-size: 0.95rem; }
+        .problem-highlight { text-align: center; max-width: 800px; margin: 40px auto 0; }
+        .problem-highlight p { font-size: 1.2rem; font-weight: 600; color: var(--text-primary); }
+
+        /* Learn Section */
+        .learn { background: var(--bg-card); border-top: 1px solid var(--border); }
+        .learn-card .icon {
+            width: 48px; height: 48px;
+            background: linear-gradient(135deg, rgba(212,175,55,0.12), rgba(45,138,78,0.1));
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            margin-bottom: 18px;
+            font-size: 1.4rem;
+        }
+        .learn-card h3 { font-size: 1.05rem; margin-bottom: 10px; }
+        .learn-card p { font-size: 0.92rem; color: var(--text-secondary); line-height: 1.5; }
+
+        /* Ghana Section */
+        .ghana-card .icon { font-size: 1.6rem; margin-bottom: 10px; }
+        .ghana-card h4 { font-size: 0.95rem; margin-bottom: 6px; }
+        .ghana-card p { font-size: 0.88rem; color: var(--text-secondary); }
+
+        /* Format Section */
+        .format { background: var(--bg-card); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+        .format-highlight { text-align: center; max-width: 700px; margin: 36px auto 0; }
+        .format-highlight p { font-size: 1.1rem; font-weight: 600; color: var(--gold-light); }
+
+        /* Audience */
+        .audience-card { text-align: center; padding: 24px; }
+        .audience-card .icon { font-size: 1.8rem; margin-bottom: 10px; }
+        .audience-card h4 { font-size: 0.95rem; }
+        .audience-note { text-align: center; max-width: 700px; margin: 36px auto 0; }
+        .audience-note p { color: var(--red-light); font-weight: 600; }
+
+        /* FOMO */
+        .fomo { background: linear-gradient(135deg, rgba(212,175,55,0.04), rgba(45,138,78,0.03)); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+        .fomo-card { text-align: center; padding: 28px; }
+        .fomo-card .icon { font-size: 1.8rem; margin-bottom: 10px; }
+        .fomo-card h4 { font-size: 1rem; margin-bottom: 6px; }
+        .fomo-card p { font-size: 0.88rem; color: var(--text-secondary); }
+        .fomo-urgency { text-align: center; max-width: 700px; margin: 36px auto 0; }
+        .fomo-urgency p { font-size: 1.05rem; color: var(--red-light); font-weight: 600; }
+
+        /* Form Section */
+        .form-section { background: var(--bg-card); }
+        .form-container {
+            max-width: 720px;
+            margin: 0 auto;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 40px 28px;
+            position: relative;
+        }
+        @media (min-width: 640px) {
+            .form-container { padding: 48px; }
+        }
+        .form-container::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--gold), var(--green-light), var(--gold));
+            border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+        }
+
+        /* Final CTA */
+        .final-cta {
+            text-align: center;
+            padding: 100px 0;
+            position: relative;
+            overflow: hidden;
+        }
+        .final-cta::before {
+            content: '';
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 700px; height: 700px;
+            background: radial-gradient(circle, rgba(212, 175, 55, 0.05) 0%, transparent 60%);
+            pointer-events: none;
+        }
+        .final-cta h2 {
+            font-size: clamp(1.8rem, 4.5vw, 3rem);
+            margin-bottom: 16px;
+            position: relative; z-index: 2;
+        }
+        .final-cta p {
+            font-size: 1.15rem;
+            color: var(--text-secondary);
+            max-width: 560px;
+            margin: 0 auto 36px;
+            position: relative; z-index: 2;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="site-header">
+    <div class="container">
+        <a href="/" class="brand">
+            <div class="brand-icon">⚡</div>
+            <span>Bulletproof Automations</span>
+        </a>
+        <nav class="nav-links">
+            <a href="/">Home</a>
+            <a href="/price-by-value">Workshops</a>
+            <a href="#waitlist">Join Waitlist</a>
+            <a href="https://bulletproofautomations.com">Main Site</a>
+        </nav>
+        <a href="#waitlist" class="btn btn-primary nav-cta">Join Waitlist</a>
+        <button class="mobile-menu-btn" aria-label="Menu">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+        </button>
+    </div>
+    <div class="mobile-nav">
+        <a href="/">Home</a>
+        <a href="/price-by-value">Workshops</a>
+        <a href="#waitlist">Join Waitlist</a>
+        <a href="https://bulletproofautomations.com">Main Site</a>
+    </div>
+</header>
+
+<!-- Hero -->
+<section class="hero-workshop">
+    <div class="container">
+        <div class="badge badge-gold animate-in" style="margin-bottom:20px;">
+            <span style="width:8px;height:8px;background:var(--green-light);border-radius:50%;animation:pulse 2s infinite;"></span>
+            <span>Ghana Workshop — First Cohort Coming Soon</span>
+        </div>
+        <h1 class="animate-in delay-1">Stop Undercharging for AI Automations.</h1>
+        <p class="subtitle animate-in delay-2">Learn how to price n8n and AI workflows based on business value — not the number of hours you spent building them.</p>
+        <div class="hero-proof animate-in delay-3">
+            <p>"I recently sold an AI automation to a company in Britain for <strong>€5,000</strong> — not because it took hundreds of hours, but because it solved a real business problem."</p>
+        </div>
+        <div class="hero-meta animate-in delay-3">
+            <span>📍 Ghana</span>
+            <span>⏱️ 4 Hours</span>
+            <span>👥 In-Person</span>
+            <span>🎤 Hands-On</span>
+            <span>🔒 Limited Seats</span>
+        </div>
+        <div class="hero-cta-group animate-in delay-4">
+            <a href="#waitlist" class="btn btn-primary btn-large">Join the Waitlist</a>
+            <a href="#waitlist" class="btn btn-secondary btn-large">Reserve Early Access</a>
+        </div>
+        <div class="hero-urgency animate-in delay-4">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <span>First cohort seats will be limited so participants can get hands-on pricing practice and feedback.</span>
+        </div>
+    </div>
+</section>
+
+<!-- Problem -->
+<section class="problem" id="problem">
+    <div class="container">
+        <div class="section-header reveal">
+            <h2>Most Builders Are Pricing Themselves Too Low.</h2>
+            <p>Many automation builders charge based on hours, tool complexity, or what they think clients can afford. But clients do not pay for nodes, prompts, APIs, or workflows. They pay for outcomes.</p>
+        </div>
+        <div class="grid-2 problem-grid">
+            <div class="card problem-card reveal">
+                <h3>⏱️ Time Saved</h3>
+                <p>Your automation eliminates repetitive manual work. That time has real monetary value to the business.</p>
+            </div>
+            <div class="card problem-card reveal">
+                <h3>🚀 Leads Followed Up Faster</h3>
+                <p>Faster response times mean more conversions. Speed is money in sales.</p>
+            </div>
+            <div class="card problem-card reveal">
+                <h3>✅ Errors Reduced</h3>
+                <p>Fewer mistakes mean fewer costly corrections, refunds, and reputation damage.</p>
+            </div>
+            <div class="card problem-card reveal">
+                <h3>💰 Revenue Protected</h3>
+                <p>Automated follow-ups and reminders catch opportunities before they slip away.</p>
+            </div>
+            <div class="card problem-card reveal">
+                <h3>👥 Staff Capacity Increased</h3>
+                <p>Your automation lets teams focus on high-value work instead of admin tasks.</p>
+            </div>
+            <div class="card problem-card reveal">
+                <h3>⭐ Better Customer Experience</h3>
+                <p>Consistent, instant responses build trust and loyalty with customers.</p>
+            </div>
+            <div class="card problem-card reveal">
+                <h3>🧹 Cleaner Operations</h3>
+                <p>Well-built workflows reduce chaos and create predictable business processes.</p>
+            </div>
+            <div class="card problem-card reveal">
+                <h3>🤚 Less Manual Follow-Up</h3>
+                <p>Stop relying on memory and sticky notes. Automations handle it consistently.</p>
+            </div>
+        </div>
+        <div class="highlight-box highlight-box-red problem-highlight reveal">
+            <p>"If your automation saves a business thousands, why are you charging like you only sold them a spreadsheet trick?"</p>
+        </div>
+    </div>
+</section>
+
+<!-- Mindset Shift -->
+<section id="mindset">
+    <div class="container">
+        <div class="section-header reveal">
+            <h2>You Are Not Selling a Workflow. You Are Selling a Business Outcome.</h2>
+        </div>
+        <div class="comparison">
+            <div class="comparison-card comparison-old reveal">
+                <div class="comparison-label">Old Way</div>
+                <p>"I built this in <strong>6 hours</strong>, so I'll charge for <strong>6 hours</strong>."</p>
+            </div>
+            <div class="comparison-card comparison-new reveal">
+                <div class="comparison-label">Better Way</div>
+                <p>"This workflow saves the business <strong>30 hours per month</strong>, reduces missed follow-ups, and protects revenue. <strong>That is what I am pricing.</strong>"</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- What You'll Learn -->
+<section class="learn" id="learn">
+    <div class="container">
+        <div class="section-header reveal">
+            <h2>What You'll Learn in the Workshop</h2>
+        </div>
+        <div class="grid-3">
+            <div class="card learn-card reveal">
+                <div class="icon">📊</div>
+                <h3>Value-Based Pricing</h3>
+                <p>How to calculate the business value of an automation before quoting.</p>
+            </div>
+            <div class="card learn-card reveal">
+                <div class="icon">❓</div>
+                <h3>Discovery Before Pricing</h3>
+                <p>How to ask the right questions before giving a price.</p>
+            </div>
+            <div class="card learn-card reveal">
+                <div class="icon">🏗️</div>
+                <h3>Pricing Tiers</h3>
+                <p>How to separate simple builds, business process automations, and managed AI systems.</p>
+            </div>
+            <div class="card learn-card reveal">
+                <div class="icon">💳</div>
+                <h3>Setup Fees and Monthly Support</h3>
+                <p>How to price both the initial build and ongoing maintenance.</p>
+            </div>
+            <div class="card learn-card reveal">
+                <div class="icon">💪</div>
+                <h3>Quote Confidence</h3>
+                <p>How to explain your price without apologizing.</p>
+            </div>
+            <div class="card learn-card reveal">
+                <div class="icon">🛡️</div>
+                <h3>Objection Handling</h3>
+                <p>How to respond when clients say "That's too expensive" or "My nephew can do this."</p>
+            </div>
+            <div class="card learn-card reveal">
+                <div class="icon">🇬🇭</div>
+                <h3>Real Ghana Examples</h3>
+                <p>How to apply the framework to Ghanaian SMEs, schools, churches, agencies, real estate businesses, and service companies.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Ghana Context -->
+<section id="ghana">
+    <div class="container">
+        <div class="section-header reveal">
+            <h2>Built for the Ghana Market.</h2>
+            <p>This workshop is designed for builders working in the Ghanaian business environment. It uses realistic Ghana pricing examples, local business scenarios, and practical conversations builders are likely to face with SMEs, schools, churches, real estate businesses, agencies, and service companies.</p>
+        </div>
+        <div class="grid-3 ghana-examples">
+            <div class="card ghana-card reveal">
+                <div class="icon">🏠</div>
+                <h4>Real Estate Lead Follow-Up</h4>
+                <p>Auto-respond to inquiries, schedule viewings, and nurture leads until they convert.</p>
+            </div>
+            <div class="card ghana-card reveal">
+                <div class="icon">🎓</div>
+                <h4>School Admissions System</h4>
+                <p>Automate inquiry responses, application tracking, and parent communication.</p>
+            </div>
+            <div class="card ghana-card reveal">
+                <div class="icon">🧾</div>
+                <h4>Invoice Reminder Workflow</h4>
+                <p>Send scheduled payment reminders and follow-ups to reduce late payments.</p>
+            </div>
+            <div class="card ghana-card reveal">
+                <div class="icon">🤝</div>
+                <h4>Customer Onboarding</h4>
+                <p>Guide new clients through welcome sequences, document collection, and setup.</p>
+            </div>
+            <div class="card ghana-card reveal">
+                <div class="icon">🤖</div>
+                <h4>AI Internal Assistant</h4>
+                <p>Build AI-powered assistants that handle FAQs, data lookup, and staff support.</p>
+            </div>
+            <div class="card ghana-card reveal">
+                <div class="icon">💬</div>
+                <h4>WhatsApp Inquiry Routing</h4>
+                <p>Route and respond to WhatsApp business inquiries automatically.</p>
+            </div>
+            <div class="card ghana-card reveal">
+                <div class="icon">📈</div>
+                <h4>Weekly Reporting Workflows</h4>
+                <p>Auto-generate and send reports to stakeholders every week.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Workshop Format -->
+<section class="format" id="format">
+    <div class="container">
+        <div class="section-header reveal">
+            <h2>This Will Be Practical, Not Just Theory.</h2>
+        </div>
+        <div class="grid-4">
+            <div class="checklist-item reveal">
+                <div class="check">✓</div>
+                <p><strong>4-hour</strong> interactive workshop</p>
+            </div>
+            <div class="checklist-item reveal">
+                <div class="check">✓</div>
+                <p>Worked pricing examples</p>
+            </div>
+            <div class="checklist-item reveal">
+                <div class="check">✓</div>
+                <p>Discovery worksheet</p>
+            </div>
+            <div class="checklist-item reveal">
+                <div class="check">✓</div>
+                <p>Pricing calculator worksheet</p>
+            </div>
+            <div class="checklist-item reveal">
+                <div class="check">✓</div>
+                <p>Objection-handling scripts</p>
+            </div>
+            <div class="checklist-item reveal">
+                <div class="check">✓</div>
+                <p>Live pricing practice</p>
+            </div>
+            <div class="checklist-item reveal">
+                <div class="check">✓</div>
+                <p>Realistic Ghana market pricing ranges</p>
+            </div>
+            <div class="checklist-item reveal">
+                <div class="check">✓</div>
+                <p>Optional VIP pricing review</p>
+            </div>
+        </div>
+        <div class="highlight-box format-highlight reveal">
+            <p>"You will practice saying real prices out loud — because confidence is part of the skill."</p>
+        </div>
+    </div>
+</section>
+
+<!-- Who Is It For -->
+<section id="who">
+    <div class="container">
+        <div class="section-header reveal">
+            <h2>Who Should Join?</h2>
+        </div>
+        <div class="grid-4">
+            <div class="card audience-card reveal">
+                <div class="icon">🔗</div>
+                <h4>n8n Builders</h4>
+            </div>
+            <div class="card audience-card reveal">
+                <div class="icon">🤖</div>
+                <h4>AI Automation Builders</h4>
+            </div>
+            <div class="card audience-card reveal">
+                <div class="icon">👤</div>
+                <h4>Freelancers</h4>
+            </div>
+            <div class="card audience-card reveal">
+                <div class="icon">💼</div>
+                <h4>Consultants</h4>
+            </div>
+            <div class="card audience-card reveal">
+                <div class="icon">🏢</div>
+                <h4>Agency Owners</h4>
+            </div>
+            <div class="card audience-card reveal">
+                <div class="icon">💻</div>
+                <h4>Tech Professionals</h4>
+            </div>
+            <div class="card audience-card reveal">
+                <div class="icon">🚀</div>
+                <h4>Solopreneurs</h4>
+            </div>
+            <div class="card audience-card reveal">
+                <div class="icon">❓</div>
+                <h4>Builders Who Undercharge</h4>
+            </div>
+        </div>
+        <div class="highlight-box highlight-box-red audience-note reveal">
+            <p>"This is not for people looking for cheap shortcuts. It is for builders who want to charge properly and deliver real value."</p>
+        </div>
+    </div>
+</section>
+
+<!-- FOMO -->
+<section class="fomo" id="fomo">
+    <div class="container">
+        <div class="section-header reveal">
+            <h2>Founding Waitlist Benefits</h2>
+            <p>Early waitlist members will get first access when registration opens.</p>
+        </div>
+        <div class="grid-3">
+            <div class="card fomo-card reveal">
+                <div class="icon">🔑</div>
+                <h4>First Access to Registration</h4>
+                <p>Be the first to know when registration opens and secure your spot.</p>
+            </div>
+            <div class="card fomo-card reveal">
+                <div class="icon">🐦</div>
+                <h4>Early-Bird Pricing</h4>
+                <p>Special pricing exclusively for founding waitlist members.</p>
+            </div>
+            <div class="card fomo-card reveal">
+                <div class="icon">📊</div>
+                <h4>Bonus Pricing Calculator</h4>
+                <p>Get the advanced pricing calculator worksheet as a free bonus.</p>
+            </div>
+            <div class="card fomo-card reveal">
+                <div class="icon">⭐</div>
+                <h4>Priority VIP Review Seats</h4>
+                <p>First pick for limited VIP pricing review sessions.</p>
+            </div>
+            <div class="card fomo-card reveal">
+                <div class="icon">🔔</div>
+                <h4>First Cohort Notification</h4>
+                <p>Instant alert when the first cohort opens for registration.</p>
+            </div>
+        </div>
+        <div class="highlight-box highlight-box-red fomo-urgency reveal">
+            <p>"The first cohort will be intentionally limited so participants can actually practice, ask questions, and get feedback. This is not a sit-and-watch webinar."</p>
+        </div>
+    </div>
+</section>
+
+<!-- Waitlist Form -->
+<section class="form-section" id="waitlist">
+    <div class="container">
+        <div class="section-header reveal">
+            <h2>Get Early Access Before Public Registration Opens</h2>
+            <p>Join the waitlist and be first to hear when registration opens.</p>
+        </div>
+        <div class="form-container reveal">
+            <form id="waitlistForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="fullname">Full Name <span class="required">*</span></label>
+                        <input type="text" id="fullname" name="fullname" placeholder="Your full name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="email">Email Address <span class="required">*</span></label>
+                        <input type="email" id="email" name="email" placeholder="your@email.com" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="whatsapp">WhatsApp Number <span class="required">*</span></label>
+                        <input type="tel" id="whatsapp" name="whatsapp" placeholder="+233 XX XXX XXXX" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="location">Location / City <span class="required">*</span></label>
+                        <input type="text" id="location" name="location" placeholder="e.g. Accra, Kumasi, Takoradi" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="experience">Experience Level <span class="required">*</span></label>
+                        <select id="experience" name="experience" required>
+                            <option value="">Select your level</option>
+                            <option value="Beginner">Beginner</option>
+                            <option value="Intermediate">Intermediate</option>
+                            <option value="Advanced">Advanced</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="build">What do you currently build? <span class="required">*</span></label>
+                        <select id="build" name="build" required>
+                            <option value="">Select an option</option>
+                            <option value="n8n workflows">n8n workflows</option>
+                            <option value="AI automations">AI automations</option>
+                            <option value="Websites/apps">Websites / Apps</option>
+                            <option value="Business systems">Business systems</option>
+                            <option value="Just learning">Just learning</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="challenge">Biggest pricing challenge <span class="required">*</span></label>
+                    <textarea id="challenge" name="challenge" placeholder="What makes pricing automation work difficult for you right now?" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Would you be interested in VIP pricing review? <span class="required">*</span></label>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="vip" value="Yes" required>
+                            <span>Yes</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="vip" value="Maybe">
+                            <span>Maybe</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="vip" value="No">
+                            <span>No</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="price_range">What price range would you realistically consider paying? <span class="required">*</span></label>
+                    <select id="price_range" name="price_range" required>
+                        <option value="">Select a range</option>
+                        <option value="Under GHS 250">Under GHS 250</option>
+                        <option value="GHS 250–500">GHS 250 – 500</option>
+                        <option value="GHS 500–750">GHS 500 – 750</option>
+                        <option value="GHS 750–1,200">GHS 750 – 1,200</option>
+                        <option value="GHS 1,200+ for VIP support">GHS 1,200+ for VIP support</option>
+                    </select>
+                </div>
+                <input type="hidden" id="source" name="source" value="">
+                <input type="hidden" id="workshop_slug" name="workshop_slug" value="price-by-value">
+                <button type="submit" class="btn btn-primary btn-large form-submit">Join the Waitlist</button>
+            </form>
+            <div class="form-success" id="formSuccess">
+                <div class="icon">🎉</div>
+                <h3>You're on the waitlist!</h3>
+                <p>Watch your email or WhatsApp for early access details. We'll be in touch soon.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Final CTA -->
+<section class="final-cta" id="final">
+    <div class="container">
+        <h2 class="reveal">Your Skills Build Automations.<br>Your Pricing Builds a Business.</h2>
+        <p class="reveal">If you know how to build workflows but struggle to price them, this workshop is for you.</p>
+        <a href="#waitlist" class="btn btn-primary btn-large reveal">Join the Waitlist</a>
+    </div>
+</section>
+
+<!-- Footer -->
+<footer class="site-footer">
+    <div class="container">
+        <p><span class="accent">Price by Value Workshop</span> — Part of Bulletproof Automations Training</p>
+    </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../assets/js/main.js"></script>
+<script>
+// Source tracking from URL
+(function() {
+    const source = getUrlParam('source') || 'direct';
+    document.getElementById('source').value = source;
+})();
+
+// Form submission
+const form = document.getElementById('waitlistForm');
+const successDiv = document.getElementById('formSuccess');
+
+form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const btn = form.querySelector('button[type="submit"]');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner" style="margin-right:8px;"></span> Joining...';
+    btn.disabled = true;
+
+    const data = {
+        full_name: document.getElementById('fullname').value.trim(),
+        email: document.getElementById('email').value.trim().toLowerCase(),
+        whatsapp_number: document.getElementById('whatsapp').value.trim(),
+        city: document.getElementById('location').value.trim(),
+        experience_level: document.getElementById('experience').value,
+        current_build_type: document.getElementById('build').value,
+        biggest_pricing_challenge: document.getElementById('challenge').value.trim(),
+        vip_pricing_review_interest: document.querySelector('input[name="vip"]:checked')?.value || 'No',
+        price_range_interest: document.getElementById('price_range').value,
+        source: document.getElementById('source').value,
+        workshop_slug: document.getElementById('workshop_slug').value,
+        signup_date_time: new Date().toISOString(),
+        status: 'New',
+        ticket_type: 'Waitlist',
+        payment_status: 'Unpaid'
+    };
+
+    try {
+        const sb = initSupabase();
+        if (!sb) {
+            throw new Error('Supabase not initialized. Please check your configuration.');
+        }
+
+        const { error } = await sb
+            .from('waitlist_signups')
+            .insert([data]);
+        if (error) throw error;
+
+        await invokeOptionalFunction(sb, 'confirm-email', { record: data });
+        if (data.vip_pricing_review_interest === 'Yes') {
+            await invokeOptionalFunction(sb, 'vip-alert', { record: data });
+        }
+
+        form.style.display = 'none';
+        successDiv.classList.add('active');
+        successDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        // Redirect to thank-you page after 2 seconds
+        setTimeout(() => {
+            window.location.href = '/thank-you';
+        }, 2000);
+
+    } catch (err) {
+        console.error('Signup error:', err);
+        if (isDuplicateSignupError(err)) {
+            showToast('You are already on the waitlist. We will notify you when registration opens.', 'success');
+        } else {
+            showToast(err.message || 'Something went wrong. Please try again.', 'error');
+        }
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+});
+</script>
+</body>
+</html>

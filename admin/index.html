@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard | Bulletproof Automations Training</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <style>
+        .admin-page { padding-top: 80px; min-height: 100vh; }
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .admin-header h1 { font-size: 1.6rem; }
+        .admin-header .logout-btn {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 8px 16px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        .admin-header .logout-btn:hover {
+            border-color: var(--red);
+            color: var(--red-light);
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            margin-bottom: 40px;
+        }
+        @media (min-width: 768px) {
+            .stats-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+        .stat-card { padding: 20px 16px; }
+        .stat-card .stat-value { font-size: 1.8rem; }
+        .stat-card.seats-remaining .stat-value { color: var(--green-light); }
+        .stat-card.seats-remaining { border-color: rgba(45, 138, 78, 0.3); }
+        .stat-card.overflow .stat-value { color: var(--red-light); }
+        .stat-card.overflow { border-color: rgba(192, 57, 43, 0.3); }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+        @media (min-width: 768px) {
+            .charts-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        .chart-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+        }
+        .chart-card h3 {
+            font-size: 1rem;
+            margin-bottom: 16px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .chart-wrap {
+            position: relative;
+            height: 220px;
+        }
+
+        .section-title {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .section-title .count {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            padding: 4px 12px;
+            border-radius: 100px;
+            font-size: 0.85rem;
+            color: var(--gold);
+            font-family: 'Space Grotesk', sans-serif;
+        }
+
+        .filter-bar {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+        .filter-bar input,
+        .filter-bar select {
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            padding: 10px 14px;
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            min-width: 140px;
+        }
+        .filter-bar input:focus,
+        .filter-bar select:focus {
+            outline: none;
+            border-color: var(--gold);
+        }
+
+        .action-bar {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .action-bar .btn {
+            padding: 10px 20px;
+            font-size: 0.85rem;
+        }
+
+        .data-table th { cursor: pointer; user-select: none; }
+        .data-table th:hover { color: var(--gold); }
+        .data-table th .sort-icon {
+            font-size: 0.7rem;
+            margin-left: 4px;
+            opacity: 0.5;
+        }
+        .data-table td .badge {
+            font-size: 0.7rem;
+            padding: 4px 10px;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            margin-top: 20px;
+            padding: 16px;
+        }
+        .pagination button {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            padding: 8px 14px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: var(--transition);
+        }
+        .pagination button:hover:not(:disabled) {
+            border-color: var(--gold);
+            color: var(--gold);
+        }
+        .pagination button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .pagination .page-info {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .detail-row {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        @media (min-width: 640px) {
+            .detail-row { grid-template-columns: 1fr 1fr; }
+        }
+        .detail-field label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+        .detail-field p {
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            word-break: break-word;
+        }
+        .detail-field .value-box {
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 10px 14px;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            min-height: 40px;
+        }
+        .detail-field textarea.value-box {
+            width: 100%;
+            min-height: 80px;
+            font-family: 'Inter', sans-serif;
+            resize: vertical;
+        }
+        .detail-field select.value-box {
+            width: 100%;
+            cursor: pointer;
+        }
+        .detail-field input.value-box {
+            width: 100%;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            margin-top: 24px;
+            flex-wrap: wrap;
+        }
+        .modal-actions .btn-secondary {
+            border-color: var(--border);
+            color: var(--text-muted);
+        }
+        .modal-actions .btn-secondary:hover {
+            border-color: var(--red);
+            color: var(--red-light);
+            background: transparent;
+        }
+
+        .loading-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+        .loading-state .spinner {
+            width: 40px;
+            height: 40px;
+            margin: 0 auto 16px;
+            border-width: 3px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 48px 20px;
+            color: var(--text-muted);
+        }
+        .empty-state .icon { font-size: 3rem; margin-bottom: 12px; }
+
+        .vip-highlight {
+            background: rgba(212, 175, 55, 0.08) !important;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Login Screen -->
+<div id="loginScreen" class="admin-login">
+    <div class="admin-login-box">
+        <div style="text-align:center;margin-bottom:24px;">
+            <div class="brand" style="justify-content:center;font-size:1.3rem;">
+                <div class="brand-icon">⚡</div>
+                <span>Bulletproof Automations</span>
+            </div>
+        </div>
+        <h2>Admin Dashboard</h2>
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="adminEmail">Email</label>
+                <input type="email" id="adminEmail" placeholder="admin@example.com" required>
+            </div>
+            <div class="form-group">
+                <label for="adminPassword">Password</label>
+                <input type="password" id="adminPassword" placeholder="••••••••" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-full" style="margin-top:8px;">Sign In</button>
+        </form>
+        <p style="text-align:center;margin-top:16px;font-size:0.85rem;color:var(--text-muted);">
+            Use a Supabase Auth admin account. No fallback password is shipped in this static site.
+        </p>
+    </div>
+</div>
+
+<!-- Dashboard -->
+<div id="dashboard" class="admin-page" style="display:none;">
+    <div class="container">
+        <div class="admin-header">
+            <h1>Waitlist Dashboard</h1>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                <a class="logout-btn" href="https://bulletproofautomations.com">Main Site</a>
+                <button class="logout-btn" onclick="logout()">Logout</button>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card">
+                <div class="stat-value" id="statTotal">—</div>
+                <div class="stat-label">Total Signups</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="statToday">—</div>
+                <div class="stat-label">Today</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="statWeek">—</div>
+                <div class="stat-label">This Week</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="statVIP">—</div>
+                <div class="stat-label">VIP Interest</div>
+            </div>
+            <div class="stat-card seats-remaining">
+                <div class="stat-value" id="statPaid">—</div>
+                <div class="stat-label">Paid Seats</div>
+            </div>
+            <div class="stat-card seats-remaining">
+                <div class="stat-value" id="statRemaining">—</div>
+                <div class="stat-label">Seats Remaining</div>
+            </div>
+            <div class="stat-card overflow">
+                <div class="stat-value" id="statOverflow">—</div>
+                <div class="stat-label">Waitlist Overflow</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="statSources">—</div>
+                <div class="stat-label">Sources</div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="charts-grid" id="chartsGrid">
+            <div class="chart-card">
+                <h3>Signup Sources</h3>
+                <div class="chart-wrap"><canvas id="sourceChart"></canvas></div>
+            </div>
+            <div class="chart-card">
+                <h3>Experience Levels</h3>
+                <div class="chart-wrap"><canvas id="expChart"></canvas></div>
+            </div>
+            <div class="chart-card">
+                <h3>Price Range Interest</h3>
+                <div class="chart-wrap"><canvas id="priceChart"></canvas></div>
+            </div>
+            <div class="chart-card">
+                <h3>VIP Interest</h3>
+                <div class="chart-wrap"><canvas id="vipChart"></canvas></div>
+            </div>
+        </div>
+
+        <!-- Signups Table -->
+        <div style="margin-bottom:40px;">
+            <div class="section-title">
+                Latest Signups
+                <span class="count" id="tableCount">0</span>
+            </div>
+
+            <div class="filter-bar">
+                <input type="text" id="searchInput" placeholder="Search name, email, WhatsApp...">
+                <select id="filterSource">
+                    <option value="">All Sources</option>
+                </select>
+                <select id="filterWorkshop">
+                    <option value="">All Workshops</option>
+                </select>
+                <select id="filterStatus">
+                    <option value="">All Statuses</option>
+                    <option value="New">New</option>
+                    <option value="Contacted">Contacted</option>
+                    <option value="Registered">Registered</option>
+                    <option value="Paid">Paid</option>
+                    <option value="Not Interested">Not Interested</option>
+                </select>
+                <select id="filterVIP">
+                    <option value="">All VIP</option>
+                    <option value="Yes">Yes</option>
+                    <option value="Maybe">Maybe</option>
+                    <option value="No">No</option>
+                </select>
+                <select id="filterPrice">
+                    <option value="">All Prices</option>
+                </select>
+                <button class="btn btn-secondary" onclick="clearFilters()" style="padding:10px 16px;font-size:0.85rem;">Clear</button>
+            </div>
+
+            <div class="action-bar">
+                <button class="btn btn-primary" onclick="exportCSV()">📥 Export CSV</button>
+                <button class="btn btn-secondary" onclick="loadData()">🔄 Refresh</button>
+            </div>
+
+            <div class="table-wrap">
+                <div id="loadingState" class="loading-state">
+                    <div class="spinner"></div>
+                    <p>Loading signups...</p>
+                </div>
+                <div id="emptyState" class="empty-state" style="display:none;">
+                    <div class="icon">📭</div>
+                    <p>No signups found.</p>
+                </div>
+                <table class="data-table" id="dataTable" style="display:none;">
+                    <thead>
+                        <tr>
+                            <th onclick="sortTable('full_name')">Name <span class="sort-icon">↕</span></th>
+                            <th onclick="sortTable('email')">Email <span class="sort-icon">↕</span></th>
+                            <th onclick="sortTable('whatsapp_number')">WhatsApp <span class="sort-icon">↕</span></th>
+                            <th onclick="sortTable('city')">City <span class="sort-icon">↕</span></th>
+                            <th onclick="sortTable('experience_level')">Exp <span class="sort-icon">↕</span></th>
+                            <th onclick="sortTable('current_build_type')">Build <span class="sort-icon">↕</span></th>
+                            <th onclick="sortTable('price_range_interest')">Price <span class="sort-icon">↕</span></th>
+                            <th onclick="sortTable('vip_pricing_review_interest')">VIP <span class="sort-icon">↕</span></th>
+                            <th onclick="sortTable('source')">Source <span class="sort-icon">↕</span></th>
+                            <th onclick="sortTable('status')">Status <span class="sort-icon">↕</span></th>
+                            <th onclick="sortTable('payment_status')">Payment <span class="sort-icon">↕</span></th>
+                            <th onclick="sortTable('signup_date_time')">Date <span class="sort-icon">↕</span></th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+
+            <div class="pagination" id="pagination"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal-overlay" id="editModal">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3>Edit Signup</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div id="modalContent">
+            <div class="detail-row">
+                <div class="detail-field">
+                    <label>Full Name</label>
+                    <div class="value-box" id="modalName"></div>
+                </div>
+                <div class="detail-field">
+                    <label>Email</label>
+                    <div class="value-box" id="modalEmail"></div>
+                </div>
+            </div>
+            <div class="detail-row">
+                <div class="detail-field">
+                    <label>WhatsApp</label>
+                    <div class="value-box" id="modalWhatsApp"></div>
+                </div>
+                <div class="detail-field">
+                    <label>City</label>
+                    <div class="value-box" id="modalCity"></div>
+                </div>
+            </div>
+            <div class="detail-row">
+                <div class="detail-field">
+                    <label>Experience</label>
+                    <div class="value-box" id="modalExp"></div>
+                </div>
+                <div class="detail-field">
+                    <label>Build Type</label>
+                    <div class="value-box" id="modalBuild"></div>
+                </div>
+            </div>
+            <div class="detail-row">
+                <div class="detail-field">
+                    <label>Price Range</label>
+                    <div class="value-box" id="modalPrice"></div>
+                </div>
+                <div class="detail-field">
+                    <label>VIP Interest</label>
+                    <div class="value-box" id="modalVIP"></div>
+                </div>
+            </div>
+            <div class="detail-field" style="margin-bottom:16px;">
+                <label>Biggest Pricing Challenge</label>
+                <div class="value-box" id="modalChallenge" style="min-height:60px;"></div>
+            </div>
+            <div class="detail-row">
+                <div class="detail-field">
+                    <label>Status</label>
+                    <select class="value-box" id="editStatus">
+                        <option value="New">New</option>
+                        <option value="Contacted">Contacted</option>
+                        <option value="Registered">Registered</option>
+                        <option value="Paid">Paid</option>
+                        <option value="Not Interested">Not Interested</option>
+                    </select>
+                </div>
+                <div class="detail-field">
+                    <label>Ticket Type</label>
+                    <select class="value-box" id="editTicket">
+                        <option value="Waitlist">Waitlist</option>
+                        <option value="Early Bird">Early Bird</option>
+                        <option value="Regular">Regular</option>
+                        <option value="VIP">VIP</option>
+                    </select>
+                </div>
+            </div>
+            <div class="detail-row">
+                <div class="detail-field">
+                    <label>Payment Status</label>
+                    <select class="value-box" id="editPaymentStatus">
+                        <option value="Unpaid">Unpaid</option>
+                        <option value="Paid">Paid</option>
+                        <option value="Refunded">Refunded</option>
+                        <option value="Cancelled">Cancelled</option>
+                    </select>
+                </div>
+                <div class="detail-field">
+                    <label>Payment Method</label>
+                    <select class="value-box" id="editPaymentMethod">
+                        <option value="">—</option>
+                        <option value="Mobile Money">Mobile Money</option>
+                        <option value="Card">Card</option>
+                        <option value="Bank Transfer">Bank Transfer</option>
+                        <option value="Cash">Cash</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+            </div>
+            <div class="detail-row">
+                <div class="detail-field">
+                    <label>Amount Paid (GHS)</label>
+                    <input type="number" class="value-box" id="editAmount" placeholder="0.00" step="0.01">
+                </div>
+                <div class="detail-field">
+                    <label>Payment Reference</label>
+                    <input type="text" class="value-box" id="editReference" placeholder="Transaction ID">
+                </div>
+            </div>
+            <div class="detail-field">
+                <label>Internal Notes</label>
+                <textarea class="value-box" id="editNotes" placeholder="Add notes about this signup..."></textarea>
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveEdit()">Save Changes</button>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../assets/js/main.js"></script>
+<script>
+// ============================================
+// CONFIGURATION
+// ============================================
+const TARGET_SEATS = 20;
+
+let allSignups = [];
+let filteredSignups = [];
+let currentPage = 1;
+let pageSize = 25;
+let sortField = 'signup_date_time';
+let sortDesc = true;
+let currentEditId = null;
+
+let sourceChartInstance = null;
+let expChartInstance = null;
+let priceChartInstance = null;
+let vipChartInstance = null;
+
+// ============================================
+// AUTH
+// ============================================
+function checkAuth() {
+    const sb = initSupabase();
+    if (sb) {
+        sb.auth.getSession().then(({ data: { session } }) => {
+            if (session) {
+                showDashboard();
+            } else {
+                showLogin();
+            }
+        });
+    } else {
+        showLogin();
+    }
+}
+
+function showLogin() {
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('dashboard').style.display = 'none';
+}
+
+function showDashboard() {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    loadData();
+}
+
+// Supabase Auth Login
+document.getElementById('loginForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const email = document.getElementById('adminEmail').value;
+    const password = document.getElementById('adminPassword').value;
+    const btn = this.querySelector('button[type="submit"]');
+    btn.innerHTML = '<span class="spinner" style="margin-right:8px;"></span> Signing in...';
+    btn.disabled = true;
+
+    const sb = initSupabase();
+    if (!sb) {
+        showToast('Supabase not configured', 'error');
+        btn.innerHTML = 'Sign In';
+        btn.disabled = false;
+        return;
+    }
+
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) {
+        showToast(error.message, 'error');
+        btn.innerHTML = 'Sign In';
+        btn.disabled = false;
+        return;
+    }
+
+    localStorage.setItem('admin_session', 'active');
+    localStorage.setItem('admin_auth_type', 'supabase');
+    showDashboard();
+});
+
+function logout() {
+    localStorage.removeItem('admin_session');
+    localStorage.removeItem('admin_auth_type');
+    const sb = initSupabase();
+    if (sb) sb.auth.signOut();
+    showLogin();
+}
+
+// ============================================
+// DATA LOADING
+// ============================================
+async function loadData() {
+    document.getElementById('loadingState').style.display = 'block';
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('dataTable').style.display = 'none';
+
+    const sb = initSupabase();
+    if (!sb) {
+        showToast('Supabase not configured', 'error');
+        return;
+    }
+
+    try {
+        const { data, error } = await sb
+            .from('waitlist_signups')
+            .select('*')
+            .order('signup_date_time', { ascending: false });
+
+        if (error) throw error;
+
+        allSignups = data || [];
+        filteredSignups = [...allSignups];
+
+        updateStats();
+        updateCharts();
+        populateFilters();
+        applyFilters();
+
+        document.getElementById('loadingState').style.display = 'none';
+
+        if (allSignups.length === 0) {
+            document.getElementById('emptyState').style.display = 'block';
+        } else {
+            document.getElementById('dataTable').style.display = 'table';
+        }
+    } catch (err) {
+        console.error('Load error:', err);
+        showToast('Failed to load data: ' + err.message, 'error');
+        document.getElementById('loadingState').style.display = 'none';
+        document.getElementById('emptyState').style.display = 'block';
+    }
+}
+
+// ============================================
+// STATS
+// ============================================
+function updateStats() {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const total = allSignups.length;
+    const todayCount = allSignups.filter(s => new Date(s.signup_date_time) >= today).length;
+    const weekCount = allSignups.filter(s => new Date(s.signup_date_time) >= weekAgo).length;
+    const vipCount = allSignups.filter(s => s.vip_pricing_review_interest === 'Yes').length;
+    const paidCount = allSignups.filter(s => s.payment_status === 'Paid').length;
+    const remaining = Math.max(0, TARGET_SEATS - paidCount);
+    const overflow = Math.max(0, total - TARGET_SEATS);
+    const uniqueSources = new Set(allSignups.map(s => s.source)).size;
+
+    document.getElementById('statTotal').textContent = total;
+    document.getElementById('statToday').textContent = todayCount;
+    document.getElementById('statWeek').textContent = weekCount;
+    document.getElementById('statVIP').textContent = vipCount;
+    document.getElementById('statPaid').textContent = paidCount;
+    document.getElementById('statRemaining').textContent = remaining;
+    document.getElementById('statOverflow').textContent = overflow;
+    document.getElementById('statSources').textContent = uniqueSources;
+}
+
+// ============================================
+// CHARTS
+// ============================================
+function updateCharts() {
+    const sources = {};
+    const exps = {};
+    const prices = {};
+    const vips = {};
+
+    allSignups.forEach(s => {
+        sources[s.source || 'direct'] = (sources[s.source || 'direct'] || 0) + 1;
+        exps[s.experience_level || 'Unknown'] = (exps[s.experience_level || 'Unknown'] || 0) + 1;
+        prices[s.price_range_interest || 'Unknown'] = (prices[s.price_range_interest || 'Unknown'] || 0) + 1;
+        vips[s.vip_pricing_review_interest || 'No'] = (vips[s.vip_pricing_review_interest || 'No'] || 0) + 1;
+    });
+
+    const chartColors = {
+        gold: 'rgba(212, 175, 55, 0.8)',
+        green: 'rgba(45, 138, 78, 0.8)',
+        red: 'rgba(192, 57, 43, 0.8)',
+        blue: 'rgba(52, 152, 219, 0.8)',
+        purple: 'rgba(155, 89, 182, 0.8)',
+        orange: 'rgba(230, 126, 34, 0.8)',
+        teal: 'rgba(26, 188, 156, 0.8)',
+        gray: 'rgba(149, 165, 166, 0.8)'
+    };
+    const palette = Object.values(chartColors);
+
+    const commonOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'bottom',
+                labels: { color: '#a0a0b0', font: { size: 11 }, boxWidth: 12, padding: 10 }
+            }
+        },
+        scales: {
+            x: { ticks: { color: '#6b6b7b', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.03)' } },
+            y: { ticks: { color: '#6b6b7b', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.03)' } }
+        }
+    };
+
+    const doughnutOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'bottom',
+                labels: { color: '#a0a0b0', font: { size: 11 }, boxWidth: 12, padding: 8 }
+            }
+        }
+    };
+
+    // Source Chart
+    if (sourceChartInstance) sourceChartInstance.destroy();
+    sourceChartInstance = new Chart(document.getElementById('sourceChart'), {
+        type: 'doughnut',
+        data: {
+            labels: Object.keys(sources),
+            datasets: [{ data: Object.values(sources), backgroundColor: palette, borderWidth: 0 }]
+        },
+        options: doughnutOptions
+    });
+
+    // Experience Chart
+    if (expChartInstance) expChartInstance.destroy();
+    expChartInstance = new Chart(document.getElementById('expChart'), {
+        type: 'bar',
+        data: {
+            labels: Object.keys(exps),
+            datasets: [{ label: 'Signups', data: Object.values(exps), backgroundColor: chartColors.gold, borderRadius: 6 }]
+        },
+        options: commonOptions
+    });
+
+    // Price Chart
+    if (priceChartInstance) priceChartInstance.destroy();
+    priceChartInstance = new Chart(document.getElementById('priceChart'), {
+        type: 'bar',
+        data: {
+            labels: Object.keys(prices),
+            datasets: [{ label: 'Signups', data: Object.values(prices), backgroundColor: chartColors.green, borderRadius: 6 }]
+        },
+        options: commonOptions
+    });
+
+    // VIP Chart
+    if (vipChartInstance) vipChartInstance.destroy();
+    vipChartInstance = new Chart(document.getElementById('vipChart'), {
+        type: 'doughnut',
+        data: {
+            labels: Object.keys(vips),
+            datasets: [{ data: Object.values(vips), backgroundColor: [chartColors.gold, chartColors.blue, chartColors.gray], borderWidth: 0 }]
+        },
+        options: doughnutOptions
+    });
+}
+
+// ============================================
+// TABLE & FILTERS
+// ============================================
+function populateFilters() {
+    const sources = [...new Set(allSignups.map(s => s.source).filter(Boolean))].sort();
+    const workshops = [...new Set(allSignups.map(s => s.workshop_slug).filter(Boolean))].sort();
+    const prices = [...new Set(allSignups.map(s => s.price_range_interest).filter(Boolean))].sort();
+
+    const sourceSelect = document.getElementById('filterSource');
+    sourceSelect.innerHTML = '<option value="">All Sources</option>';
+    sources.forEach(s => {
+        sourceSelect.innerHTML += `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`;
+    });
+
+    const workshopSelect = document.getElementById('filterWorkshop');
+    workshopSelect.innerHTML = '<option value="">All Workshops</option>';
+    workshops.forEach(w => {
+        workshopSelect.innerHTML += `<option value="${escapeHtml(w)}">${escapeHtml(w)}</option>`;
+    });
+
+    const priceSelect = document.getElementById('filterPrice');
+    priceSelect.innerHTML = '<option value="">All Prices</option>';
+    prices.forEach(p => {
+        priceSelect.innerHTML += `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`;
+    });
+}
+
+function applyFilters() {
+    const search = document.getElementById('searchInput').value.toLowerCase();
+    const source = document.getElementById('filterSource').value;
+    const workshop = document.getElementById('filterWorkshop').value;
+    const status = document.getElementById('filterStatus').value;
+    const vip = document.getElementById('filterVIP').value;
+    const price = document.getElementById('filterPrice').value;
+
+    filteredSignups = allSignups.filter(s => {
+        const matchesSearch = !search || 
+            (s.full_name || '').toLowerCase().includes(search) ||
+            (s.email || '').toLowerCase().includes(search) ||
+            (s.whatsapp_number || '').toLowerCase().includes(search);
+        const matchesSource = !source || s.source === source;
+        const matchesWorkshop = !workshop || s.workshop_slug === workshop;
+        const matchesStatus = !status || s.status === status;
+        const matchesVIP = !vip || s.vip_pricing_review_interest === vip;
+        const matchesPrice = !price || s.price_range_interest === price;
+        return matchesSearch && matchesSource && matchesWorkshop && matchesStatus && matchesVIP && matchesPrice;
+    });
+
+    // Apply sort
+    filteredSignups.sort((a, b) => {
+        let valA = a[sortField] || '';
+        let valB = b[sortField] || '';
+        if (typeof valA === 'string') valA = valA.toLowerCase();
+        if (typeof valB === 'string') valB = valB.toLowerCase();
+        if (valA < valB) return sortDesc ? 1 : -1;
+        if (valA > valB) return sortDesc ? -1 : 1;
+        return 0;
+    });
+
+    currentPage = 1;
+    renderTable();
+}
+
+function clearFilters() {
+    document.getElementById('searchInput').value = '';
+    document.getElementById('filterSource').value = '';
+    document.getElementById('filterWorkshop').value = '';
+    document.getElementById('filterStatus').value = '';
+    document.getElementById('filterVIP').value = '';
+    document.getElementById('filterPrice').value = '';
+    applyFilters();
+}
+
+function sortTable(field) {
+    if (sortField === field) {
+        sortDesc = !sortDesc;
+    } else {
+        sortField = field;
+        sortDesc = true;
+    }
+    applyFilters();
+}
+
+function renderTable() {
+    const tbody = document.getElementById('tableBody');
+    const start = (currentPage - 1) * pageSize;
+    const end = start + pageSize;
+    const pageData = filteredSignups.slice(start, end);
+
+    document.getElementById('tableCount').textContent = filteredSignups.length;
+
+    tbody.innerHTML = pageData.map(s => {
+        const isVIP = s.vip_pricing_review_interest === 'Yes';
+        const statusBadge = getStatusBadge(s.status);
+        const paymentBadge = getPaymentBadge(s.payment_status);
+        return `
+            <tr class="${isVIP ? 'vip-highlight' : ''}">
+                <td>${escapeHtml(s.full_name || '-')}</td>
+                <td>${escapeHtml(s.email || '-')}</td>
+                <td>${escapeHtml(s.whatsapp_number || '-')}</td>
+                <td>${escapeHtml(s.city || '-')}</td>
+                <td><span class="badge badge-blue">${escapeHtml(s.experience_level || '-')}</span></td>
+                <td>${escapeHtml(s.current_build_type || '-')}</td>
+                <td>${escapeHtml(s.price_range_interest || '-')}</td>
+                <td><span class="badge ${isVIP ? 'badge-gold' : 'badge-blue'}">${escapeHtml(s.vip_pricing_review_interest || '-')}</span></td>
+                <td>${escapeHtml(s.source || 'direct')}</td>
+                <td><span class="badge ${statusBadge.class}">${escapeHtml(s.status || 'New')}</span></td>
+                <td><span class="badge ${paymentBadge.class}">${escapeHtml(s.payment_status || 'Unpaid')}</span></td>
+                <td>${formatDate(s.signup_date_time)}</td>
+                <td><button class="btn btn-secondary" style="padding:6px 12px;font-size:0.8rem;" onclick="openEdit('${s.id}')">Edit</button></td>
+            </tr>
+        `;
+    }).join('');
+
+    renderPagination();
+}
+
+function getStatusBadge(status) {
+    const map = {
+        'New': 'badge-blue',
+        'Contacted': 'badge-gold',
+        'Registered': 'badge-green',
+        'Paid': 'badge-green',
+        'Not Interested': 'badge-red'
+    };
+    return { class: map[status] || 'badge-blue' };
+}
+
+function getPaymentBadge(status) {
+    const map = {
+        'Unpaid': 'badge-blue',
+        'Paid': 'badge-green',
+        'Refunded': 'badge-red',
+        'Cancelled': 'badge-red'
+    };
+    return { class: map[status] || 'badge-blue' };
+}
+
+function renderPagination() {
+    const totalPages = Math.ceil(filteredSignups.length / pageSize);
+    const container = document.getElementById('pagination');
+
+    if (totalPages <= 1) {
+        container.innerHTML = '';
+        return;
+    }
+
+    let html = `
+        <button onclick="goToPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>← Prev</button>
+        <span class="page-info">Page ${currentPage} of ${totalPages}</span>
+        <button onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>Next →</button>
+    `;
+    container.innerHTML = html;
+}
+
+function goToPage(page) {
+    currentPage = page;
+    renderTable();
+}
+
+// ============================================
+// EDIT MODAL
+// ============================================
+function openEdit(id) {
+    const signup = allSignups.find(s => s.id === id);
+    if (!signup) return;
+
+    currentEditId = id;
+    document.getElementById('modalName').textContent = signup.full_name || '-';
+    document.getElementById('modalEmail').textContent = signup.email || '-';
+    document.getElementById('modalWhatsApp').textContent = signup.whatsapp_number || '-';
+    document.getElementById('modalCity').textContent = signup.city || '-';
+    document.getElementById('modalExp').textContent = signup.experience_level || '-';
+    document.getElementById('modalBuild').textContent = signup.current_build_type || '-';
+    document.getElementById('modalPrice').textContent = signup.price_range_interest || '-';
+    document.getElementById('modalVIP').textContent = signup.vip_pricing_review_interest || '-';
+    document.getElementById('modalChallenge').textContent = signup.biggest_pricing_challenge || '-';
+
+    document.getElementById('editStatus').value = signup.status || 'New';
+    document.getElementById('editTicket').value = signup.ticket_type || 'Waitlist';
+    document.getElementById('editPaymentStatus').value = signup.payment_status || 'Unpaid';
+    document.getElementById('editPaymentMethod').value = signup.payment_method || '';
+    document.getElementById('editAmount').value = signup.amount_paid || '';
+    document.getElementById('editReference').value = signup.payment_reference || '';
+    document.getElementById('editNotes').value = signup.notes || '';
+
+    document.getElementById('editModal').classList.add('active');
+}
+
+function closeModal() {
+    document.getElementById('editModal').classList.remove('active');
+    currentEditId = null;
+}
+
+async function saveEdit() {
+    if (!currentEditId) return;
+
+    const updates = {
+        status: document.getElementById('editStatus').value,
+        ticket_type: document.getElementById('editTicket').value,
+        payment_status: document.getElementById('editPaymentStatus').value,
+        payment_method: document.getElementById('editPaymentMethod').value || null,
+        amount_paid: document.getElementById('editAmount').value ? parseFloat(document.getElementById('editAmount').value) : null,
+        payment_reference: document.getElementById('editReference').value || null,
+        notes: document.getElementById('editNotes').value || null,
+        updated_at: new Date().toISOString()
+    };
+
+    const sb = initSupabase();
+    if (!sb) {
+        showToast('Supabase not configured', 'error');
+        return;
+    }
+
+    try {
+        const { error } = await sb
+            .from('waitlist_signups')
+            .update(updates)
+            .eq('id', currentEditId);
+
+        if (error) throw error;
+
+        showToast('Changes saved successfully', 'success');
+        closeModal();
+        loadData();
+    } catch (err) {
+        showToast('Failed to save: ' + err.message, 'error');
+    }
+}
+
+// ============================================
+// CSV EXPORT
+// ============================================
+function exportCSV() {
+    if (filteredSignups.length === 0) {
+        showToast('No data to export', 'error');
+        return;
+    }
+
+    const headers = [
+        'ID', 'Full Name', 'Email', 'WhatsApp', 'City', 'Experience', 'Build Type',
+        'Challenge', 'VIP Interest', 'Price Range', 'Source', 'Workshop', 'Status',
+        'Ticket Type', 'Payment Status', 'Amount Paid', 'Payment Reference',
+        'Payment Method', 'Notes', 'Signup Date'
+    ];
+
+    const rows = filteredSignups.map(s => [
+        s.id,
+        s.full_name,
+        s.email,
+        s.whatsapp_number,
+        s.city,
+        s.experience_level,
+        s.current_build_type,
+        s.biggest_pricing_challenge,
+        s.vip_pricing_review_interest,
+        s.price_range_interest,
+        s.source,
+        s.workshop_slug,
+        s.status,
+        s.ticket_type,
+        s.payment_status,
+        s.amount_paid,
+        s.payment_reference,
+        s.payment_method,
+        s.notes,
+        s.signup_date_time
+    ]);
+
+    const csvContent = [headers, ...rows]
+        .map(row => row.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(','))
+        .join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `waitlist_export_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+
+    showToast(`Exported ${filteredSignups.length} records`, 'success');
+}
+
+// ============================================
+// EVENT LISTENERS
+// ============================================
+document.getElementById('searchInput').addEventListener('input', debounce(applyFilters, 300));
+document.getElementById('filterSource').addEventListener('change', applyFilters);
+document.getElementById('filterWorkshop').addEventListener('change', applyFilters);
+document.getElementById('filterStatus').addEventListener('change', applyFilters);
+document.getElementById('filterVIP').addEventListener('change', applyFilters);
+document.getElementById('filterPrice').addEventListener('change', applyFilters);
+
+document.getElementById('editModal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+});
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeModal();
+});
+
+function debounce(fn, ms) {
+    let timeout;
+    return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => fn.apply(this, args), ms);
+    };
+}
+
+// ============================================
+// INIT
+// ============================================
+checkAuth();
+</script>
+</body>
+</html>

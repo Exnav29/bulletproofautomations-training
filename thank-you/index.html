@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>You're on the Waitlist! | Price by Value</title>
+    <meta name="description" content="Thank you for joining the Price by Value waitlist. Early access details coming soon.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <style>
+        .thankyou-page {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 100px 20px 40px;
+            text-align: center;
+        }
+        .thankyou-box {
+            max-width: 560px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 48px 32px;
+            position: relative;
+        }
+        .thankyou-box::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--gold), var(--green-light), var(--gold));
+            border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+        }
+        .thankyou-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+        }
+        .thankyou-box h1 {
+            font-size: clamp(1.8rem, 4vw, 2.4rem);
+            margin-bottom: 16px;
+        }
+        .thankyou-box p {
+            color: var(--text-secondary);
+            font-size: 1.05rem;
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+        .thankyou-box .highlight {
+            background: linear-gradient(135deg, rgba(45, 138, 78, 0.1), rgba(212, 175, 55, 0.05));
+            border: 1px solid rgba(45, 138, 78, 0.2);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            margin: 24px 0;
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+        }
+        .thankyou-box .highlight strong {
+            color: var(--green-light);
+        }
+        .share-box {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            margin: 24px 0;
+            text-align: left;
+        }
+        .share-box label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .share-box textarea {
+            width: 100%;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 12px;
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            font-size: 0.9rem;
+            resize: none;
+            height: 80px;
+        }
+        .share-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+        .share-btn {
+            padding: 8px 16px;
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: var(--transition);
+        }
+        .share-btn.whatsapp {
+            background: #25d366;
+            color: white;
+        }
+        .share-btn.whatsapp:hover { background: #1fb955; }
+        .share-btn.twitter {
+            background: #1da1f2;
+            color: white;
+        }
+        .share-btn.twitter:hover { background: #0d8bd9; }
+        .share-btn.copy {
+            background: var(--bg-elevated);
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+        }
+        .share-btn.copy:hover {
+            background: var(--gold);
+            color: var(--bg-dark);
+            border-color: var(--gold);
+        }
+        .cta-group {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 28px;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="site-header">
+    <div class="container">
+        <a href="/" class="brand">
+            <div class="brand-icon">⚡</div>
+            <span>Bulletproof Automations</span>
+        </a>
+        <nav class="nav-links">
+            <a href="/">Training Home</a>
+            <a href="https://bulletproofautomations.com">Main Site</a>
+        </nav>
+    </div>
+</header>
+
+<!-- Thank You -->
+<section class="thankyou-page">
+    <div class="thankyou-box">
+        <div class="thankyou-icon">🎉</div>
+        <h1>You're on the waitlist.</h1>
+        <p>Thanks for joining the <strong style="color:var(--gold-light);">Price by Value</strong> waitlist. Early access details will be sent by email or WhatsApp when registration opens.</p>
+        <div class="highlight">
+            <strong>First cohort seats will be limited</strong>, so watch for updates.
+        </div>
+
+        <div class="share-box">
+            <label>Share with another automation builder</label>
+            <textarea id="shareText" readonly>I joined the waitlist for Price by Value, a Ghana-focused workshop on how to stop undercharging for AI automations and workflows. Check it out: training.bulletproofautomations.com/price-by-value</textarea>
+            <div class="share-buttons">
+                <button class="share-btn whatsapp" onclick="shareWhatsApp()">WhatsApp</button>
+                <button class="share-btn twitter" onclick="shareTwitter()">Twitter / X</button>
+                <button class="share-btn copy" onclick="copyShareText()">Copy Text</button>
+            </div>
+        </div>
+
+        <div class="cta-group">
+            <a href="/" class="btn btn-primary">Back to Training Home</a>
+            <a href="/price-by-value" class="btn btn-secondary">Back to Workshop</a>
+        </div>
+    </div>
+</section>
+
+<!-- Footer -->
+<footer class="site-footer">
+    <div class="container">
+        <p><span class="accent">Bulletproof Automations Training</span> — Practical training for automation builders.</p>
+    </div>
+</footer>
+
+<script src="../assets/js/main.js"></script>
+<script>
+const shareText = document.getElementById('shareText').value;
+const shareUrl = encodeURIComponent('https://training.bulletproofautomations.com/price-by-value');
+
+function shareWhatsApp() {
+    const text = encodeURIComponent(shareText);
+    window.open(`https://wa.me/?text=${text}`, '_blank');
+}
+
+function shareTwitter() {
+    const text = encodeURIComponent('I joined the waitlist for Price by Value, a Ghana-focused workshop on how to stop undercharging for AI automations and workflows.');
+    window.open(`https://twitter.com/intent/tweet?text=${text}&url=${shareUrl}`, '_blank');
+}
+
+function copyShareText() {
+    navigator.clipboard.writeText(shareText).then(() => {
+        showToast('Copied to clipboard!', 'success');
+    }).catch(() => {
+        showToast('Failed to copy. Please select and copy manually.', 'error');
+    });
+}
+</script>
+</body>
+</html>
