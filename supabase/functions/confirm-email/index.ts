@@ -18,6 +18,40 @@ function escapeHtml(value: unknown) {
   }[char] || char))
 }
 
+function confirmationFor(record: Record<string, unknown>, firstName: string) {
+  if (record.workshop_slug === 'n8n-foundations') {
+    return {
+      subject: "You're on the n8n Foundations interest list",
+      html: `
+        <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;padding:32px 20px;color:#222;">
+          <h2 style="margin:0 0 16px;color:#0a0a0f;">You're on the n8n Foundations interest list</h2>
+          <p>Hi ${firstName},</p>
+          <p>You're on the interest list for <strong>Beginner Cohort: n8n Foundations</strong>.</p>
+          <p>Registration is not open yet, and joining the interest list does not reserve a seat. We will notify you when registration opens.</p>
+          <p>The cohort is free, online, hands-on, and runs for 8 weeks. It is portfolio-first: every session produces a portfolio artifact such as exported workflow JSON, screenshots, notes, or a README.</p>
+          <p>Participants should prepare for local n8n setup with Docker. If local setup does not work, the n8n Cloud trial can be used as a fallback.</p>
+          <p><strong>Meeting links will only be sent to confirmed registrants later, not interest-list members.</strong></p>
+          <p style="margin-top:28px;color:#666;font-size:14px;">Bulletproof Automations Training<br><a href="https://training.bulletproofautomations.com">training.bulletproofautomations.com</a></p>
+        </div>
+      `,
+    }
+  }
+
+  return {
+    subject: "You're on the Price by Value waitlist",
+    html: `
+      <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;padding:32px 20px;color:#222;">
+        <h2 style="margin:0 0 16px;color:#0a0a0f;">You're on the Price by Value waitlist</h2>
+        <p>Hi ${firstName},</p>
+        <p>You're on the waitlist for <strong>Price by Value: How to Stop Undercharging for AI Automations</strong>.</p>
+        <p>This Ghana-focused in-person workshop teaches builders how to price AI automations and n8n workflows based on business value instead of hours worked.</p>
+        <p><strong>First cohort seats will be limited.</strong> Watch your email or WhatsApp for early access details.</p>
+        <p style="margin-top:28px;color:#666;font-size:14px;">Bulletproof Automations Training<br><a href="https://training.bulletproofautomations.com">training.bulletproofautomations.com</a></p>
+      </div>
+    `,
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -38,16 +72,7 @@ serve(async (req) => {
     }
 
     const firstName = escapeHtml(String(record.full_name || 'there').split(' ')[0])
-    const html = `
-      <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;padding:32px 20px;color:#222;">
-        <h2 style="margin:0 0 16px;color:#0a0a0f;">You're on the Price by Value waitlist</h2>
-        <p>Hi ${firstName},</p>
-        <p>You're on the waitlist for <strong>Price by Value: How to Stop Undercharging for AI Automations</strong>.</p>
-        <p>This Ghana-focused in-person workshop teaches builders how to price AI automations and n8n workflows based on business value instead of hours worked.</p>
-        <p><strong>First cohort seats will be limited.</strong> Watch your email or WhatsApp for early access details.</p>
-        <p style="margin-top:28px;color:#666;font-size:14px;">Bulletproof Automations Training<br><a href="https://training.bulletproofautomations.com">training.bulletproofautomations.com</a></p>
-      </div>
-    `
+    const confirmation = confirmationFor(record, firstName)
 
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -58,8 +83,8 @@ serve(async (req) => {
       body: JSON.stringify({
         from: `Bulletproof Automations Training <${FROM_EMAIL}>`,
         to: record.email,
-        subject: "You're on the Price by Value waitlist",
-        html,
+        subject: confirmation.subject,
+        html: confirmation.html,
       }),
     })
 

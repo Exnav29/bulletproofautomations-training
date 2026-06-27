@@ -12,6 +12,8 @@ create table if not exists public.waitlist_signups (
     city text not null,
     experience_level text not null,
     current_build_type text not null,
+    interested_class text,
+    preferred_setup text,
     biggest_pricing_challenge text,
     vip_pricing_review_interest text not null default 'No',
     price_range_interest text,
@@ -27,7 +29,7 @@ create table if not exists public.waitlist_signups (
     notes text,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now(),
-    constraint waitlist_experience_check check (experience_level in ('Beginner', 'Intermediate', 'Advanced')),
+    constraint waitlist_experience_check check (experience_level in ('New to n8n', 'Beginner', 'Some experience', 'Intermediate', 'Advanced')),
     constraint waitlist_vip_check check (vip_pricing_review_interest in ('Yes', 'Maybe', 'No')),
     constraint waitlist_status_check check (status in ('New', 'Contacted', 'Registered', 'Paid', 'Not Interested')),
     constraint waitlist_ticket_type_check check (ticket_type in ('Waitlist', 'Early Bird', 'Regular', 'VIP')),
@@ -38,12 +40,27 @@ create table if not exists public.waitlist_signups (
     )
 );
 
+alter table public.waitlist_signups
+    add column if not exists interested_class text;
+
+alter table public.waitlist_signups
+    add column if not exists preferred_setup text;
+
+alter table public.waitlist_signups
+    drop constraint if exists waitlist_experience_check;
+
+alter table public.waitlist_signups
+    add constraint waitlist_experience_check
+    check (experience_level in ('New to n8n', 'Beginner', 'Some experience', 'Intermediate', 'Advanced'));
+
 create index if not exists idx_waitlist_workshop on public.waitlist_signups(workshop_slug);
 create index if not exists idx_waitlist_status on public.waitlist_signups(status);
 create index if not exists idx_waitlist_payment on public.waitlist_signups(payment_status);
 create index if not exists idx_waitlist_source on public.waitlist_signups(source);
 create index if not exists idx_waitlist_date on public.waitlist_signups(signup_date_time desc);
 create index if not exists idx_waitlist_vip on public.waitlist_signups(vip_pricing_review_interest);
+create index if not exists idx_waitlist_interested_class on public.waitlist_signups(interested_class);
+create index if not exists idx_waitlist_preferred_setup on public.waitlist_signups(preferred_setup);
 
 create unique index if not exists idx_waitlist_unique_workshop_email
     on public.waitlist_signups(workshop_slug, lower(email));

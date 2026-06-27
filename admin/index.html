@@ -370,6 +370,9 @@
                 <select id="filterWorkshop">
                     <option value="">All Workshops</option>
                 </select>
+                <select id="filterClass">
+                    <option value="">All Classes</option>
+                </select>
                 <select id="filterStatus">
                     <option value="">All Statuses</option>
                     <option value="New">New</option>
@@ -411,8 +414,11 @@
                             <th onclick="sortTable('email')">Email <span class="sort-icon">↕</span></th>
                             <th onclick="sortTable('whatsapp_number')">WhatsApp <span class="sort-icon">↕</span></th>
                             <th onclick="sortTable('city')">City <span class="sort-icon">↕</span></th>
+                            <th onclick="sortTable('workshop_slug')">Workshop <span class="sort-icon">↕</span></th>
+                            <th onclick="sortTable('interested_class')">Class <span class="sort-icon">↕</span></th>
                             <th onclick="sortTable('experience_level')">Exp <span class="sort-icon">↕</span></th>
-                            <th onclick="sortTable('current_build_type')">Build <span class="sort-icon">↕</span></th>
+                            <th onclick="sortTable('current_build_type')">Build / Setup <span class="sort-icon">↕</span></th>
+                            <th onclick="sortTable('preferred_setup')">Preferred Setup <span class="sort-icon">↕</span></th>
                             <th onclick="sortTable('price_range_interest')">Price <span class="sort-icon">↕</span></th>
                             <th onclick="sortTable('vip_pricing_review_interest')">VIP <span class="sort-icon">↕</span></th>
                             <th onclick="sortTable('source')">Source <span class="sort-icon">↕</span></th>
@@ -467,6 +473,26 @@
                 <div class="detail-field">
                     <label>Build Type</label>
                     <div class="value-box" id="modalBuild"></div>
+                </div>
+            </div>
+            <div class="detail-row">
+                <div class="detail-field">
+                    <label>Workshop</label>
+                    <div class="value-box" id="modalWorkshop"></div>
+                </div>
+                <div class="detail-field">
+                    <label>Interested Class</label>
+                    <div class="value-box" id="modalInterestedClass"></div>
+                </div>
+            </div>
+            <div class="detail-row">
+                <div class="detail-field">
+                    <label>Preferred Setup</label>
+                    <div class="value-box" id="modalPreferredSetup"></div>
+                </div>
+                <div class="detail-field">
+                    <label>Source</label>
+                    <div class="value-box" id="modalSource"></div>
                 </div>
             </div>
             <div class="detail-row">
@@ -813,6 +839,7 @@ function updateCharts() {
 function populateFilters() {
     const sources = [...new Set(allSignups.map(s => s.source).filter(Boolean))].sort();
     const workshops = [...new Set(allSignups.map(s => s.workshop_slug).filter(Boolean))].sort();
+    const classes = [...new Set(allSignups.map(s => s.interested_class).filter(Boolean))].sort();
     const prices = [...new Set(allSignups.map(s => s.price_range_interest).filter(Boolean))].sort();
 
     const sourceSelect = document.getElementById('filterSource');
@@ -827,6 +854,12 @@ function populateFilters() {
         workshopSelect.innerHTML += `<option value="${escapeHtml(w)}">${escapeHtml(w)}</option>`;
     });
 
+    const classSelect = document.getElementById('filterClass');
+    classSelect.innerHTML = '<option value="">All Classes</option>';
+    classes.forEach(c => {
+        classSelect.innerHTML += `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`;
+    });
+
     const priceSelect = document.getElementById('filterPrice');
     priceSelect.innerHTML = '<option value="">All Prices</option>';
     prices.forEach(p => {
@@ -838,6 +871,7 @@ function applyFilters() {
     const search = document.getElementById('searchInput').value.toLowerCase();
     const source = document.getElementById('filterSource').value;
     const workshop = document.getElementById('filterWorkshop').value;
+    const interestedClass = document.getElementById('filterClass').value;
     const status = document.getElementById('filterStatus').value;
     const vip = document.getElementById('filterVIP').value;
     const price = document.getElementById('filterPrice').value;
@@ -849,10 +883,11 @@ function applyFilters() {
             (s.whatsapp_number || '').toLowerCase().includes(search);
         const matchesSource = !source || s.source === source;
         const matchesWorkshop = !workshop || s.workshop_slug === workshop;
+        const matchesClass = !interestedClass || s.interested_class === interestedClass;
         const matchesStatus = !status || s.status === status;
         const matchesVIP = !vip || s.vip_pricing_review_interest === vip;
         const matchesPrice = !price || s.price_range_interest === price;
-        return matchesSearch && matchesSource && matchesWorkshop && matchesStatus && matchesVIP && matchesPrice;
+        return matchesSearch && matchesSource && matchesWorkshop && matchesClass && matchesStatus && matchesVIP && matchesPrice;
     });
 
     // Apply sort
@@ -874,6 +909,7 @@ function clearFilters() {
     document.getElementById('searchInput').value = '';
     document.getElementById('filterSource').value = '';
     document.getElementById('filterWorkshop').value = '';
+    document.getElementById('filterClass').value = '';
     document.getElementById('filterStatus').value = '';
     document.getElementById('filterVIP').value = '';
     document.getElementById('filterPrice').value = '';
@@ -908,8 +944,11 @@ function renderTable() {
                 <td>${escapeHtml(s.email || '-')}</td>
                 <td>${escapeHtml(s.whatsapp_number || '-')}</td>
                 <td>${escapeHtml(s.city || '-')}</td>
+                <td>${escapeHtml(s.workshop_slug || '-')}</td>
+                <td>${escapeHtml(s.interested_class || '-')}</td>
                 <td><span class="badge badge-blue">${escapeHtml(s.experience_level || '-')}</span></td>
                 <td>${escapeHtml(s.current_build_type || '-')}</td>
+                <td>${escapeHtml(s.preferred_setup || '-')}</td>
                 <td>${escapeHtml(s.price_range_interest || '-')}</td>
                 <td><span class="badge ${isVIP ? 'badge-gold' : 'badge-blue'}">${escapeHtml(s.vip_pricing_review_interest || '-')}</span></td>
                 <td>${escapeHtml(s.source || 'direct')}</td>
@@ -981,6 +1020,10 @@ function openEdit(id) {
     document.getElementById('modalCity').textContent = signup.city || '-';
     document.getElementById('modalExp').textContent = signup.experience_level || '-';
     document.getElementById('modalBuild').textContent = signup.current_build_type || '-';
+    document.getElementById('modalWorkshop').textContent = signup.workshop_slug || '-';
+    document.getElementById('modalInterestedClass').textContent = signup.interested_class || '-';
+    document.getElementById('modalPreferredSetup').textContent = signup.preferred_setup || '-';
+    document.getElementById('modalSource').textContent = signup.source || 'direct';
     document.getElementById('modalPrice').textContent = signup.price_range_interest || '-';
     document.getElementById('modalVIP').textContent = signup.vip_pricing_review_interest || '-';
     document.getElementById('modalChallenge').textContent = signup.biggest_pricing_challenge || '-';
@@ -1047,8 +1090,8 @@ function exportCSV() {
     }
 
     const headers = [
-        'ID', 'Full Name', 'Email', 'WhatsApp', 'City', 'Experience', 'Build Type',
-        'Challenge', 'VIP Interest', 'Price Range', 'Source', 'Workshop', 'Status',
+        'ID', 'Full Name', 'Email', 'WhatsApp', 'City', 'Workshop', 'Interested Class',
+        'Preferred Setup', 'Experience', 'Build Type', 'Challenge', 'VIP Interest', 'Price Range', 'Source', 'Status',
         'Ticket Type', 'Payment Status', 'Amount Paid', 'Payment Reference',
         'Payment Method', 'Notes', 'Signup Date'
     ];
@@ -1059,13 +1102,15 @@ function exportCSV() {
         s.email,
         s.whatsapp_number,
         s.city,
+        s.workshop_slug,
+        s.interested_class,
+        s.preferred_setup,
         s.experience_level,
         s.current_build_type,
         s.biggest_pricing_challenge,
         s.vip_pricing_review_interest,
         s.price_range_interest,
         s.source,
-        s.workshop_slug,
         s.status,
         s.ticket_type,
         s.payment_status,
@@ -1095,6 +1140,7 @@ function exportCSV() {
 document.getElementById('searchInput').addEventListener('input', debounce(applyFilters, 300));
 document.getElementById('filterSource').addEventListener('change', applyFilters);
 document.getElementById('filterWorkshop').addEventListener('change', applyFilters);
+document.getElementById('filterClass').addEventListener('change', applyFilters);
 document.getElementById('filterStatus').addEventListener('change', applyFilters);
 document.getElementById('filterVIP').addEventListener('change', applyFilters);
 document.getElementById('filterPrice').addEventListener('change', applyFilters);

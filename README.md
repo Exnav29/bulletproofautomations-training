@@ -16,6 +16,8 @@ The main website can later add:
 
 - `/` training hub homepage
 - `/price-by-value` workshop landing page and waitlist form
+- `/n8n-automation-builder-pathway` n8n training pathway overview
+- `/n8n-foundations` n8n Foundations interest list and cohort overview
 - `/thank-you` post-signup confirmation page
 - `/admin` private waitlist admin dashboard
 

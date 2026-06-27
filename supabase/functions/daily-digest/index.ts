@@ -27,10 +27,55 @@ function countBy(rows: Record<string, unknown>[], key: string) {
 }
 
 function rowsForBreakdown(items: Record<string, number>) {
-  return Object.entries(items)
+  const rows = Object.entries(items)
     .sort((a, b) => b[1] - a[1])
     .map(([label, count]) => `<tr><td>${escapeHtml(label)}</td><td align="right"><strong>${count}</strong></td></tr>`)
     .join('')
+  return rows || '<tr><td colspan="2">No data yet.</td></tr>'
+}
+
+function signupRows(rows: Record<string, unknown>[]) {
+  return rows.map((s) => `
+    <tr>
+      <td>${escapeHtml(s.signup_date_time)}</td>
+      <td>${escapeHtml(s.full_name)}</td>
+      <td>${escapeHtml(s.email)}</td>
+      <td>${escapeHtml(s.whatsapp_number)}</td>
+      <td>${escapeHtml(s.city)}</td>
+      <td>${escapeHtml(s.workshop_slug)}</td>
+      <td>${escapeHtml(s.interested_class || '-')}</td>
+      <td>${escapeHtml(s.preferred_setup || '-')}</td>
+      <td>${escapeHtml(s.experience_level || '-')}</td>
+      <td>${escapeHtml(s.source || 'direct')}</td>
+      <td>${escapeHtml(s.status || 'New')}</td>
+    </tr>
+  `).join('')
+}
+
+function groupedSignupSections(rows: Record<string, unknown>[]) {
+  if (!rows.length) return '<p>No new signups today.</p>'
+
+  const grouped = rows.reduce<Record<string, Record<string, unknown>[]>>((acc, row) => {
+    const slug = String(row.workshop_slug || 'unknown')
+    if (!acc[slug]) acc[slug] = []
+    acc[slug].push(row)
+    return acc
+  }, {})
+
+  return Object.entries(grouped)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([slug, signups]) => `
+      <h3>${escapeHtml(slug)} (${signups.length})</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Signup time</th><th>Name</th><th>Email</th><th>WhatsApp</th><th>City/Country</th>
+            <th>Workshop</th><th>Interested class</th><th>Preferred setup</th><th>Experience</th><th>Source</th><th>Status</th>
+          </tr>
+        </thead>
+        <tbody>${signupRows(signups)}</tbody>
+      </table>
+    `).join('')
 }
 
 serve(async () => {
@@ -43,32 +88,21 @@ serve(async () => {
     const { data, error } = await supabase
       .from('waitlist_signups')
       .select('*')
-      .eq('workshop_slug', 'price-by-value')
       .order('signup_date_time', { ascending: false })
 
     if (error) throw error
 
     const allSignups = data || []
     const now = new Date()
-    const todayStart = new Date(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()).toISOString()
-    const tomorrowStart = new Date(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1).toISOString()
+    const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
+    const tomorrowStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)).toISOString()
     const todaySignups = allSignups.filter((s) => s.signup_date_time >= todayStart && s.signup_date_time < tomorrowStart)
+    const priceByValueSignups = allSignups.filter((s) => s.workshop_slug === 'price-by-value')
+    const n8nSignups = allSignups.filter((s) => s.workshop_slug === 'n8n-foundations')
     const todayVip = todaySignups.filter((s) => s.vip_pricing_review_interest === 'Yes')
     const totalVip = allSignups.filter((s) => s.vip_pricing_review_interest === 'Yes').length
-    const paidSeats = allSignups.filter((s) => s.payment_status === 'Paid').length
+    const paidSeats = priceByValueSignups.filter((s) => s.payment_status === 'Paid').length
     const seatsRemaining = Math.max(0, TARGET_SEATS - paidSeats)
-
-    const todayRows = todaySignups.map((s) => `
-      <tr>
-        <td>${escapeHtml(s.full_name)}</td>
-        <td>${escapeHtml(s.email)}</td>
-        <td>${escapeHtml(s.whatsapp_number)}</td>
-        <td>${escapeHtml(s.city)}</td>
-        <td>${escapeHtml(s.source || 'direct')}</td>
-        <td>${escapeHtml(s.price_range_interest)}</td>
-        <td>${escapeHtml(s.biggest_pricing_challenge || '-')}</td>
-      </tr>
-    `).join('')
 
     const html = `
       <style>
@@ -79,24 +113,28 @@ serve(async () => {
         .stat { background: #f7f7f7; border-radius: 10px; padding: 14px; }
         .stat strong { display: block; font-size: 24px; color: #b8941f; }
       </style>
-      <h2>Daily waitlist digest: Price by Value</h2>
+      <h2>Daily training interest digest</h2>
+      <p>Scheduled for 10:00 AM GMT / UTC.</p>
       <div class="stats">
         <div class="stat"><strong>${todaySignups.length}</strong>New signups today</div>
         <div class="stat"><strong>${allSignups.length}</strong>Total signups</div>
+        <div class="stat"><strong>${priceByValueSignups.length}</strong>Price by Value total</div>
+        <div class="stat"><strong>${n8nSignups.length}</strong>n8n Foundations total</div>
         <div class="stat"><strong>${todayVip.length}</strong>VIP-interest today</div>
         <div class="stat"><strong>${totalVip}</strong>Total VIP-interest</div>
-        <div class="stat"><strong>${paidSeats}</strong>Paid confirmed seats</div>
-        <div class="stat"><strong>${seatsRemaining}</strong>Seats remaining</div>
+        <div class="stat"><strong>${paidSeats}</strong>Price by Value paid seats</div>
+        <div class="stat"><strong>${seatsRemaining}</strong>Price by Value seats remaining</div>
       </div>
       <h3>Signup source breakdown</h3>
       <table>${rowsForBreakdown(countBy(allSignups, 'source'))}</table>
-      <h3>Price-range interest breakdown</h3>
-      <table>${rowsForBreakdown(countBy(allSignups, 'price_range_interest'))}</table>
-      <h3>Today's signups and pricing challenges</h3>
-      <table>
-        <thead><tr><th>Name</th><th>Email</th><th>WhatsApp</th><th>City</th><th>Source</th><th>Price range</th><th>Challenge</th></tr></thead>
-        <tbody>${todayRows || '<tr><td colspan="7">No signups today.</td></tr>'}</tbody>
-      </table>
+      <h3>Workshop breakdown</h3>
+      <table>${rowsForBreakdown(countBy(allSignups, 'workshop_slug'))}</table>
+      <h3>Interested class breakdown</h3>
+      <table>${rowsForBreakdown(countBy(allSignups, 'interested_class'))}</table>
+      <h3>Preferred setup breakdown</h3>
+      <table>${rowsForBreakdown(countBy(allSignups, 'preferred_setup'))}</table>
+      <h3>Today's signups by workshop/class</h3>
+      ${groupedSignupSections(todaySignups)}
       <p><a href="https://training.bulletproofautomations.com/admin">Open admin dashboard</a></p>
     `
 
@@ -110,7 +148,7 @@ serve(async () => {
         body: JSON.stringify({
           from: `Bulletproof Automations Training <${FROM_EMAIL}>`,
           to: OWNER_EMAIL,
-          subject: `Daily waitlist digest: ${todaySignups.length} new signup(s)`,
+          subject: `Daily training digest: ${todaySignups.length} new signup(s)`,
           html,
         }),
       })
@@ -124,6 +162,8 @@ serve(async () => {
       stats: {
         newSignupsToday: todaySignups.length,
         totalSignups: allSignups.length,
+        priceByValueTotal: priceByValueSignups.length,
+        n8nFoundationsTotal: n8nSignups.length,
         vipToday: todayVip.length,
         vipTotal: totalVip,
         paidConfirmedSeats: paidSeats,
