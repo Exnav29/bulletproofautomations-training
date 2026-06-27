@@ -436,7 +436,7 @@ section { padding: 72px 0; }
     padding: 4px;
 }
 
-@media (min-width: 768px) {
+@media (min-width: 1024px) {
     .nav-links { display: flex; }
     .mobile-menu-btn { display: none; }
 }

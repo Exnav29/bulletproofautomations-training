@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>n8n Automation Builder Training Pathway | Bulletproof Automations Training</title>
+    <meta name="description" content="A serious training ladder for people who want to build practical n8n and AI automation skills.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <style>
+        .pathway-hero {
+            min-height: 92vh;
+            display: flex;
+            align-items: center;
+            padding-top: 110px;
+            background:
+                linear-gradient(rgba(212,175,55,0.035) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(212,175,55,0.035) 1px, transparent 1px),
+                radial-gradient(circle at 80% 24%, rgba(212,175,55,0.14), transparent 32%),
+                radial-gradient(circle at 20% 80%, rgba(45,138,78,0.12), transparent 30%);
+            background-size: 42px 42px, 42px 42px, auto, auto;
+        }
+        .hero-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 36px;
+            align-items: center;
+        }
+        .pathway-hero h1 {
+            font-size: clamp(2.5rem, 6vw, 4.9rem);
+            max-width: 840px;
+            margin: 18px 0 20px;
+            background: linear-gradient(135deg, var(--text-primary), var(--gold-light));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .pathway-hero .subtitle {
+            max-width: 720px;
+            color: var(--text-secondary);
+            font-size: clamp(1.05rem, 2vw, 1.25rem);
+            margin-bottom: 32px;
+        }
+        .hero-cta-group { display: flex; gap: 16px; flex-wrap: wrap; }
+        .pathway-visual {
+            background: linear-gradient(145deg, rgba(17,17,24,0.92), rgba(22,22,31,0.86));
+            border: 1px solid var(--border-strong);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            box-shadow: var(--shadow-md);
+        }
+        .visual-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 22px;
+        }
+        .visual-top span { color: var(--text-muted); font-size: 0.85rem; }
+        .flow-stack {
+            display: grid;
+            gap: 14px;
+            position: relative;
+        }
+        .flow-stack::before {
+            content: "";
+            position: absolute;
+            left: 18px;
+            top: 24px;
+            bottom: 24px;
+            width: 2px;
+            background: linear-gradient(var(--gold), var(--green-light));
+        }
+        .flow-node {
+            position: relative;
+            display: grid;
+            grid-template-columns: 38px 1fr auto;
+            gap: 14px;
+            align-items: center;
+            padding: 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+        }
+        .node-dot {
+            width: 38px;
+            height: 38px;
+            border-radius: 12px;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(135deg, var(--gold), var(--green));
+            color: var(--bg-dark);
+            font-weight: 800;
+            z-index: 1;
+        }
+        .flow-node strong { display: block; }
+        .flow-node small { color: var(--text-muted); }
+        .flow-node .tag { color: var(--gold-light); font-size: 0.8rem; font-weight: 700; }
+        .band { background: var(--bg-card); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+        .copy-block { max-width: 900px; margin: 0 auto; }
+        .copy-block p { color: var(--text-secondary); font-size: 1.08rem; margin-bottom: 16px; }
+        .ladder {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 18px;
+        }
+        .ladder-step {
+            display: grid;
+            grid-template-columns: 54px 1fr;
+            gap: 18px;
+            align-items: start;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+        }
+        .step-number {
+            width: 54px;
+            height: 54px;
+            border-radius: 16px;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(135deg, var(--gold), var(--gold-dim));
+            color: var(--bg-dark);
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 800;
+        }
+        .ladder-step h3 { margin-bottom: 8px; }
+        .ladder-step p, .info-card p, .info-card li { color: var(--text-secondary); }
+        .ladder-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 12px 0;
+        }
+        .ladder-meta span {
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(212,175,55,0.09);
+            color: var(--gold-light);
+            font-size: 0.82rem;
+            font-weight: 700;
+        }
+        .info-card ul { padding-left: 20px; margin-top: 12px; }
+        .info-card li { margin-bottom: 8px; }
+        .split-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+        .final-pathway-cta { text-align: center; }
+        .final-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+        @media (min-width: 900px) {
+            .hero-layout { grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr); }
+            .split-grid { grid-template-columns: 1fr 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<header class="site-header">
+    <div class="container">
+        <a href="/" class="brand">
+            <div class="brand-icon">BA</div>
+            <span>Bulletproof Automations</span>
+        </a>
+        <nav class="nav-links">
+            <a href="/">Home</a>
+            <a href="/n8n-automation-builder-pathway">n8n Pathway</a>
+            <a href="/price-by-value">Workshops</a>
+            <a href="/n8n-foundations#interest">Interest List</a>
+            <a href="https://bulletproofautomations.com">Main Site</a>
+        </nav>
+        <a href="/n8n-foundations#interest" class="btn btn-primary nav-cta">Interest List</a>
+        <button class="mobile-menu-btn" aria-label="Menu">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+        </button>
+    </div>
+    <div class="mobile-nav">
+        <a href="/">Home</a>
+        <a href="/n8n-automation-builder-pathway">n8n Pathway</a>
+        <a href="/price-by-value">Workshops</a>
+        <a href="/n8n-foundations#interest">Interest List</a>
+        <a href="https://bulletproofautomations.com">Main Site</a>
+    </div>
+</header>
+
+<section class="pathway-hero">
+    <div class="container hero-layout">
+        <div>
+            <span class="badge badge-gold animate-in">n8n Ghana Training Pathway</span>
+            <h1 class="animate-in delay-1">From Beginner to Useful Automation Builder</h1>
+            <p class="subtitle animate-in delay-2">A structured training ladder for people who want to move beyond watching tutorials and start building automations that can survive real business use.</p>
+            <div class="hero-cta-group animate-in delay-3">
+                <a href="/n8n-foundations" class="btn btn-primary btn-large">Start With n8n Foundations</a>
+                <a href="/n8n-foundations#interest" class="btn btn-secondary btn-large">Join Interest List</a>
+            </div>
+        </div>
+        <div class="pathway-visual animate-in delay-2" aria-label="Pathway progression">
+            <div class="visual-top">
+                <strong>Builder Ladder</strong>
+                <span>Progression map</span>
+            </div>
+            <div class="flow-stack">
+                <div class="flow-node"><div class="node-dot">1</div><div><strong>Beginner</strong><small>n8n foundations</small></div><span class="tag">Free</span></div>
+                <div class="flow-node"><div class="node-dot">2</div><div><strong>Intermediate</strong><small>realistic integrations</small></div><span class="tag">Paid</span></div>
+                <div class="flow-node"><div class="node-dot">3</div><div><strong>Advanced</strong><small>reliability habits</small></div><span class="tag">Paid</span></div>
+                <div class="flow-node"><div class="node-dot">4</div><div><strong>Use Case</strong><small>business deliverable</small></div><span class="tag">Paid</span></div>
+                <div class="flow-node"><div class="node-dot">5</div><div><strong>Builder Pool Review</strong><small>trusted with real work</small></div><span class="tag">Review</span></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="band">
+    <div class="container">
+        <div class="section-header reveal">
+            <h2>Why This Pathway Exists</h2>
+        </div>
+        <div class="copy-block reveal">
+            <p>Many people are trying to learn AI automation and n8n, but tutorials alone do not create reliable builders.</p>
+            <p>Real client work requires setup discipline, troubleshooting, documentation, communication, reliability, and repeatable delivery habits. This pathway is designed to build those habits step by step.</p>
+            <p>It is not a shortcut and not a job guarantee. It is a structured route for people willing to do the work.</p>
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="container">
+        <div class="section-header reveal">
+            <h2>The Builder Ladder</h2>
+            <p>Each cohort builds on the previous one. Participants may not skip into later cohorts without an interview and skills assessment.</p>
+        </div>
+        <div class="ladder">
+            <div class="ladder-step reveal">
+                <div class="step-number">1</div>
+                <div>
+                    <h3>Beginner Cohort</h3>
+                    <div class="ladder-meta"><span>8 weeks</span><span>Free</span></div>
+                    <p>Foundation, local setup, workflow basics, assignments, and first portfolio pieces.</p>
+                </div>
+            </div>
+            <div class="ladder-step reveal">
+                <div class="step-number">2</div>
+                <div>
+                    <h3>Intermediate Cohort</h3>
+                    <div class="ladder-meta"><span>4 weeks</span><span>Paid</span></div>
+                    <p>More realistic integrations, workflow design, data handling, debugging, and client-style requirements.</p>
+                </div>
+            </div>
+            <div class="ladder-step reveal">
+                <div class="step-number">3</div>
+                <div>
+                    <h3>Advanced Cohort</h3>
+                    <div class="ladder-meta"><span>2 weeks</span><span>Paid</span></div>
+                    <p>Production readiness, error handling, credentials, security awareness, maintainability, and reliability.</p>
+                </div>
+            </div>
+            <div class="ladder-step reveal">
+                <div class="step-number">4</div>
+                <div>
+                    <h3>Use Case Cohort</h3>
+                    <div class="ladder-meta"><span>1 session</span><span>Paid</span></div>
+                    <p>Focused business use case practice with a practical deliverable.</p>
+                </div>
+            </div>
+            <div class="ladder-step reveal">
+                <div class="step-number">5</div>
+                <div>
+                    <h3>Builder Pool Review</h3>
+                    <div class="ladder-meta"><span>Interview</span><span>Skills assessment</span><span>Portfolio review</span><span>Reliability review</span></div>
+                    <p>Consideration for future assignment opportunities when available.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="band">
+    <div class="container">
+        <div class="section-header reveal">
+            <h2>What Makes This Different</h2>
+        </div>
+        <div class="grid-3">
+            <div class="card info-card reveal"><h3>Hands-on Work</h3><p>Built around practice, not passive watching.</p></div>
+            <div class="card info-card reveal"><h3>Proof of Work</h3><p>Assignments and submitted evidence matter.</p></div>
+            <div class="card info-card reveal"><h3>Local-first Setup</h3><p>Local n8n is preferred when possible so practice can continue.</p></div>
+            <div class="card info-card reveal"><h3>Attendance Standards</h3><p>Showing up is part of the training discipline.</p></div>
+            <div class="card info-card reveal"><h3>No Parachuting</h3><p>Later cohorts require proven skill or assessment.</p></div>
+            <div class="card info-card reveal"><h3>Earned Consideration</h3><p>Builder pool consideration is earned, not promised.</p></div>
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="container split-grid">
+        <div class="card info-card reveal">
+            <h2>Who This Is For</h2>
+            <ul>
+                <li>Beginners who are serious about learning n8n properly</li>
+                <li>People in Ghana or the broader community who want practical automation skills</li>
+                <li>Aspiring AI automation builders</li>
+                <li>Freelancers and consultants who need stronger technical foundations</li>
+                <li>People willing to attend, practice, submit assignments, and build a portfolio</li>
+            </ul>
+        </div>
+        <div class="card info-card reveal">
+            <h2>Who This Is Not For</h2>
+            <ul>
+                <li>People looking for shortcuts</li>
+                <li>People expecting paid work to be promised</li>
+                <li>People who will not complete assignments</li>
+                <li>People who only want a certificate without doing the work</li>
+                <li>People trying to skip the foundation without proving skill</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<section class="band">
+    <div class="container split-grid">
+        <div class="card info-card reveal">
+            <h2>Certificate of Completion</h2>
+            <p>Certificates are earned by meeting cohort requirements. For the beginner cohort, participants must meet attendance requirements and complete assignments.</p>
+            <p class="mt-2">A Certificate of Completion recognizes completion, not an official n8n credential, employment, job placement, or builder pool acceptance.</p>
+        </div>
+        <div class="card info-card reveal">
+            <h2>AI Automation Builder Pool</h2>
+            <p>The long-term goal is to build a pool of reliable AI automation builders.</p>
+            <p class="mt-2">Participants who complete the full pathway may be invited to apply. Acceptance requires interview, skills assessment, portfolio review, communication review, and reliability review.</p>
+            <p class="mt-2"><strong>The standard is not "I attended classes." The standard is "I can be trusted with real work."</strong></p>
+            <p class="mt-2">There is no guarantee of paid work or assignments.</p>
+        </div>
+    </div>
+</section>
+
+<section class="final-pathway-cta">
+    <div class="container">
+        <h2 class="reveal">The first step is n8n Foundations.</h2>
+        <p class="text-secondary reveal mt-2 mb-4">The beginner cohort is where the pathway starts. It is free, hands-on, and designed to give serious learners the foundation they need before moving into paid follow-on cohorts.</p>
+        <div class="final-actions reveal">
+            <a href="/n8n-foundations" class="btn btn-primary btn-large">View Beginner Cohort</a>
+            <a href="/n8n-foundations#interest" class="btn btn-secondary btn-large">Join Interest List</a>
+        </div>
+    </div>
+</section>
+
+<footer class="site-footer">
+    <div class="container">
+        <p><span class="accent">n8n Automation Builder Training Pathway</span> - Part of Bulletproof Automations Training</p>
+    </div>
+</footer>
+
+<script src="../assets/js/main.js"></script>
+</body>
+</html>
