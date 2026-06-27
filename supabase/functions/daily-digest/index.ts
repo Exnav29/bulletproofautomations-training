@@ -53,7 +53,7 @@ function signupRows(rows: Record<string, unknown>[]) {
 }
 
 function groupedSignupSections(rows: Record<string, unknown>[]) {
-  if (!rows.length) return '<p>No new signups today.</p>'
+  if (!rows.length) return '<p>No new signups in the last 24 hours.</p>'
 
   const grouped = rows.reduce<Record<string, Record<string, unknown>[]>>((acc, row) => {
     const slug = String(row.workshop_slug || 'unknown')
@@ -94,12 +94,12 @@ serve(async () => {
 
     const allSignups = data || []
     const now = new Date()
-    const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
-    const tomorrowStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)).toISOString()
-    const todaySignups = allSignups.filter((s) => s.signup_date_time >= todayStart && s.signup_date_time < tomorrowStart)
+    const windowEnd = now.toISOString()
+    const windowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString()
+    const recentSignups = allSignups.filter((s) => s.signup_date_time >= windowStart && s.signup_date_time < windowEnd)
     const priceByValueSignups = allSignups.filter((s) => s.workshop_slug === 'price-by-value')
     const n8nSignups = allSignups.filter((s) => s.workshop_slug === 'n8n-foundations')
-    const todayVip = todaySignups.filter((s) => s.vip_pricing_review_interest === 'Yes')
+    const recentVip = recentSignups.filter((s) => s.vip_pricing_review_interest === 'Yes')
     const totalVip = allSignups.filter((s) => s.vip_pricing_review_interest === 'Yes').length
     const paidSeats = priceByValueSignups.filter((s) => s.payment_status === 'Paid').length
     const seatsRemaining = Math.max(0, TARGET_SEATS - paidSeats)
@@ -114,13 +114,13 @@ serve(async () => {
         .stat strong { display: block; font-size: 24px; color: #b8941f; }
       </style>
       <h2>Daily training interest digest</h2>
-      <p>Scheduled for 10:00 AM GMT / UTC.</p>
+      <p>Scheduled for 10:00 AM GMT / UTC. Detailed signup listing covers the previous 24 hours: ${escapeHtml(windowStart)} through ${escapeHtml(windowEnd)}.</p>
       <div class="stats">
-        <div class="stat"><strong>${todaySignups.length}</strong>New signups today</div>
+        <div class="stat"><strong>${recentSignups.length}</strong>New signups in the last 24 hours</div>
         <div class="stat"><strong>${allSignups.length}</strong>Total signups</div>
         <div class="stat"><strong>${priceByValueSignups.length}</strong>Price by Value total</div>
         <div class="stat"><strong>${n8nSignups.length}</strong>n8n Foundations total</div>
-        <div class="stat"><strong>${todayVip.length}</strong>VIP-interest today</div>
+        <div class="stat"><strong>${recentVip.length}</strong>VIP-interest in the last 24 hours</div>
         <div class="stat"><strong>${totalVip}</strong>Total VIP-interest</div>
         <div class="stat"><strong>${paidSeats}</strong>Price by Value paid seats</div>
         <div class="stat"><strong>${seatsRemaining}</strong>Price by Value seats remaining</div>
@@ -133,8 +133,8 @@ serve(async () => {
       <table>${rowsForBreakdown(countBy(allSignups, 'interested_class'))}</table>
       <h3>Preferred setup breakdown</h3>
       <table>${rowsForBreakdown(countBy(allSignups, 'preferred_setup'))}</table>
-      <h3>Today's signups by workshop/class</h3>
-      ${groupedSignupSections(todaySignups)}
+      <h3>Signups from the last 24 hours by workshop/class</h3>
+      ${groupedSignupSections(recentSignups)}
       <p><a href="https://training.bulletproofautomations.com/admin">Open admin dashboard</a></p>
     `
 
@@ -148,7 +148,7 @@ serve(async () => {
         body: JSON.stringify({
           from: `Bulletproof Automations Training <${FROM_EMAIL}>`,
           to: OWNER_EMAIL,
-          subject: `Daily training digest: ${todaySignups.length} new signup(s)`,
+          subject: `Daily training digest: ${recentSignups.length} new signup(s) in the last 24 hours`,
           html,
         }),
       })
@@ -160,11 +160,11 @@ serve(async () => {
     return new Response(JSON.stringify({
       success: true,
       stats: {
-        newSignupsToday: todaySignups.length,
+        newSignupsLast24Hours: recentSignups.length,
         totalSignups: allSignups.length,
         priceByValueTotal: priceByValueSignups.length,
         n8nFoundationsTotal: n8nSignups.length,
-        vipToday: todayVip.length,
+        vipLast24Hours: recentVip.length,
         vipTotal: totalVip,
         paidConfirmedSeats: paidSeats,
         seatsRemaining,

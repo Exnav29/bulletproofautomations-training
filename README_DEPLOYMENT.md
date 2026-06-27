@@ -95,7 +95,7 @@ These GitHub Actions secret names can keep the `SUPABASE_` prefix. The reserved-
 
 In GitHub Actions, open `Daily Waitlist Digest` and run `workflow_dispatch`.
 
-The scheduled digest runs at 10:00 AM GMT / UTC and groups signups by workshop/class.
+The scheduled digest runs at 10:00 AM GMT / UTC and lists signups from the previous 24 hours, grouped by workshop/class.
 
 ## 14. Test the full waitlist flow
 
