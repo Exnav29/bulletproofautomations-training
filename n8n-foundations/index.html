@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Beginner Cohort: n8n Foundations | Bulletproof Automations Training</title>
-    <meta name="description" content="A free 8-week beginner cohort for installing n8n, learning workflow basics, and building disciplined automation skills.">
+    <meta name="description" content="A free 8-week beginner cohort for installing n8n, building workflow artifacts, and starting an automation portfolio.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
@@ -129,6 +129,19 @@
         .info-card p, .info-card li, .week-card p { color: var(--text-secondary); }
         .info-card ul { padding-left: 20px; margin-top: 12px; }
         .info-card li { margin-bottom: 8px; }
+        .artifact-list {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+            margin-top: 20px;
+        }
+        .artifact-item {
+            padding: 14px 16px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            background: var(--bg-elevated);
+            color: var(--text-secondary);
+        }
         .week-grid {
             display: grid;
             grid-template-columns: 1fr;
@@ -145,6 +158,14 @@
             color: var(--gold-light);
             font-weight: 800;
             margin-bottom: 8px;
+        }
+        .week-card h3 { margin-bottom: 12px; }
+        .week-card .week-label {
+            display: block;
+            margin: 12px 0 4px;
+            color: var(--text-primary);
+            font-weight: 800;
+            font-size: 0.9rem;
         }
         .warning-card {
             border-color: rgba(192,57,43,0.35);
@@ -208,7 +229,7 @@
         <div>
             <span class="badge badge-green animate-in">Free Beginner Cohort</span>
             <h1 class="animate-in delay-1">n8n Foundations: Build Your First Real Automation Skills</h1>
-            <p class="subtitle animate-in delay-2">An 8-week hands-on beginner cohort for people who want to install n8n, understand how workflows work, and start building useful automations with discipline.</p>
+            <p class="subtitle animate-in delay-2">An 8-week hands-on builder cohort for people who want to install n8n, build useful workflows, and start a real automation portfolio from Week 1.</p>
             <div class="hero-meta animate-in delay-3">
                 <span>8 Weeks</span>
                 <span>Free Beginner Cohort</span>
@@ -236,10 +257,10 @@
             </div>
             <div class="visual-labels">
                 <span>Docker setup</span>
-                <span>n8n basics</span>
+                <span>Portfolio artifacts</span>
                 <span>Workflow thinking</span>
                 <span>Assignments</span>
-                <span>Portfolio work</span>
+                <span>Proof of work</span>
             </div>
         </div>
     </div>
@@ -253,11 +274,31 @@
         <div class="copy-block reveal">
             <p>Completing the beginner cohort does not make someone a professional automation builder.</p>
             <p>It gives the foundation needed to continue into intermediate, advanced, and use-case cohorts. The full pathway is what prepares someone to be considered for more serious work.</p>
+            <p>The goal is not to watch training. The goal is to build proof of work.</p>
         </div>
     </div>
 </section>
 
 <section>
+    <div class="container">
+        <div class="section-header reveal">
+            <h2>Portfolio-First Learning</h2>
+            <p>Every session ends with a portfolio artifact.</p>
+        </div>
+        <div class="copy-block reveal">
+            <p>This is not a watch-and-nod training. We learn by doing, and every Saturday session has a build assignment that should leave behind proof of work.</p>
+            <p>Participants should maintain a GitHub repository or organized portfolio folder from the beginning. Attendance alone is not enough; the Certificate of Completion depends on assignment completion and portfolio evidence.</p>
+        </div>
+        <div class="artifact-list reveal">
+            <div class="artifact-item">Exported workflow JSON files</div>
+            <div class="artifact-item">Screenshots of workflows, executions, and outputs</div>
+            <div class="artifact-item">README files and short case-study write-ups</div>
+            <div class="artifact-item">Test checklists, troubleshooting logs, and walkthrough notes</div>
+        </div>
+    </div>
+</section>
+
+<section class="band">
     <div class="container">
         <div class="section-header reveal">
             <h2>What You Will Learn</h2>
@@ -275,21 +316,39 @@
     </div>
 </section>
 
-<section class="band">
+<section>
     <div class="container">
         <div class="section-header reveal">
             <h2>8-Week Beginner Structure</h2>
-            <p>The exact outline may be adjusted as cohort needs become clearer.</p>
+            <p>This is a build plan, not a lecture syllabus. The exact outline may be adjusted as cohort needs become clearer.</p>
         </div>
         <div class="week-grid">
-            <div class="week-card reveal"><span>Week 1</span><h3>Orientation and First Workflow</h3><p>Local setup expectations, what n8n is, and the first working automation.</p></div>
-            <div class="week-card reveal"><span>Week 2</span><h3>Triggers and Actions</h3><p>Workflow structure, node connections, and basic execution flow.</p></div>
-            <div class="week-card reveal"><span>Week 3</span><h3>Data Between Nodes</h3><p>Reading outputs, mapping fields, and keeping data understandable.</p></div>
-            <div class="week-card reveal"><span>Week 4</span><h3>Conditions and Logic</h3><p>Branching, filters, and beginner workflow decisions.</p></div>
-            <div class="week-card reveal"><span>Week 5</span><h3>HTTP and APIs</h3><p>HTTP requests, APIs, and external services at a beginner level.</p></div>
-            <div class="week-card reveal"><span>Week 6</span><h3>Credentials and Safety</h3><p>Credentials, security basics, and safe workflow habits.</p></div>
-            <div class="week-card reveal"><span>Week 7</span><h3>Testing and Documentation</h3><p>Troubleshooting, testing, and documenting workflows clearly.</p></div>
-            <div class="week-card reveal"><span>Week 8</span><h3>Final Beginner Project</h3><p>Portfolio packaging, workflow export, and next-step review.</p></div>
+            <div class="week-card reveal"><span>Week 1</span><h3>First Portfolio Artifact</h3><strong class="week-label">Class focus</strong><p>Build and publish your first n8n portfolio artifact.</p><strong class="week-label">Portfolio piece</strong><p>GitHub portfolio repo created, first README added, screenshot of local n8n or n8n Cloud running, and exported "Hello Automation" workflow JSON.</p></div>
+            <div class="week-card reveal"><span>Week 2</span><h3>Trigger-Based Workflow</h3><strong class="week-label">Class focus</strong><p>Build a trigger-based workflow.</p><strong class="week-label">Portfolio piece</strong><p>A simple manual or scheduled trigger workflow, exported JSON file, screenshot, and short README explanation.</p></div>
+            <div class="week-card reveal"><span>Week 3</span><h3>Data Movement</h3><strong class="week-label">Class focus</strong><p>Move and transform data between nodes.</p><strong class="week-label">Portfolio piece</strong><p>A data transformation workflow showing input, processing, and output, with before/after screenshots and notes.</p></div>
+            <div class="week-card reveal"><span>Week 4</span><h3>Branching Logic</h3><strong class="week-label">Class focus</strong><p>Add conditions and branching logic.</p><strong class="week-label">Portfolio piece</strong><p>A decision-based workflow that routes data based on conditions, with exported JSON and a written explanation of the logic.</p></div>
+            <div class="week-card reveal"><span>Week 5</span><h3>HTTP and APIs</h3><strong class="week-label">Class focus</strong><p>Use HTTP requests and a beginner-friendly API.</p><strong class="week-label">Portfolio piece</strong><p>An API-powered workflow using a free or public API, exported workflow JSON, screenshot, and short case-study write-up.</p></div>
+            <div class="week-card reveal"><span>Week 6</span><h3>Credentials and Boundaries</h3><strong class="week-label">Class focus</strong><p>Use credentials safely and understand access boundaries.</p><strong class="week-label">Portfolio piece</strong><p>A workflow using a safe credentialed service or mock credential pattern, plus a short security note explaining what should and should not be shared.</p></div>
+            <div class="week-card reveal"><span>Week 7</span><h3>Test and Troubleshoot</h3><strong class="week-label">Class focus</strong><p>Test, troubleshoot, and document a workflow.</p><strong class="week-label">Portfolio piece</strong><p>A broken-to-fixed workflow, troubleshooting log, test checklist, and handoff notes.</p></div>
+            <div class="week-card reveal"><span>Week 8</span><h3>Beginner Final Project</h3><strong class="week-label">Class focus</strong><p>Complete a beginner final project.</p><strong class="week-label">Portfolio piece</strong><p>A complete beginner portfolio project with workflow JSON, screenshots, README, use case explanation, and demo notes.</p></div>
+        </div>
+    </div>
+</section>
+
+<section class="band">
+    <div class="container">
+        <div class="section-header reveal">
+            <h2>What You Will Have by the End</h2>
+        </div>
+        <div class="grid-4">
+            <div class="card info-card reveal"><h3>Starter Portfolio</h3><p>A beginner automation portfolio started from Week 1.</p></div>
+            <div class="card info-card reveal"><h3>Organized Evidence</h3><p>A GitHub repo or organized portfolio folder.</p></div>
+            <div class="card info-card reveal"><h3>Exported Workflows</h3><p>Multiple exported n8n workflow JSON files.</p></div>
+            <div class="card info-card reveal"><h3>Documentation</h3><p>Screenshots, README notes, and workflow explanations.</p></div>
+            <div class="card info-card reveal"><h3>Final Project</h3><p>A beginner final project that ties the cohort together.</p></div>
+            <div class="card info-card reveal"><h3>Explanation Practice</h3><p>Practice explaining what each workflow does and why it matters.</p></div>
+            <div class="card info-card reveal"><h3>Intermediate Foundation</h3><p>A stronger foundation for intermediate cohort work.</p></div>
+            <div class="card info-card reveal"><h3>Proof of Work</h3><p>Evidence that you built, tested, exported, and documented your assignments.</p></div>
         </div>
     </div>
 </section>
@@ -349,9 +408,10 @@
             <div class="card info-card reveal">
                 <h2>Assignments and Portfolio Work</h2>
                 <ul>
-                    <li>Every Saturday class will have an assignment</li>
+                    <li>Every Saturday class will have a build assignment</li>
                     <li>Participants should save exported workflow JSON files when requested</li>
                     <li>Participants may be asked to submit screenshots or short explanations</li>
+                    <li>Every assignment should leave behind a portfolio artifact</li>
                     <li>The goal is to build proof of work, not just attend calls</li>
                 </ul>
             </div>
@@ -367,10 +427,12 @@
                 <ul>
                     <li>Attend at least 80% of sessions</li>
                     <li>Complete all required assignments</li>
-                    <li>Submit required evidence of work when requested</li>
+                    <li>Submit portfolio evidence when requested</li>
+                    <li>Maintain enough proof of work to show the assignments were actually built</li>
                     <li>Follow class expectations</li>
                 </ul>
-                <p class="mt-2">This is a Certificate of Completion, not an official n8n credential.</p>
+                <p class="mt-2">Attendance alone is not enough. This is a Certificate of Completion, not an official n8n credential.</p>
+                <p class="mt-2">Portfolio completion does not guarantee paid work, client assignments, employment, or builder pool acceptance.</p>
             </div>
             <div class="card info-card reveal">
                 <h2>Class Expectations</h2>
