@@ -167,12 +167,29 @@
         .interest-box {
             max-width: 780px;
             margin: 0 auto;
-            text-align: center;
             background: linear-gradient(145deg, var(--bg-elevated), rgba(212,175,55,0.04));
             border: 1px solid var(--border-strong);
             border-radius: var(--radius-lg);
             padding: 44px 28px;
             box-shadow: var(--shadow-md);
+        }
+        .interest-box .section-header {
+            margin-bottom: 28px;
+        }
+        .consent-option {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            color: var(--text-secondary);
+            font-size: 0.92rem;
+            line-height: 1.5;
+        }
+        .consent-option input {
+            margin-top: 3px;
+            width: 18px;
+            height: 18px;
+            accent-color: var(--gold);
+            flex-shrink: 0;
         }
         @media (min-width: 760px) {
             .week-grid { grid-template-columns: repeat(2, 1fr); }
@@ -446,10 +463,84 @@
 <section id="interest">
     <div class="container">
         <div class="interest-box reveal">
-            <span class="badge badge-gold">Interest List</span>
-            <h2 class="mt-2">Want a seat when registration opens?</h2>
-            <p class="text-secondary mt-2 mb-4">Registration is not open yet. Join the interest list when it opens and you will be notified first about the cohort schedule, setup pre-session, requirements, and registration link. Joining the interest list does not reserve a seat, but it tells us you want to be part of the first builder cohort.</p>
-            <button class="btn btn-primary btn-large" disabled>Interest List Opening Soon</button>
+            <div class="section-header">
+                <span class="badge badge-gold">Interest List</span>
+                <h2 class="mt-2">Want a seat when registration opens?</h2>
+                <p>Registration is not open yet. Join the interest list and you will be notified first about the cohort schedule, setup pre-session, requirements, and registration link. Joining the interest list does not reserve a seat, but it tells us you want to be part of the first builder cohort.</p>
+            </div>
+            <form id="n8nInterestForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="fullname">Full Name <span class="required">*</span></label>
+                        <input type="text" id="fullname" name="fullname" placeholder="Your full name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="email">Email Address <span class="required">*</span></label>
+                        <input type="email" id="email" name="email" placeholder="your@email.com" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="whatsapp">WhatsApp Number <span class="required">*</span></label>
+                        <input type="tel" id="whatsapp" name="whatsapp" placeholder="+233 XX XXX XXXX" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="location">City / Country <span class="required">*</span></label>
+                        <input type="text" id="location" name="location" placeholder="e.g. Accra, Ghana" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="experience">Current n8n Experience <span class="required">*</span></label>
+                        <select id="experience" name="experience" required>
+                            <option value="">Select your level</option>
+                            <option value="New to n8n">New to n8n</option>
+                            <option value="Beginner">Beginner</option>
+                            <option value="Some experience">Some experience</option>
+                            <option value="Intermediate">Intermediate</option>
+                            <option value="Advanced">Advanced</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="preferred_setup">Preferred Setup <span class="required">*</span></label>
+                        <select id="preferred_setup" name="preferred_setup" required>
+                            <option value="">Select setup</option>
+                            <option value="Local n8n with Docker">Local n8n with Docker</option>
+                            <option value="n8n Cloud trial">n8n Cloud trial</option>
+                            <option value="Not sure yet">Not sure yet</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="interested_class">Interested Class <span class="required">*</span></label>
+                    <select id="interested_class" name="interested_class" required>
+                        <option value="">Select class/pathway stage</option>
+                        <option value="Beginner Cohort: n8n Foundations">Beginner Cohort: n8n Foundations</option>
+                        <option value="Intermediate Cohort">Intermediate Cohort</option>
+                        <option value="Advanced Cohort">Advanced Cohort</option>
+                        <option value="Use Case Cohort">Use Case Cohort</option>
+                        <option value="Builder Pool pathway">Builder Pool pathway</option>
+                        <option value="Not sure yet">Not sure yet</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="learning_goal">Biggest thing you want to learn or build</label>
+                    <textarea id="learning_goal" name="learning_goal" placeholder="Optional: What would you love to build by the end of the cohort?"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="consent-option">
+                        <input type="checkbox" id="consent" name="consent" required>
+                        <span>I agree to receive updates about Bulletproof Automations training, registration, setup sessions, and related cohort information. <span class="required">*</span></span>
+                    </label>
+                </div>
+                <input type="hidden" id="source" name="source" value="">
+                <input type="hidden" id="workshop_slug" name="workshop_slug" value="n8n-foundations">
+                <button type="submit" class="btn btn-primary btn-large form-submit">Join the Interest List</button>
+            </form>
+            <div class="form-success" id="formSuccess">
+                <h3>Thank you for joining the n8n Foundations interest list.</h3>
+                <p>We will notify you when registration opens. Joining the interest list does not reserve a seat. Once official registration opens, you will still need to complete the registration form.</p>
+            </div>
         </div>
     </div>
 </section>
@@ -460,6 +551,73 @@
     </div>
 </footer>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../assets/js/main.js"></script>
+<script>
+(function() {
+    const sourceInput = document.getElementById('source');
+    if (sourceInput) sourceInput.value = getUrlParam('source') || 'direct';
+})();
+
+const interestForm = document.getElementById('n8nInterestForm');
+const successDiv = document.getElementById('formSuccess');
+
+interestForm.addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const btn = interestForm.querySelector('button[type="submit"]');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner" style="margin-right:8px;"></span> Joining...';
+    btn.disabled = true;
+
+    const preferredSetup = document.getElementById('preferred_setup').value;
+    const data = {
+        full_name: document.getElementById('fullname').value.trim(),
+        email: document.getElementById('email').value.trim().toLowerCase(),
+        whatsapp_number: document.getElementById('whatsapp').value.trim(),
+        city: document.getElementById('location').value.trim(),
+        experience_level: document.getElementById('experience').value,
+        current_build_type: preferredSetup,
+        preferred_setup: preferredSetup,
+        interested_class: document.getElementById('interested_class').value,
+        biggest_pricing_challenge: document.getElementById('learning_goal').value.trim() || null,
+        vip_pricing_review_interest: 'No',
+        price_range_interest: null,
+        source: document.getElementById('source').value || 'direct',
+        workshop_slug: document.getElementById('workshop_slug').value,
+        signup_date_time: new Date().toISOString(),
+        status: 'New',
+        ticket_type: 'Waitlist',
+        payment_status: 'Unpaid'
+    };
+
+    try {
+        const sb = initSupabase();
+        if (!sb) {
+            throw new Error('Supabase not initialized. Please check your configuration.');
+        }
+
+        const { error } = await sb
+            .from('waitlist_signups')
+            .insert([data]);
+        if (error) throw error;
+
+        await invokeOptionalFunction(sb, 'confirm-email', { record: data });
+
+        interestForm.style.display = 'none';
+        successDiv.classList.add('active');
+        successDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch (err) {
+        console.error('n8n Foundations interest signup error:', err);
+        if (isDuplicateSignupError(err)) {
+            showToast('You are already on the n8n Foundations interest list. We will notify you when registration opens.', 'success');
+        } else {
+            showToast(err.message || 'Something went wrong. Please try again.', 'error');
+        }
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+});
+</script>
 </body>
 </html>

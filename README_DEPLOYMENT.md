@@ -8,6 +8,8 @@ Create a new Supabase project for the training subdomain. Do not reuse productio
 
 Open the Supabase SQL editor and run `supabase-setup.sql`. This creates `waitlist_signups`, duplicate-prevention indexes, constraints, and RLS policies.
 
+When deploying updates to the n8n Foundations interest list, rerun `supabase-setup.sql` so the existing `waitlist_signups` table has `interested_class`, `preferred_setup`, and the expanded experience-level constraint.
+
 ## 3. Find Supabase URL and anon key
 
 In Supabase, go to Project Settings -> API and copy:
@@ -64,6 +66,8 @@ supabase functions deploy vip-alert
 supabase functions deploy daily-digest
 ```
 
+Redeploy `confirm-email` and `daily-digest` after n8n Foundations interest-list changes so confirmation emails and the 10:00 AM GMT digest include the new class fields.
+
 ## 10. Deploy the static site to Cloudflare Pages
 
 Create a new Cloudflare Pages project connected to this standalone training repo.
@@ -90,6 +94,8 @@ These GitHub Actions secret names can keep the `SUPABASE_` prefix. The reserved-
 ## 13. Manually trigger the daily digest
 
 In GitHub Actions, open `Daily Waitlist Digest` and run `workflow_dispatch`.
+
+The scheduled digest runs at 10:00 AM GMT / UTC and lists signups from the previous 24 hours, grouped by workshop/class.
 
 ## 14. Test the full waitlist flow
 
