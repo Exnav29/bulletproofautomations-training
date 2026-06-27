@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Beginner Cohort: n8n Foundations | Bulletproof Automations Training</title>
-    <meta name="description" content="A free 8-week beginner cohort for installing n8n, building workflow artifacts, and starting an automation portfolio.">
+    <meta name="description" content="A free online 8-week builder cohort for installing n8n, building weekly workflow artifacts, and starting an automation portfolio.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
@@ -18,11 +18,11 @@
             background:
                 linear-gradient(rgba(45,138,78,0.035) 1px, transparent 1px),
                 linear-gradient(90deg, rgba(45,138,78,0.035) 1px, transparent 1px),
-                radial-gradient(circle at 80% 22%, rgba(45,138,78,0.15), transparent 34%),
-                radial-gradient(circle at 22% 82%, rgba(212,175,55,0.12), transparent 32%);
+                radial-gradient(circle at 82% 20%, rgba(45,138,78,0.16), transparent 34%),
+                radial-gradient(circle at 18% 84%, rgba(212,175,55,0.13), transparent 32%);
             background-size: 42px 42px, 42px 42px, auto, auto;
         }
-        .hero-layout {
+        .hero-layout, .media-split {
             display: grid;
             grid-template-columns: 1fr;
             gap: 36px;
@@ -30,7 +30,7 @@
         }
         .foundations-hero h1 {
             font-size: clamp(2.45rem, 6vw, 4.7rem);
-            max-width: 850px;
+            max-width: 900px;
             margin: 18px 0 20px;
             background: linear-gradient(135deg, var(--text-primary), var(--gold-light));
             -webkit-background-clip: text;
@@ -38,10 +38,16 @@
             background-clip: text;
         }
         .foundations-hero .subtitle {
-            max-width: 740px;
+            max-width: 800px;
             color: var(--text-secondary);
-            font-size: clamp(1.05rem, 2vw, 1.25rem);
-            margin-bottom: 26px;
+            font-size: clamp(1.05rem, 2vw, 1.23rem);
+            margin-bottom: 18px;
+        }
+        .supporting-line {
+            max-width: 760px;
+            color: var(--text-primary);
+            font-weight: 700;
+            margin-bottom: 28px;
         }
         .hero-meta {
             display: flex;
@@ -59,76 +65,55 @@
             font-weight: 600;
         }
         .hero-cta-group { display: flex; gap: 16px; flex-wrap: wrap; }
-        .workflow-visual {
-            background: linear-gradient(145deg, rgba(17,17,24,0.94), rgba(22,22,31,0.88));
+        .image-frame {
+            position: relative;
+            overflow: hidden;
             border: 1px solid var(--border-strong);
             border-radius: var(--radius-lg);
-            padding: 24px;
+            background: var(--bg-elevated);
             box-shadow: var(--shadow-md);
         }
-        .workflow-title {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
+        .image-frame img, .section-image img {
+            display: block;
+            width: 100%;
+            height: auto;
         }
-        .workflow-title span { color: var(--text-muted); font-size: 0.85rem; }
-        .workflow-chain {
-            display: grid;
-            gap: 12px;
+        .hero-image img {
+            aspect-ratio: 4 / 3;
+            object-fit: cover;
         }
-        .workflow-node {
-            display: grid;
-            grid-template-columns: 34px 1fr;
-            gap: 12px;
-            align-items: center;
-            padding: 14px;
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-md);
-            position: relative;
-        }
-        .workflow-node:not(:last-child)::after {
-            content: "";
+        .image-caption {
             position: absolute;
-            left: 30px;
-            bottom: -13px;
-            width: 2px;
-            height: 13px;
-            background: var(--gold);
-        }
-        .workflow-icon {
-            width: 34px;
-            height: 34px;
-            border-radius: 10px;
-            display: grid;
-            place-items: center;
-            background: linear-gradient(135deg, var(--green-light), var(--gold));
-            color: var(--bg-dark);
-            font-weight: 800;
-        }
-        .workflow-node strong { display: block; }
-        .workflow-node small { color: var(--text-muted); }
-        .visual-labels {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-top: 18px;
-        }
-        .visual-labels span {
-            padding: 6px 9px;
-            border-radius: 999px;
-            background: rgba(212,175,55,0.09);
+            left: 18px;
+            right: 18px;
+            bottom: 18px;
+            padding: 12px 14px;
+            border: 1px solid rgba(212,175,55,0.22);
+            border-radius: var(--radius-md);
+            background: rgba(10,10,15,0.78);
+            backdrop-filter: blur(12px);
             color: var(--gold-light);
-            font-size: 0.78rem;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.9rem;
             font-weight: 700;
         }
         .band { background: var(--bg-card); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
         .copy-block { max-width: 900px; margin: 0 auto; }
-        .copy-block p { color: var(--text-secondary); font-size: 1.08rem; margin-bottom: 16px; }
-        .info-card p, .info-card li, .week-card p { color: var(--text-secondary); }
+        .copy-block p, .info-card p, .info-card li, .week-card p { color: var(--text-secondary); }
+        .copy-block p { font-size: 1.08rem; margin-bottom: 16px; }
         .info-card ul { padding-left: 20px; margin-top: 12px; }
         .info-card li { margin-bottom: 8px; }
+        .section-image {
+            overflow: hidden;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            background: var(--bg-elevated);
+            box-shadow: var(--shadow-sm);
+        }
+        .section-image img {
+            aspect-ratio: 16 / 11;
+            object-fit: cover;
+        }
         .artifact-list {
             display: grid;
             grid-template-columns: 1fr;
@@ -141,6 +126,12 @@
             border-radius: var(--radius-md);
             background: var(--bg-elevated);
             color: var(--text-secondary);
+        }
+        .taste-card {
+            background: linear-gradient(145deg, var(--bg-elevated), rgba(45,138,78,0.05));
+            border: 1px solid var(--border-strong);
+            border-radius: var(--radius-lg);
+            padding: 28px;
         }
         .week-grid {
             display: grid;
@@ -185,9 +176,12 @@
         }
         @media (min-width: 760px) {
             .week-grid { grid-template-columns: repeat(2, 1fr); }
+            .artifact-list { grid-template-columns: repeat(2, 1fr); }
         }
-        @media (min-width: 900px) {
-            .hero-layout { grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr); }
+        @media (min-width: 980px) {
+            .hero-layout { grid-template-columns: minmax(0, 1.02fr) minmax(380px, 0.98fr); }
+            .media-split { grid-template-columns: minmax(0, 0.95fr) minmax(360px, 1.05fr); }
+            .media-split.reverse { grid-template-columns: minmax(360px, 1.05fr) minmax(0, 0.95fr); }
         }
     </style>
 </head>
@@ -227,59 +221,67 @@
 <section class="foundations-hero">
     <div class="container hero-layout">
         <div>
-            <span class="badge badge-green animate-in">Free Beginner Cohort</span>
-            <h1 class="animate-in delay-1">n8n Foundations: Build Your First Real Automation Skills</h1>
-            <p class="subtitle animate-in delay-2">An 8-week hands-on builder cohort for people who want to install n8n, build useful workflows, and start a real automation portfolio from Week 1.</p>
+            <span class="badge badge-green animate-in">Free 8-Week Beginner Cohort &middot; Online &middot; Saturdays, 11:30 AM&ndash;1:00 PM GMT</span>
+            <h1 class="animate-in delay-1">Build real automations from Week 1. Walk away with proof you can show.</h1>
+            <p class="subtitle animate-in delay-2">n8n Foundations is a hands-on builder cohort, not a watch-and-nod course. You'll install n8n, build a working workflow every single Saturday, and leave each session with a portfolio artifact you actually made: exported JSON, screenshots, and a README. Eight weeks in, you will have a starter portfolio and the skills to keep building on your own.</p>
+            <p class="supporting-line animate-in delay-3">This is for people who want to build, not spectate. Come ready to work and you will have receipts to show for it.</p>
             <div class="hero-meta animate-in delay-3">
-                <span>8 Weeks</span>
-                <span>Free Beginner Cohort</span>
-                <span>Online</span>
-                <span>GMT Time</span>
-                <span>Saturday Sessions</span>
-                <span>Thursday Setup Pre-Session</span>
+                <span>8 weekly builds</span>
+                <span>Free</span>
+                <span>Portfolio from Day 1</span>
+                <span>Docker setup help</span>
+                <span>Thursday setup pre-session</span>
             </div>
             <div class="hero-cta-group animate-in delay-4">
-                <a href="#interest" class="btn btn-primary btn-large">Join Interest List</a>
-                <a href="/n8n-automation-builder-pathway" class="btn btn-secondary btn-large">View Full Pathway</a>
+                <a href="#interest" class="btn btn-primary btn-large">Join the Interest List</a>
+                <a href="/n8n-automation-builder-pathway" class="btn btn-secondary btn-large">View the Full Pathway</a>
             </div>
         </div>
-        <div class="workflow-visual animate-in delay-2" aria-label="Beginner workflow learning path">
-            <div class="workflow-title">
-                <strong>First Workflow Skill Loop</strong>
-                <span>Trigger -> Test</span>
-            </div>
-            <div class="workflow-chain">
-                <div class="workflow-node"><div class="workflow-icon">1</div><div><strong>Trigger</strong><small>Start the workflow correctly</small></div></div>
-                <div class="workflow-node"><div class="workflow-icon">2</div><div><strong>Data</strong><small>Read and move fields between nodes</small></div></div>
-                <div class="workflow-node"><div class="workflow-icon">3</div><div><strong>Logic</strong><small>Branch, filter, and shape decisions</small></div></div>
-                <div class="workflow-node"><div class="workflow-icon">4</div><div><strong>Action</strong><small>Send useful output to a tool</small></div></div>
-                <div class="workflow-node"><div class="workflow-icon">5</div><div><strong>Test</strong><small>Check, export, and explain the build</small></div></div>
-            </div>
-            <div class="visual-labels">
-                <span>Docker setup</span>
-                <span>Portfolio artifacts</span>
-                <span>Workflow thinking</span>
-                <span>Assignments</span>
-                <span>Proof of work</span>
-            </div>
+        <div class="image-frame hero-image animate-in delay-2">
+            <img src="../assets/images/n8n-foundations/hero-online-n8n-cohort.png" alt="Online n8n Foundations cohort with instructor and remote learners building automation workflows">
+            <div class="image-caption">Online cohort &middot; weekly builds &middot; portfolio artifacts</div>
         </div>
     </div>
 </section>
 
 <section class="band">
-    <div class="container">
-        <div class="section-header reveal">
-            <h2>This Is the Starting Point, Not the Finish Line</h2>
+    <div class="container media-split reverse">
+        <div class="section-image reveal">
+            <img src="../assets/images/n8n-foundations/portfolio-workflow-proof.png" alt="Online instructor leading learners through automation workflow portfolio work">
         </div>
-        <div class="copy-block reveal">
-            <p>Completing the beginner cohort does not make someone a professional automation builder.</p>
-            <p>It gives the foundation needed to continue into intermediate, advanced, and use-case cohorts. The full pathway is what prepares someone to be considered for more serious work.</p>
-            <p>The goal is not to watch training. The goal is to build proof of work.</p>
+        <div class="reveal">
+            <span class="badge badge-gold">Outcome</span>
+            <h2 class="mt-2">What You Will Be Able to Show</h2>
+            <p class="text-secondary mt-2">By the end, the goal is not just that you attended. The goal is that you can point to proof of work and explain what you built.</p>
+            <div class="artifact-list">
+                <div class="artifact-item">A starter automation portfolio</div>
+                <div class="artifact-item">A GitHub repo or organized portfolio folder</div>
+                <div class="artifact-item">Multiple exported n8n workflow JSON files</div>
+                <div class="artifact-item">Screenshots showing workflows and executions</div>
+                <div class="artifact-item">README write-ups explaining each workflow</div>
+                <div class="artifact-item">A beginner final project</div>
+                <div class="artifact-item">Practice explaining builds like an automation builder</div>
+                <div class="artifact-item">A stronger foundation for the intermediate cohort</div>
+            </div>
         </div>
     </div>
 </section>
 
 <section>
+    <div class="container media-split">
+        <div class="taste-card reveal">
+            <span class="badge badge-green">Build Example</span>
+            <h2 class="mt-2">A Taste of What You Will Build</h2>
+            <p class="text-secondary mt-2">By Week 5, you should be able to build a simple API-powered workflow: trigger it manually, pull data from a free public API, clean or route the response, and send the result somewhere useful.</p>
+            <p class="text-secondary mt-2">It will not be enterprise-grade yet, but it will be real. You will export the workflow, screenshot the result, and write a short explanation of what it does.</p>
+        </div>
+        <div class="section-image reveal">
+            <img src="../assets/images/n8n-foundations/student-building-workflow.png" alt="Student learning n8n online from home while taking notes and building a workflow">
+        </div>
+    </div>
+</section>
+
+<section class="band">
     <div class="container">
         <div class="section-header reveal">
             <h2>Portfolio-First Learning</h2>
@@ -294,24 +296,6 @@
             <div class="artifact-item">Screenshots of workflows, executions, and outputs</div>
             <div class="artifact-item">README files and short case-study write-ups</div>
             <div class="artifact-item">Test checklists, troubleshooting logs, and walkthrough notes</div>
-        </div>
-    </div>
-</section>
-
-<section class="band">
-    <div class="container">
-        <div class="section-header reveal">
-            <h2>What You Will Learn</h2>
-        </div>
-        <div class="grid-4">
-            <div class="card info-card reveal"><h3>What n8n Is</h3><p>Where it fits, when to use it, and how to think about workflows.</p></div>
-            <div class="card info-card reveal"><h3>Local Setup</h3><p>Local n8n setup with Docker for continued practice.</p></div>
-            <div class="card info-card reveal"><h3>Workflow Basics</h3><p>Triggers, nodes, connections, and executions.</p></div>
-            <div class="card info-card reveal"><h3>Working With Data</h3><p>Move fields between nodes and understand execution output.</p></div>
-            <div class="card info-card reveal"><h3>Troubleshooting</h3><p>Read errors, rerun steps, and fix beginner mistakes.</p></div>
-            <div class="card info-card reveal"><h3>Safe Access</h3><p>Credentials and safe tool access basics.</p></div>
-            <div class="card info-card reveal"><h3>Useful Workflows</h3><p>Build simple automations that do practical work.</p></div>
-            <div class="card info-card reveal"><h3>Export and Document</h3><p>Export workflow JSON and explain what was built.</p></div>
         </div>
     </div>
 </section>
@@ -336,24 +320,40 @@
 </section>
 
 <section class="band">
-    <div class="container">
-        <div class="section-header reveal">
-            <h2>What You Will Have by the End</h2>
+    <div class="container media-split">
+        <div class="reveal">
+            <span class="badge badge-gold">Founder Note</span>
+            <h2 class="mt-2">Why I Am Building This</h2>
+            <p class="text-secondary mt-2">I am not building this as a casual webinar series. I am building it because too many people are interested in AI automation but never move from watching content to building proof.</p>
+            <p class="text-secondary mt-2">Ghana and the broader automation community need more people who can build, test, document, explain, and improve real workflows. This pathway is designed to help serious beginners start that journey with structure.</p>
         </div>
-        <div class="grid-4">
-            <div class="card info-card reveal"><h3>Starter Portfolio</h3><p>A beginner automation portfolio started from Week 1.</p></div>
-            <div class="card info-card reveal"><h3>Organized Evidence</h3><p>A GitHub repo or organized portfolio folder.</p></div>
-            <div class="card info-card reveal"><h3>Exported Workflows</h3><p>Multiple exported n8n workflow JSON files.</p></div>
-            <div class="card info-card reveal"><h3>Documentation</h3><p>Screenshots, README notes, and workflow explanations.</p></div>
-            <div class="card info-card reveal"><h3>Final Project</h3><p>A beginner final project that ties the cohort together.</p></div>
-            <div class="card info-card reveal"><h3>Explanation Practice</h3><p>Practice explaining what each workflow does and why it matters.</p></div>
-            <div class="card info-card reveal"><h3>Intermediate Foundation</h3><p>A stronger foundation for intermediate cohort work.</p></div>
-            <div class="card info-card reveal"><h3>Proof of Work</h3><p>Evidence that you built, tested, exported, and documented your assignments.</p></div>
+        <div class="section-image reveal">
+            <img src="../assets/images/n8n-foundations/online-cohort-session.png" alt="Remote online cohort with instructor and learners joining from separate spaces">
         </div>
     </div>
 </section>
 
 <section>
+    <div class="container media-split reverse">
+        <div class="section-image reveal">
+            <img src="../assets/images/n8n-foundations/online-cohort-session.png" alt="Online cohort session showing remote learners participating from home">
+        </div>
+        <div class="reveal">
+            <span class="badge badge-green">Expectations</span>
+            <h2 class="mt-2">This Is for Builders, Not Spectators</h2>
+            <p class="text-secondary mt-2">This cohort is free, but it is not passive. You do not need to be advanced, but you do need to participate.</p>
+            <p class="text-secondary mt-2">You will be expected to build, submit assignments, and keep evidence of your work. The standards are here to protect the quality of the cohort and help serious learners make real progress.</p>
+            <ul class="mt-3 text-secondary">
+                <li>Show up on time and come prepared.</li>
+                <li>Complete prerequisites before class so Saturday can stay focused on building.</li>
+                <li>Ask questions respectfully and do the assignments.</li>
+                <li>Use the Thursday setup pre-session and recording for setup preparation.</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<section class="band">
     <div class="container">
         <div class="section-header reveal">
             <h2>Prerequisites Before the First Saturday Class</h2>
@@ -362,7 +362,7 @@
             <h3>Be Ready Before Saturday</h3>
             <ul>
                 <li>Participants must have access to n8n before the first Saturday class.</li>
-                <li>Saturday class will not be used for Docker installation, n8n installation, or individual computer setup.</li>
+                <li>Saturday class will focus on building, not Docker installation, n8n installation, or individual computer setup.</li>
                 <li>Participants who are not ready can still watch, but may not be able to follow along hands-on.</li>
             </ul>
         </div>
@@ -391,7 +391,7 @@
     </div>
 </section>
 
-<section class="band">
+<section>
     <div class="container">
         <div class="grid-2">
             <div class="card info-card reveal">
@@ -419,7 +419,7 @@
     </div>
 </section>
 
-<section>
+<section class="band">
     <div class="container">
         <div class="grid-2">
             <div class="card info-card reveal">
@@ -432,30 +432,23 @@
                     <li>Follow class expectations</li>
                 </ul>
                 <p class="mt-2">Attendance alone is not enough. This is a Certificate of Completion, not an official n8n credential.</p>
-                <p class="mt-2">Portfolio completion does not guarantee paid work, client assignments, employment, or builder pool acceptance.</p>
+                <p class="mt-2">Portfolio completion does not guarantee paid work, client assignments, employment, or builder pool acceptance. There is no guarantee of future assignment opportunities.</p>
             </div>
             <div class="card info-card reveal">
-                <h2>Class Expectations</h2>
-                <ul>
-                    <li>Show up on time</li>
-                    <li>Come prepared</li>
-                    <li>Complete prerequisites before class</li>
-                    <li>Do the assignments</li>
-                    <li>Ask questions respectfully</li>
-                    <li>Do not expect Saturday class to become setup troubleshooting</li>
-                    <li>Treat this like skill development, not entertainment</li>
-                </ul>
+                <h2>This Is the Starting Point</h2>
+                <p>Completing the beginner cohort does not make someone a professional automation builder.</p>
+                <p class="mt-2">It gives the foundation needed to continue into intermediate, advanced, and use-case cohorts. The full pathway is what prepares someone to be considered for more serious work.</p>
             </div>
         </div>
     </div>
 </section>
 
-<section class="band" id="interest">
+<section id="interest">
     <div class="container">
         <div class="interest-box reveal">
             <span class="badge badge-gold">Interest List</span>
-            <h2 class="mt-2">Want to Know When Registration Opens?</h2>
-            <p class="text-secondary mt-2 mb-4">The official registration link is not open yet. Join the interest list when it opens and you will be notified about registration, setup requirements, the Thursday pre-session, and first-class details. Joining the interest list will not reserve a seat.</p>
+            <h2 class="mt-2">Want a seat when registration opens?</h2>
+            <p class="text-secondary mt-2 mb-4">Registration is not open yet. Join the interest list when it opens and you will be notified first about the cohort schedule, setup pre-session, requirements, and registration link. Joining the interest list does not reserve a seat, but it tells us you want to be part of the first builder cohort.</p>
             <button class="btn btn-primary btn-large" disabled>Interest List Opening Soon</button>
         </div>
     </div>
