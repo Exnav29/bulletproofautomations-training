@@ -440,12 +440,12 @@
         <p class="sub">Twenty seconds, four questions — so I can send you exactly what you need.</p>
 
         <!--
-          BACKEND NOTE (for Codex):
-          No backend is wired yet. On submit we validate, then redirect to the
-          resources page. Replace the redirect in <script> below with a POST to
-          your endpoint, then navigate to /nfc/resources on success.
+          Backend is handled by a normal browser POST to n8n.
         -->
-        <form id="nfc-form" novalidate>
+        <form id="nfc-form" action="https://n8n.bulletproofautomations.com/webhook/nfc-lead-capture" method="POST">
+          <input type="hidden" name="source" value="nfc-card" />
+          <input type="hidden" name="campaign" value="n8n-ambassador" />
+          <input type="hidden" name="entry_page" value="/nfc" />
           <div class="field">
             <label for="name">Your name</label>
             <input type="text" id="name" name="name" placeholder="Kofi Mensah" autocomplete="name" required />
@@ -464,7 +464,7 @@
           <div class="field">
             <label id="looking-label">What are you looking for?</label>
             <div class="chips" role="radiogroup" aria-labelledby="looking-label">
-              <label><input type="radio" name="looking_for" value="n8n-training" /><span>n8n training</span></label>
+              <label><input type="radio" name="looking_for" value="n8n-training" required /><span>n8n training</span></label>
               <label><input type="radio" name="looking_for" value="automation-help" /><span>Automation help</span></label>
               <label><input type="radio" name="looking_for" value="scriptureflow" /><span>ScriptureFlow</span></label>
               <label><input type="radio" name="looking_for" value="ministry" /><span>Ministry &amp; community</span></label>
@@ -492,29 +492,6 @@
     try { sessionStorage.setItem("nfc-intro", "1"); } catch (e) {}
     setTimeout(() => { const l = document.querySelector(".loader"); if (l) l.remove(); }, 3000);
   }
-
-  const form = document.getElementById("nfc-form");
-  const err  = document.getElementById("form-err");
-
-  form.addEventListener("submit", (e) => {
-    e.preventDefault();
-    const name  = form.name.value.trim();
-    const email = form.email.value.trim();
-    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
-    if (!name || !emailOk) {
-      err.classList.add("show");
-      (name ? form.email : form.name).focus();
-      return;
-    }
-    err.classList.remove("show");
-
-    // TODO (Codex): POST { name, email, phone, looking_for } to your endpoint here.
-    // const payload = Object.fromEntries(new FormData(form));
-
-    // Local preview redirect — change to "/nfc/resources" in production:
-    window.location.href = "/nfc/resources";
-  });
 </script>
 
 </body>
