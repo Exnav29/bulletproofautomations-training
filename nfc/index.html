@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Akwaaba — Johnathan Lightfoot</title>
+<meta name="description" content="You tapped the card. Tell me what you're building and I'll point you to the right resources." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Albert+Sans:wght@400;500;600&family=Space+Grotesk:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  /* ============================================================
+     THE GHANA EXPERIENCE — DESIGN TOKENS
+     Deep "vibranium" violet-black · kente gold / crimson / emerald
+     ============================================================ */
+  :root {
+    --ink:        #100B17;   /* page background — deep violet-black */
+    --ink-2:      #191126;   /* raised panels */
+    --ink-3:      #221935;   /* inputs / hover surfaces */
+    --line:       rgba(224, 168, 46, 0.18);
+    --gold:       #E0A82E;   /* kente gold */
+    --gold-hi:    #F5C452;   /* bright gold, hovers & glows */
+    --crimson:    #B23A2E;   /* kente crimson */
+    --emerald:    #1F7A5C;   /* kente emerald */
+    --cream:      #F5EBD8;   /* primary text */
+    --cream-dim:  #B9AC93;   /* secondary text */
+
+    --font-display: "Syne", sans-serif;
+    --font-body:    "Albert Sans", sans-serif;
+    --font-label:   "Space Grotesk", monospace;
+
+    --radius: 14px;
+    --kente: repeating-linear-gradient(90deg,
+      var(--gold)    0 26px,  var(--ink) 26px 32px,
+      var(--crimson) 32px 54px, var(--ink) 54px 60px,
+      var(--emerald) 60px 82px, var(--ink) 82px 88px);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--ink);
+    color: var(--cream);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.6;
+    min-height: 100vh;
+    /* faint diagonal weave texture */
+    background-image:
+      repeating-linear-gradient(45deg,  rgba(245,235,216,0.015) 0 2px, transparent 2px 14px),
+      repeating-linear-gradient(-45deg, rgba(245,235,216,0.015) 0 2px, transparent 2px 14px);
+  }
+
+  ::selection { background: var(--gold); color: var(--ink); }
+
+  /* Kente strip — the woven thread that runs through both pages */
+  .kente { height: 8px; background: var(--kente); }
+  .kente--thick { height: 12px; }
+
+  .wrap {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* ============ LAYOUT: identity panel + form ============ */
+  .stage {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 64px;
+    align-items: center;
+    min-height: calc(100vh - 8px);
+    padding: 64px 0;
+    position: relative;
+  }
+
+  /* Ananse Ntontan — the spider's web. Wisdom, creativity,
+     and (fittingly) the shape of every automation workflow. */
+  .web-mark {
+    position: absolute;
+    top: 50%;
+    left: -180px;
+    transform: translateY(-50%);
+    width: 560px;
+    height: 560px;
+    opacity: 0.07;
+    pointer-events: none;
+  }
+
+  .identity { position: relative; z-index: 1; }
+
+  .eyebrow {
+    font-family: var(--font-label);
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--gold);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .eyebrow::before {
+    content: "";
+    display: block;
+    width: 34px;
+    height: 4px;
+    background: var(--kente);
+    background-size: 88px 4px;
+  }
+
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: clamp(2.4rem, 5vw, 3.6rem);
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    margin-bottom: 20px;
+  }
+  h1 .gold { color: var(--gold-hi); }
+
+  .lede {
+    color: var(--cream-dim);
+    font-size: 1.06rem;
+    max-width: 42ch;
+    margin-bottom: 36px;
+  }
+  .lede strong { color: var(--cream); font-weight: 600; }
+
+  .roles { list-style: none; display: grid; gap: 10px; }
+  .roles li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--cream-dim);
+    font-size: 0.95rem;
+  }
+  .roles li b { color: var(--cream); font-weight: 600; }
+  .roles li::before {
+    content: "";
+    width: 8px; height: 8px;
+    background: var(--gold);
+    transform: rotate(45deg);   /* kente diamond */
+    flex: none;
+  }
+
+  /* ============ FORM CARD ============ */
+  .card {
+    position: relative;
+    z-index: 1;
+    background: var(--ink-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.45);
+  }
+  .card::before {          /* woven top edge */
+    content: "";
+    display: block;
+    height: 8px;
+    background: var(--kente);
+  }
+  .card__inner { padding: 36px 32px 32px; }
+
+  .card h2 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.35rem;
+    margin-bottom: 6px;
+  }
+  .card .sub {
+    color: var(--cream-dim);
+    font-size: 0.92rem;
+    margin-bottom: 26px;
+  }
+
+  .field { margin-bottom: 18px; }
+  label {
+    display: block;
+    font-family: var(--font-label);
+    font-size: 11.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--cream-dim);
+    margin-bottom: 8px;
+  }
+  label .opt { color: rgba(185,172,147,0.55); text-transform: none; letter-spacing: 0.04em; }
+
+  input[type="text"],
+  input[type="email"],
+  input[type="tel"] {
+    width: 100%;
+    background: var(--ink-3);
+    border: 1px solid transparent;
+    border-radius: 10px;
+    padding: 13px 16px;
+    color: var(--cream);
+    font-family: var(--font-body);
+    font-size: 1rem;
+    transition: border-color 160ms ease, box-shadow 160ms ease;
+  }
+  input::placeholder { color: rgba(185,172,147,0.45); }
+  input:focus {
+    outline: none;
+    border-color: var(--gold);
+    box-shadow: 0 0 0 3px rgba(224,168,46,0.18);
+  }
+
+  /* "What are you looking for" — chip radios */
+  .chips { display: flex; flex-wrap: wrap; gap: 9px; }
+  .chips input { position: absolute; opacity: 0; pointer-events: none; }
+  .chips span {
+    display: inline-block;
+    padding: 9px 15px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--cream-dim);
+    font-size: 0.88rem;
+    cursor: pointer;
+    transition: all 150ms ease;
+    user-select: none;
+  }
+  .chips span:hover { border-color: var(--gold); color: var(--cream); }
+  .chips input:checked + span {
+    background: var(--gold);
+    border-color: var(--gold);
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .chips input:focus-visible + span {
+    outline: 2px solid var(--gold-hi);
+    outline-offset: 2px;
+  }
+
+  .submit {
+    width: 100%;
+    margin-top: 26px;
+    padding: 16px 20px;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--gold) 0%, var(--gold-hi) 100%);
+    color: var(--ink);
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.02rem;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    transition: transform 150ms ease, box-shadow 150ms ease;
+  }
+  .submit:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px rgba(224,168,46,0.35);
+  }
+  .submit:focus-visible { outline: 3px solid var(--cream); outline-offset: 2px; }
+  .submit:active { transform: translateY(0); }
+
+  .micro {
+    margin-top: 16px;
+    text-align: center;
+    font-size: 0.83rem;
+    color: var(--cream-dim);
+  }
+  .micro b { color: var(--gold); font-weight: 600; }
+
+  .err {
+    display: none;
+    margin-top: 14px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: rgba(178,58,46,0.15);
+    border: 1px solid rgba(178,58,46,0.4);
+    color: #E8A79F;
+    font-size: 0.87rem;
+  }
+  .err.show { display: block; }
+
+  footer {
+    padding: 22px 0 30px;
+    text-align: center;
+    color: rgba(185,172,147,0.5);
+    font-family: var(--font-label);
+    font-size: 11.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  /* ============ ENTRANCE MOTION ============ */
+  .rise { opacity: 0; transform: translateY(18px); animation: rise 700ms cubic-bezier(0.2,0.7,0.2,1) forwards; }
+  .d1 { animation-delay: 80ms; } .d2 { animation-delay: 180ms; } .d3 { animation-delay: 280ms; }
+  @keyframes rise { to { opacity: 1; transform: none; } }
+
+  /* ============ INTRO LOADER — the weave opens ============
+     Plays once per session. The <html class="intro"> flag is set by a
+     tiny script in <head> (skipped for repeat visits & reduced motion). */
+  .loader { display: none; }
+  .intro .loader {
+    display: grid;
+    place-items: center;
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: var(--ink);
+    animation: loader-out 600ms ease 2150ms forwards;
+  }
+  .loader__stack { display: grid; justify-items: center; gap: 26px; }
+  .loader__web { width: 130px; height: 130px; }
+  .loader__web circle,
+  .loader__web path {
+    stroke-dasharray: 620;
+    stroke-dashoffset: 620;
+    animation: draw 1400ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+  .loader__web .dot {
+    stroke: none;
+    transform-origin: center;
+    transform: scale(0);
+    animation: dot-in 400ms ease 1150ms forwards;
+  }
+  .loader__word {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 1.5rem;
+    letter-spacing: 0.5em;
+    text-indent: 0.5em;   /* visually recenters letterspaced text */
+    color: var(--cream);
+    opacity: 0;
+    animation: word-in 700ms ease 500ms forwards;
+  }
+  .loader__bar {
+    width: 176px;
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(245,235,216,0.08);
+    overflow: hidden;
+  }
+  .loader__bar i {
+    display: block;
+    height: 100%;
+    width: 100%;
+    background: var(--kente);
+    transform: translateX(-101%);
+    animation: weave 1100ms cubic-bezier(0.65, 0, 0.35, 1) 800ms forwards;
+  }
+  @keyframes draw     { to { stroke-dashoffset: 0; } }
+  @keyframes dot-in   { to { transform: scale(1); } }
+  @keyframes word-in  { to { opacity: 1; } }
+  @keyframes weave    { to { transform: translateX(0); } }
+  @keyframes loader-out { to { opacity: 0; visibility: hidden; transform: translateY(-2%); } }
+
+  /* Hold the page reveal until the weave opens */
+  .intro .rise    { animation-delay: 2350ms; }
+  .intro .rise.d1 { animation-delay: 2440ms; }
+  .intro .rise.d2 { animation-delay: 2540ms; }
+  .intro .rise.d3 { animation-delay: 2640ms; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rise { animation: none; opacity: 1; transform: none; }
+    .loader { display: none !important; }
+    * { transition: none !important; }
+  }
+
+  /* ============ RESPONSIVE ============ */
+  @media (max-width: 880px) {
+    .stage { grid-template-columns: 1fr; gap: 44px; padding: 48px 0; min-height: 0; }
+    .web-mark { width: 380px; height: 380px; top: -60px; left: auto; right: -140px; transform: none; }
+    .card__inner { padding: 28px 22px 26px; }
+  }
+</style>
+<script>
+  /* Decide before first paint whether the intro plays:
+     skip for repeat visits this session and for reduced-motion users. */
+  (function () {
+    try {
+      var seen = sessionStorage.getItem("nfc-intro");
+      var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (!seen && !reduced) document.documentElement.classList.add("intro");
+    } catch (e) { /* private mode etc. — just show the page */ }
+  })();
+</script>
+</head>
+<body>
+
+<!-- Intro: Ananse's web draws itself, then the weave opens onto the page -->
+<div class="loader" aria-hidden="true">
+  <div class="loader__stack">
+    <svg class="loader__web" viewBox="0 0 200 200">
+      <g fill="none" stroke="#E0A82E" stroke-width="2">
+        <circle cx="100" cy="100" r="28"/>
+        <circle cx="100" cy="100" r="56"/>
+        <circle cx="100" cy="100" r="84"/>
+        <path d="M100 4 v192 M4 100 h192 M32 32 L168 168 M168 32 L32 168"/>
+        <circle class="dot" cx="100" cy="100" r="6" fill="#E0A82E"/>
+      </g>
+    </svg>
+    <p class="loader__word">AKWAABA</p>
+    <div class="loader__bar"><i></i></div>
+  </div>
+</div>
+
+<div class="kente kente--thick" aria-hidden="true"></div>
+
+<main class="wrap">
+  <div class="stage">
+
+    <!-- Ananse Ntontan watermark: the spider's web -->
+    <svg class="web-mark" viewBox="0 0 200 200" aria-hidden="true">
+      <g fill="none" stroke="#E0A82E" stroke-width="1.2">
+        <circle cx="100" cy="100" r="28"/>
+        <circle cx="100" cy="100" r="56"/>
+        <circle cx="100" cy="100" r="84"/>
+        <path d="M100 4 v192 M4 100 h192 M32 32 L168 168 M168 32 L32 168"/>
+        <circle cx="100" cy="100" r="6" fill="#E0A82E"/>
+      </g>
+    </svg>
+
+    <!-- ============ IDENTITY ============ -->
+    <section class="identity">
+      <p class="eyebrow rise">You tapped the card · The Ghana Experience</p>
+      <h1 class="rise d1">Akwaaba.<br/>Let's build something <span class="gold">that runs itself.</span></h1>
+      <p class="lede rise d2">
+        I'm <strong>Johnathan Lightfoot</strong> — I help people and ministries turn
+        repetitive work into reliable automation. Tell me what brought you here,
+        and I'll take you straight to the right resources.
+      </p>
+      <ul class="roles rise d3">
+        <li><b>n8n Ambassador</b>&nbsp;· automation builder &amp; trainer</li>
+        <li>Founder, <b>Bulletproof Automations</b></li>
+        <li>Founder, <b>ScriptureFlow</b></li>
+        <li>Minister &amp; community builder</li>
+      </ul>
+    </section>
+
+    <!-- ============ FORM ============ -->
+    <section class="card rise d2" aria-labelledby="form-title">
+      <div class="card__inner">
+        <h2 id="form-title">Point me in the right direction</h2>
+        <p class="sub">Twenty seconds, four questions — so I can send you exactly what you need.</p>
+
+        <!--
+          BACKEND NOTE (for Codex):
+          No backend is wired yet. On submit we validate, then redirect to the
+          resources page. Replace the redirect in <script> below with a POST to
+          your endpoint, then navigate to /nfc/resources on success.
+        -->
+        <form id="nfc-form" novalidate>
+          <div class="field">
+            <label for="name">Your name</label>
+            <input type="text" id="name" name="name" placeholder="Kofi Mensah" autocomplete="name" required />
+          </div>
+
+          <div class="field">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" placeholder="you@example.com" autocomplete="email" required />
+          </div>
+
+          <div class="field">
+            <label for="phone">Phone / WhatsApp <span class="opt">(optional)</span></label>
+            <input type="tel" id="phone" name="phone" placeholder="+233 · +1 ·  anywhere" autocomplete="tel" />
+          </div>
+
+          <div class="field">
+            <label id="looking-label">What are you looking for?</label>
+            <div class="chips" role="radiogroup" aria-labelledby="looking-label">
+              <label><input type="radio" name="looking_for" value="n8n-training" /><span>n8n training</span></label>
+              <label><input type="radio" name="looking_for" value="automation-help" /><span>Automation help</span></label>
+              <label><input type="radio" name="looking_for" value="scriptureflow" /><span>ScriptureFlow</span></label>
+              <label><input type="radio" name="looking_for" value="ministry" /><span>Ministry &amp; community</span></label>
+              <label><input type="radio" name="looking_for" value="connecting" /><span>Just connecting</span></label>
+            </div>
+          </div>
+
+          <p class="err" id="form-err" role="alert">Add your name and a valid email so I know where to send things.</p>
+
+          <button type="submit" class="submit">Show Me the Resources →</button>
+          <p class="micro">This just helps me point you to the <b>right</b> resources. No spam, no mailing-list ambush.</p>
+        </form>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<div class="kente" aria-hidden="true"></div>
+<footer>Woven in Ghana spirit · Bulletproof Automations</footer>
+
+<script>
+  // Intro plays once per session; remove the overlay after it exits.
+  if (document.documentElement.classList.contains("intro")) {
+    try { sessionStorage.setItem("nfc-intro", "1"); } catch (e) {}
+    setTimeout(() => { const l = document.querySelector(".loader"); if (l) l.remove(); }, 3000);
+  }
+
+  const form = document.getElementById("nfc-form");
+  const err  = document.getElementById("form-err");
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const name  = form.name.value.trim();
+    const email = form.email.value.trim();
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+    if (!name || !emailOk) {
+      err.classList.add("show");
+      (name ? form.email : form.name).focus();
+      return;
+    }
+    err.classList.remove("show");
+
+    // TODO (Codex): POST { name, email, phone, looking_for } to your endpoint here.
+    // const payload = Object.fromEntries(new FormData(form));
+
+    // Local preview redirect — change to "/nfc/resources" in production:
+    window.location.href = "/nfc/resources";
+  });
+</script>
+
+</body>
+</html>
