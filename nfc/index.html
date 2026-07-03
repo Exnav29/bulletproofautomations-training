@@ -235,6 +235,21 @@
     outline-offset: 2px;
   }
 
+  .checkbox-field {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    margin-top: 18px;
+    color: var(--cream-dim);
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+
+  .checkbox-field input {
+    margin-top: 4px;
+    accent-color: var(--gold);
+  }
+
   .submit {
     width: 100%;
     margin-top: 26px;
@@ -474,8 +489,13 @@
 
           <p class="err" id="form-err" role="alert">Add your name and a valid email so I know where to send things.</p>
 
+          <label class="checkbox-field">
+            <input type="checkbox" name="email_opt_in" value="yes" />
+            <span>Yes, send me automation resources, training updates, and follow-up from Bulletproof Automations.</span>
+          </label>
+
           <button type="submit" class="submit">Show Me the Resources →</button>
-          <p class="micro">This just helps me point you to the <b>right</b> resources. No spam, no mailing-list ambush.</p>
+          <p class="micro">This just helps me point you to the <b>right</b> resources. No spam, no mailing-list ambush — updates only come if you check the box.</p>
         </form>
       </div>
     </section>
