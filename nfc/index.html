@@ -512,6 +512,9 @@
     try { sessionStorage.setItem("nfc-intro", "1"); } catch (e) {}
     setTimeout(() => { const l = document.querySelector(".loader"); if (l) l.remove(); }, 3000);
   }
+
+  const campaign = new URLSearchParams(window.location.search).get("campaign");
+  if (campaign) document.querySelector('input[name="campaign"]').value = campaign;
 </script>
 
 </body>
