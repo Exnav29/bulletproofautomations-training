@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  html-validate:
+    name: HTML validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Validate HTML
+        run: npx --yes html-validate "**/index.html"
+
+  link-check:
+    name: Link check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --base-url https://training.bulletproofautomations.com
+            --verbose
+            --no-progress
+            --max-retries 3
+            --retry-wait-time 2
+            --accept '100..=103,200..=299,403'
+            --exclude '^https://n8n\.bulletproofautomations\.com/webhook/nfc-lead-capture$'
+            './**/*.html'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

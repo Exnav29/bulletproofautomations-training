@@ -1,0 +1,12 @@
+title = "Bulletproof Automations Training gitleaks config"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Public Supabase anon key used by browser-safe client code"
+paths = ['''^assets/js/main\.js$''']
+regexTarget = "match"
+regexes = [
+  '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ0cWNleHp3cHBjb3pweWp3ZnFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwMjU3MzgsImV4cCI6MjA5NDYwMTczOH0\.Jj-eu6XMcPfAgZ91kSTpAYs1zlQNM95HvgdXgEoBR2w''',
+]
