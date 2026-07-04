@@ -10,6 +10,29 @@ The repo powers **three funnels**:
 2. **The n8n Automation Builder Pathway** — a structured training ladder, starting with the free 8-week n8n Foundations cohort and its interest list
 3. **NFC lead capture** — a physical-world funnel for NFC cards and NFC-enabled coffee cups
 
+## Architecture at a Glance
+
+```mermaid
+flowchart LR
+  subgraph STATIC_SITE [Cloudflare Pages - training.bulletproofautomations.com]
+    PBV["/price-by-value"]
+    N8NF["/n8n-foundations"]
+    NFC["/nfc"]
+    ADMIN["/admin"]
+    RES["/nfc/resources"]
+  end
+  PBV -->|anon insert| DB[(Supabase waitlist_signups)]
+  N8NF -->|anon insert| DB
+  DB --> CE[confirm-email fn] --> RESEND[Resend]
+  DB --> VA[vip-alert fn] --> RESEND
+  GHA[GitHub Actions cron 10:00 UTC] --> DD[daily-digest fn] --> RESEND
+  DD --> DB
+  ADMIN -->|Supabase Auth| DB
+  NFC -->|POST| N8N[n8n webhook] --> AT[Airtable]
+  N8N -->|opt-in only| HR[Hostinger Reach]
+  N8N -->|redirect| RES
+```
+
 ---
 
 Shared styling lives in `assets/css/style.css`, and shared JavaScript lives in `assets/js/main.js`. Standalone pages, such as `/nfc`, may include page-local CSS.
