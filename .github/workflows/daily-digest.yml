@@ -25,10 +25,14 @@ jobs:
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
         run: |
-          curl -fsS "https://api.resend.com/emails" \
+          sleep 20
+          EMAIL_ID="$(curl -fsS "https://api.resend.com/emails" \
             -H "Authorization: Bearer $RESEND_API_KEY" \
-            | jq -r '.data[] | select(.subject | startswith("Daily training digest:")) | "RESEND_EMAIL_ID=\(.id)\nRESEND_MESSAGE_ID=\(.message_id)\nRESEND_STATUS=\(.last_event)\nRESEND_CREATED_AT=\(.created_at)"' \
-            | head -n 4
+            | jq -r '.data[] | select(.subject | startswith("Daily training digest:")) | .id' \
+            | head -n 1)"
+          curl -fsS "https://api.resend.com/emails/$EMAIL_ID" \
+            -H "Authorization: Bearer $RESEND_API_KEY" \
+            | jq -r '"RESEND_EMAIL_ID=\(.id)\nRESEND_MESSAGE_ID=\(.message_id)\nRESEND_STATUS=\(.last_event)\nRESEND_CREATED_AT=\(.created_at)"'
       - name: Open failure issue
         if: failure()
         env:
