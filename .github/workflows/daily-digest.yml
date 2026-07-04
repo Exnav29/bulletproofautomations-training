@@ -19,7 +19,7 @@ jobs:
             -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
             -d '{}'
         env:
-          SUPABASE_DAILY_DIGEST_URL: ${{ secrets.SUPABASE_DAILY_DIGEST_URL }}-invalid
+          SUPABASE_DAILY_DIGEST_URL: ${{ secrets.SUPABASE_DAILY_DIGEST_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       - name: Open failure issue
         if: failure()
