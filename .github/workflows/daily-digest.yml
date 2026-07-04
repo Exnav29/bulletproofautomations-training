@@ -8,13 +8,25 @@ on:
 jobs:
   send-digest:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
     steps:
       - name: Call Supabase daily digest function
         run: |
-          curl -X POST "$SUPABASE_DAILY_DIGEST_URL" \
+          curl -f --retry 3 --retry-delay 30 -X POST "$SUPABASE_DAILY_DIGEST_URL" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
             -d '{}'
         env:
           SUPABASE_DAILY_DIGEST_URL: ${{ secrets.SUPABASE_DAILY_DIGEST_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - name: Open failure issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh issue create \
+            --title "Daily digest failed on $(date -u +%F)" \
+            --body "Daily digest workflow failed: $RUN_URL"
