@@ -12,7 +12,7 @@ The repo powers **three funnels**:
 
 ---
 
-## Site Structure / Routes
+Shared styling lives in `assets/css/style.css`, and shared JavaScript lives in `assets/js/main.js`. Standalone pages, such as `/nfc`, may include page-local CSS.
 
 Routes are folder-based (`route/index.html`).
 
