@@ -21,6 +21,14 @@ jobs:
         env:
           SUPABASE_DAILY_DIGEST_URL: ${{ secrets.SUPABASE_DAILY_DIGEST_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - name: Verify Resend delivery
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: |
+          curl -fsS "https://api.resend.com/emails" \
+            -H "Authorization: Bearer $RESEND_API_KEY" \
+            | jq -r '.data[] | select(.subject | startswith("Daily training digest:")) | "RESEND_EMAIL_ID=\(.id)\nRESEND_MESSAGE_ID=\(.message_id)\nRESEND_STATUS=\(.last_event)\nRESEND_CREATED_AT=\(.created_at)"' \
+            | head -n 4
       - name: Open failure issue
         if: failure()
         env:
