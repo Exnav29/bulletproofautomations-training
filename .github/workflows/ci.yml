@@ -27,12 +27,13 @@ jobs:
         uses: lycheeverse/lychee-action@v2
         with:
           args: >-
-            --base https://training.bulletproofautomations.com
+            --base-url https://training.bulletproofautomations.com
             --verbose
             --no-progress
             --max-retries 3
             --retry-wait-time 2
             --accept '100..=103,200..=299,403'
+            --exclude '^https://n8n\.bulletproofautomations\.com/webhook/nfc-lead-capture$'
             './**/*.html'
         env:
           GITHUB_TOKEN: ${{ github.token }}
