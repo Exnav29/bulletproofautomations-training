@@ -8,6 +8,29 @@ It is a plain static HTML/CSS/JavaScript site with pages for training programs, 
 
 This project is separate from the main Bulletproof Automations website at `https://bulletproofautomations.com`.
 
+## Architecture at a Glance
+
+```mermaid
+flowchart LR
+  subgraph Static Site [Cloudflare Pages — training.bulletproofautomations.com]
+    PBV["/price-by-value"]
+    N8NF["/n8n-foundations"]
+    NFC["/nfc"]
+    ADMIN["/admin"]
+    RES["/nfc/resources"]
+  end
+  PBV -->|anon insert| DB[(Supabase waitlist_signups)]
+  N8NF -->|anon insert| DB
+  DB --> CE[confirm-email fn] --> RESEND[Resend]
+  DB --> VA[vip-alert fn] --> RESEND
+  GHA[GitHub Actions cron 10:00 UTC] --> DD[daily-digest fn] --> RESEND
+  DD --> DB
+  ADMIN -->|Supabase Auth| DB
+  NFC -->|POST| N8N[n8n webhook] --> AT[Airtable]
+  N8N -->|opt-in only| HR[Hostinger Reach]
+  N8N -->|redirect| RES
+```
+
 ## Site Structure / Routes
 
 - `/` - training hub homepage
