@@ -72,15 +72,18 @@ Redeploy `confirm-email` and `daily-digest` after n8n Foundations interest-list 
 
 Create a new Cloudflare Pages project connected to this standalone training repo.
 
-- Build command: blank
-- Output directory: `/`
+- Build command: `npm run build`
+- Output directory: `dist`
 - Project: separate from the main website
+
+The build copies only browser-public files into `dist`. Do not deploy the repository root.
+This is a static HTML site with no framework preset.
 
 ## 11. Add the custom domain
 
 Add `training.bulletproofautomations.com` to the Cloudflare Pages project.
 
-Do not change the existing `bulletproofautomations.com` deployment.
+DNS for `bulletproofautomations.com` is managed at Namecheap. Point the `training` DNS record to Cloudflare Pages, not Netlify. Do not use a Worker custom domain for this site, and do not change the existing `bulletproofautomations.com` deployment.
 
 ## 12. Add GitHub Actions secrets
 
@@ -100,3 +103,26 @@ The scheduled digest runs at 10:00 AM GMT / UTC and lists signups from the previ
 ## 14. Test the full waitlist flow
 
 Use `/price-by-value?source=manual-test`, submit a signup, confirm redirect to `/thank-you`, confirm the database row exists, confirm email delivery, test VIP alert with VIP interest set to `Yes`, and verify `/admin` login and CSV export.
+
+## 15. Validate the deployment output
+
+Run:
+
+```bash
+npm run build
+```
+
+Confirm `dist` contains the public site files and route folders:
+
+- `index.html`
+- `assets/`
+- `admin/`
+- `nfc/`
+- `n8n-foundations/`
+- `n8n-automation-builder-pathway/`
+- `price-by-value/`
+- `thank-you/`
+- `robots.txt`
+- `sitemap.xml`
+
+Confirm `dist` does not contain `.git`, `.github`, `.wrangler`, `supabase`, `supabase-setup.sql`, README/deployment docs, test plans, gitleaks config, or backend/dev files.
