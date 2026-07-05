@@ -139,7 +139,7 @@ Do not commit API tokens, Airtable credentials, Hostinger credentials, Supabase 
 
 ## Deployment & Testing
 
-- **Hosting:** Cloudflare Pages, no build command, output directory `/`, custom domain `training.bulletproofautomations.com`. The main `bulletproofautomations.com` deployment is untouched.
+- **Hosting:** Cloudflare Pages, build command `npm run build`, output directory `dist`, custom domain `training.bulletproofautomations.com`. DNS is managed in Namecheap. See **[OPS_NOTES.md](OPS_NOTES.md)** before changing hosting.
 - **[README_DEPLOYMENT.md](README_DEPLOYMENT.md)** — the full 14-step deployment runbook (Supabase, Resend domain verification, Edge Function deploys, Cloudflare Pages, GitHub secrets).
 - **[DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md)** — go-live checklist.
 - **[TEST_PLAN.md](TEST_PLAN.md)** — nine test scenarios covering signups, duplicates, VIP alerts, source attribution, admin flows, CSV export, the digest, and mobile responsiveness.
