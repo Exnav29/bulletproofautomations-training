@@ -1,0 +1,13 @@
+# Cloudflare Pages redirects.
+#
+# Legacy URLs from the pre-rebuild site. Each one is added only once its
+# destination exists — a redirect to a route that has not been built is a 404
+# where a working page used to be.
+#
+# Still to add, when their targets ship:
+#   /n8n-foundations                  /foundations   301
+#   /n8n-automation-builder-pathway   /pathway       301
+
+# Price by Value workshop, retired 10 August 2026. Permanent — it is not
+# coming back and there is no successor page to send people to.
+/price-by-value  /  301

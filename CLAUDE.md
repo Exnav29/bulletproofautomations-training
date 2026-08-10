@@ -128,9 +128,14 @@ ships. The list is currently:
 
 ```
 index.html · assets/ · admin/ · nfc/ · n8n-foundations/ ·
-n8n-automation-builder-pathway/ · price-by-value/ · thank-you/ ·
-robots.txt · sitemap.xml
+n8n-automation-builder-pathway/ · certified-automation-builder/ · standard/ ·
+_redirects · robots.txt · sitemap.xml
 ```
+
+Plus the rebuild routes declared but not yet built: `thank-you`, `foundations`, `pathway`,
+`about`, `verify`, `builder-pool`, `workshops`, `privacy`. `price-by-value` was **retired on
+10 August 2026** — folder deleted, dropped from the allowlist, and `/price-by-value` now 301s
+to `/` via `_redirects`.
 
 **Any new route added during the rebuild — `/pathway`, `/standard`, `/certified-automation-builder`,
 `/verify`, `/about`, `/builder-pool`, `/workshops` — must be added to `publicPaths` in
@@ -163,7 +168,7 @@ documentation, not a migration, and the database is the source of truth.
 ### Running it locally
 
 No dev script exists — `package.json` has only `build`. Routes are folder-based (`route/index.html`)
-and links are root-absolute (`/price-by-value`), so opening `index.html` over `file://` breaks both
+and links are root-absolute (`/standard`), so opening `index.html` over `file://` breaks both
 navigation and assets. Serve the repo root over HTTP:
 
 ```bash
@@ -188,9 +193,11 @@ Three GitHub Actions workflows:
   resolve, so validating them would always fail. This is what enforces the "every internal
   link resolves" rule above, so open a PR rather than trusting a local check.
 - **Secret scanning** (`gitleaks.yml`, on push and PR) — gitleaks over full history.
-- **Daily Waitlist Digest** (`daily-digest.yml`, cron `0 10 * * *` plus manual dispatch) — calls a
-  Supabase Edge Function; opens a GitHub issue on failure. Not part of the site build. Do not
-  modify its behaviour unless a task explicitly says to.
+
+**Removed 10 August 2026:** the Daily Waitlist Digest workflow (`daily-digest.yml`, cron
+`0 10 * * *`). It was the only trigger for the morning digest email, so deleting it stopped the
+report. The `daily-digest` Edge Function is still deployed on the old Supabase project and must
+be deleted from that dashboard to be fully gone.
 
 There is no deploy workflow in `.github/` — Cloudflare Pages builds from its own repo connection,
 so a green CI run is not a deploy and a failing CI run does not block one.

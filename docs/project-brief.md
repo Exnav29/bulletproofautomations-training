@@ -244,7 +244,7 @@ Evidence, not styling. In priority order:
 - `/verify` — Credential verification lookup.
 - `/about` — Johnathan and Bulletproof Automations.
 - `/builder-pool` — Hiring standard and builder pool, with non-guarantee wording.
-- `/workshops` — Price by Value and other standalone workshops (secondary now, not the headline).
+- `/workshops` — standalone workshops (secondary now, not the headline). Empty as of 10 August 2026: Price by Value, its only occupant, is retired.
 
 Every course page needs: hard facts block (dates, time, format, cap, price, deadline),
 what it covers, who it is not for, proof, and a real signup with a payment path.
@@ -285,8 +285,9 @@ counter · second assessor · fonts · shared markup · interim homepage.
 - Company detail for `/about` beyond "automation consultancy, Accra".
 - Contact email to publish — confirm `training@bulletproofautomations.com`.
 - Public WhatsApp number.
-- **Price by Value workshop** — still running and moving to `/workshops/price-by-value`, or
-  retired?
+- ~~Price by Value workshop~~ — **resolved 10 August 2026: retired.** No longer running. Page
+  deleted, dropped from the build allowlist, `/price-by-value` 301s to `/`. `/workshops` has no
+  occupant, so building it is no longer urgent.
 - Slack invite mechanism: is there a join link to publish, or are learners invited after payment?
   The instalment path now names the Slack instance publicly.
 - ~~Standard PDF for `/standard`~~ — confirmed 10 August 2026: **no PDF file.** `/standard` carries
@@ -302,7 +303,8 @@ counter · second assessor · fonts · shared markup · interim homepage.
 - Brand assets: logo or wordmark file, colour direction.
 - Analytics — any? Cloudflare Web Analytics is the zero-JS-cost option.
 - Where enrollment data goes. `waitlist_signups` is waitlist-framed, defaulted to
-  `workshop_slug: 'price-by-value'`, and read by the `daily-digest` edge function.
+  `workshop_slug: 'price-by-value'`, and was read by the `daily-digest` edge function (that
+  digest was deleted on 10 August 2026).
   Recommendation is a new `enrollments` table, leaving the existing one and its digest alone.
 
 ---
@@ -445,7 +447,7 @@ outside the rebuild's scope.
 | `/verify` | Credential verification lookup | NOW |
 | `/builder-pool` | Hiring standard, with the non-guarantee wording verbatim | NOW |
 | `/workshops` | Index of standalone workshops. Secondary, not a headline | NOW |
-| `/workshops/price-by-value` | Price by Value workshop, relocated | NOW (gated — still open) |
+| ~~`/workshops/price-by-value`~~ | Price by Value workshop | **RETIRED 10 August 2026.** Not building it |
 | `/thank-you` | Post-submission confirmation, rewritten from its waitlist framing | NOW |
 | `/privacy` | How enrollment and notify-me data is handled | NOW (before forms go live) |
 | BCAE | **No page.** Named on `/pathway` only — no date, no signup, no email capture | NAMED |
@@ -457,7 +459,7 @@ BCAB certification/training split, no `/contact` page, no blog, no coming-soon c
 
 Redirects to add via a Cloudflare Pages `_redirects` file:
 `/n8n-foundations` → `/foundations` · `/n8n-automation-builder-pathway` → `/pathway` ·
-`/price-by-value` → `/workshops/price-by-value`
+`/price-by-value` → `/` (workshop retired; **done** — `_redirects` created 10 August 2026)
 
 ### 12.3 Design direction
 

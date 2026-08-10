@@ -16,14 +16,15 @@ session can continue without re-deriving it.
 | `/` homepage | **Built, approved** ("okay with the design for now") |
 | `/certified-automation-builder` | **Built**, not yet reviewed. Enrollment form blocked — see §4 |
 | `/standard` | **Built**, not yet reviewed. No placeholders — the first page in the rebuild that ships clean |
-| `/thank-you` | Exists but is still the **old waitlist page**. Needs rewriting |
+| `/thank-you` | **Deleted 10 August 2026** — it was pure Price by Value waitlist content and orphaned. Route stays declared in `publicPaths` and is skipped until rewritten |
 | `/foundations` | Not started (Tier 2, needed before 5 September) |
 | `/pathway` · `/about` | Not started (Tier 2) |
 | `/verify` · `/builder-pool` · `/workshops` · `/privacy` | Not started (Tier 3) |
-| `_redirects` | Not created. Needed for the three legacy URLs |
+| `_redirects` | **Created 10 August 2026.** Carries `/price-by-value` → `/` only; the other two wait for their targets |
 
-Build reports **12 of 20 declared paths**; the eight unbuilt routes are already declared in
-`publicPaths` and are skipped with a warning until their files exist.
+Build reports **11 of 19 declared paths**; the eight unbuilt routes are already declared in
+`publicPaths` and are skipped with a warning until their files exist. `price-by-value` was
+dropped from the allowlist entirely on 10 August 2026, taking the count from 20 to 19.
 
 `sitemap.xml` now lists `/`, `/certified-automation-builder` and `/standard`. Add each new
 route as it is built.
@@ -35,7 +36,7 @@ route as it is built.
 Per the approved plan, driven by the 12 September cohort start:
 
 1. ~~`/standard`~~ — **built 10 August 2026.** All four BCAB links to it now resolve.
-2. **`/thank-you`** — rewrite from waitlist framing. **Next.**
+2. **`/thank-you`** — rebuild. The old waitlist page is gone, so this starts from the new design system rather than editing legacy markup. **Next.**
 3. **`/foundations`** in State 2 — showcase invite. Must be live before 5 September.
 4. **`/pathway`**, **`/about`**.
 5. Tier 3: `/verify`, `/builder-pool`, `/workshops`, `/privacy`, `_redirects`.
@@ -133,11 +134,44 @@ Every one renders in conspicuous dashed marigold. **Nothing ships with one still
 
 - **PR #22** is open as a draft: https://github.com/Exnav29/bulletproofautomations-training/pull/22
   Five commits. Do not merge — merging deploys immediately and the placeholders are still visible.
-- **The Cloudflare Pages preview build fails**, which is correct: `SUPABASE_URL` and
-  `SUPABASE_ANON_KEY` are not set on the Pages project, and the build refuses rather than shipping
-  a dead enrollment form. Set both for Production and Preview to clear it.
-- **`assets/js/main.js` still hardcodes the OLD project's anon key** and serves the retiring
-  legacy routes. Decide: tokenise it, or remove it with the legacy pages.
+- **The Cloudflare Pages build fails** — cause confirmed by reproduction on 10 August 2026, not
+  inferred. `CF_PAGES=1 npm run build` with the values resolvable exits 0; with them absent it
+  exits 1 on `Missing environment values: SUPABASE_URL, SUPABASE_ANON_KEY`. The guard reads
+  `process.env` only, so **this has nothing to do with the legacy form, `main.js`, or the old
+  Supabase project** — retiring any of those will not turn the build green.
+  **The fix is setting both variables on the Pages project, for Production _and_ Preview.**
+  Cloudflare scopes them separately and the guard fires in both. Do not relax the guard to get a
+  green check — it exists so a deploy cannot silently ship a dead enrollment form.
+
+  **Owner confirmed on 10 August 2026 that the variables are now set, and a manual deploy
+  succeeds.** Automatic production deploys will stay quiet regardless until something merges to
+  `main` — Cloudflare's production branch is `main` and all rebuild work is on `site-rebuild`,
+  so a push to the branch produces a *preview* build, not a production one. If a preview build
+  still fails, the variables are set for Production but not Preview.
+- **`assets/js/main.js` still hardcodes the OLD project's anon key** (`ftqcex…`, a legacy `eyJ…`
+  JWT) and serves the retiring legacy routes. The current project is a different one entirely,
+  with an `sb_publishable_…` key. **Leave it as it is until the legacy routes retire together
+  with it** — tokenising it would repoint those pages at the new project, where
+  `waitlist_signups` does not exist, silently breaking two live forms. Adding indirection to code
+  scheduled for deletion buys nothing.
+
+- **Retiring the legacy forms is blocked, and it is a sequencing problem, not a decision.**
+  Checked 10 August 2026: both Supabase projects return `401` from `/rest/v1/`, so **both are
+  alive and the old forms are still capturing**. They are the only live capture for Foundations
+  notify-me, and every replacement route is missing — `/foundations`, `/pathway`. The new shell
+  never links to any legacy route, so they are already orphaned from navigation and reachable
+  only by direct URL or an old link. **Price by Value was retired outright on 10 August 2026**,
+  which removed one of the three legacy routes without waiting for a replacement. Retirement
+  order for the remaining two, once Tier 2 lands:
+
+  1. Build `/foundations` and `/pathway`.
+  2. Add `_redirects` for the three legacy URLs.
+  3. Point `/admin` at `enrollments` on the current project.
+  4. Delete the three legacy folders, drop them from `publicPaths`, and delete `main.js` and
+     `assets/css/style.css` with them.
+
+  Steps 1 and 2 must land together: a redirect to a route that does not exist is a 404 where a
+  working page used to be.
 - **The Daily Waitlist Digest action** points at an Edge Function in the old Supabase project.
   It will keep digesting old data or start failing. `supabase/functions/` are deployed to the old
   project too.

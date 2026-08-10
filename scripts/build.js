@@ -36,10 +36,11 @@ const publicPaths = [
   "admin",
   "nfc",
 
-  // Legacy routes - removed once /_redirects is in place and the folders are deleted
+  // Legacy routes - removed once /_redirects is in place and the folders are deleted.
+  // price-by-value was retired on 10 August 2026: folder deleted, /price-by-value
+  // now 301s to / from _redirects.
   "n8n-foundations",
-  "n8n-automation-builder-pathway",
-  "price-by-value"
+  "n8n-automation-builder-pathway"
 ];
 
 /* --------------------------------------------------------------------------

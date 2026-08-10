@@ -1,7 +1,7 @@
 # Deployment Checklist
 
 - [ ] Home page loads at `/`
-- [ ] Workshop page loads at `/price-by-value`
+- [ ] `/price-by-value` 301s to `/` (workshop retired 10 August 2026)
 - [ ] Waitlist form submits
 - [ ] Duplicate prevention works for email and WhatsApp
 - [ ] Source tracking works with `?source=`
