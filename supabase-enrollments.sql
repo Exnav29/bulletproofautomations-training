@@ -1,0 +1,112 @@
+-- Bulletproof Automations Training — enrollments
+--
+-- ============================================================================
+-- THIS FILE IS DOCUMENTATION, NOT A MIGRATION. DO NOT RUN IT.
+-- ============================================================================
+--
+-- The live table was created by hand in the new Supabase training project on
+-- 10 August 2026. An earlier version of this file proposed a *different*
+-- schema; it was wrong and has been replaced by what is actually deployed,
+-- verified column-by-column through the PostgREST API.
+--
+-- The live database is the source of truth. If you change the table, update
+-- this file and assets/js/shell.js together — the enrollment form writes these
+-- exact column names and types.
+--
+-- Project: the training Supabase project (ref in .env, gitignored).
+-- Verified: 10 August 2026.
+
+
+-- ---------------------------------------------------------------------------
+-- Columns as deployed
+-- ---------------------------------------------------------------------------
+--
+--  column                  type          null?  default
+--  ----------------------  ------------  -----  ---------------------------
+--  id                      uuid          NO     gen_random_uuid()
+--  created_at              timestamptz   NO     now()
+--  updated_at              timestamptz   NO     now()
+--  full_name               text          NO     —
+--  email                   text          NO     —
+--  whatsapp                text          NO     —          (not whatsapp_number)
+--  city                    text          NO     —
+--  experience_level        text          NO     —          CHECK constraint
+--  chosen_option           text          NO     —          CHECK constraint
+--  amount_ghs              numeric       NO     —
+--  payment_plan            boolean       NO     false      true = instalments
+--  first_instalment_ghs    numeric       YES    —
+--  payment_status          text          NO     'reserved' CHECK constraint
+--  paystack_reference      text          YES    —
+--  paystack_payment_date   timestamptz   YES    —
+--  amount_paid_ghs         numeric       YES    0
+--  slack_invited           boolean       NO     false
+--  whatsapp_contacted      boolean       NO     false
+--  contact_date            timestamptz   YES    —
+--  seat_number             integer       YES    —
+--  cohort                  text          NO     'intermediate_2026_09'
+--  notes                   text          YES    —
+--  consent_given           boolean       NO     false
+--  source                  text          YES    —
+--
+-- Traps that have already bitten once each:
+--   * payment_plan is a BOOLEAN, not a text enum. Sending "Full" fails.
+--   * consent_given defaults to false. If the form does not send true, every
+--     enrollment records "no consent" while the page promises WhatsApp contact.
+--   * The column is whatsapp, not whatsapp_number.
+
+
+-- ---------------------------------------------------------------------------
+-- Row-level security as deployed
+-- ---------------------------------------------------------------------------
+--
+--  policy                          cmd     roles           with_check
+--  ------------------------------  ------  --------------  ----------
+--  Allow anon insert               INSERT  {anon}          true
+--  Allow service role full access  ALL     {service_role}  —
+--
+-- There is deliberately NO select policy for anon. Consequences:
+--
+--   * The browser can insert and cannot read the roll back. Confirmed: a GET
+--     as anon returns [] even though SELECT is granted at the table level.
+--   * The form MUST send `Prefer: return=minimal`. `return=representation`
+--     makes PostgREST RETURN the inserted row, which needs SELECT rights anon
+--     does not have, and the insert is refused with 42501. This is not a bug
+--     in the policy — it is the policy working.
+
+
+-- ---------------------------------------------------------------------------
+-- Hardening still worth doing (optional, reversible)
+-- ---------------------------------------------------------------------------
+--
+-- Supabase grants anon every privilege on public tables by default and relies
+-- entirely on RLS. The site only ever inserts, so anon needs nothing else.
+-- Revoking the rest makes a future RLS mistake non-catastrophic:
+--
+--   revoke select, update, delete, truncate, references, trigger
+--     on public.enrollments from anon;
+
+
+-- ---------------------------------------------------------------------------
+-- CHECK constraint vocabularies (verified 10 August 2026)
+-- ---------------------------------------------------------------------------
+--
+-- These are closed sets. Sending anything else fails with 23514, and the
+-- failure only surfaces when a real person is trying to enroll. The form's
+-- radio values, select values and JS lookup keys must match these exactly.
+--
+--   chosen_option     cohort_only            GHS 750,   first instalment 400
+--                     cohort_and_assessment  GHS 1,050, first instalment 400
+--                     path_b_readiness       GHS 150
+--
+--   experience_level  foundations_graduate   completed Foundations -> Path A
+--                     experienced_builder    working practitioner  -> Path B
+--                     beginner               new; belongs in Foundations first
+--
+--   payment_status    reserved | payment_pending | partially_paid | paid | cancelled
+--                     Defaults to 'reserved'. The site never sends it.
+--
+--   source            website | showcase | whatsapp | referral
+--                     The site always sends 'website'.
+--
+-- End-to-end insert verified 10 August 2026: HTTP 201, and a subsequent anon
+-- SELECT returned [] with a row present — RLS protects the roll.

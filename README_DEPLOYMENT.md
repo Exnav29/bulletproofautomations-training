@@ -126,3 +126,28 @@ Confirm `dist` contains the public site files and route folders:
 - `sitemap.xml`
 
 Confirm `dist` does not contain `.git`, `.github`, `.wrangler`, `supabase`, `supabase-setup.sql`, README/deployment docs, test plans, gitleaks config, or backend/dev files.
+
+## Environment variables (required)
+
+The Supabase values are injected into the bundle at build time. They are not committed —
+source files carry `__SUPABASE_URL__` / `__SUPABASE_ANON_KEY__` tokens, and `scripts/build.js`
+substitutes them while writing `dist/`.
+
+Set both in the Cloudflare Pages project (Settings -> Environment variables, Production):
+
+| Variable | Value |
+|---|---|
+| `SUPABASE_URL` | The training project URL, `https://<ref>.supabase.co` |
+| `SUPABASE_ANON_KEY` | The anon/public key for that project |
+
+The anon key is public by design — it reaches the browser either way — and row-level security
+limits it to inserting into `public.enrollments`. It cannot read the roll or mark anyone paid.
+
+**A production build with either value missing fails.** `scripts/build.js` exits non-zero when
+`CF_PAGES` is set and the values are absent, because a deploy that silently shipped a dead
+enrollment form would cost seats. Locally, and in CI — which only validates HTML and has no
+business holding secrets — the build warns instead and the form politely refuses, directing
+visitors to WhatsApp.
+
+For local development, put the same two values in a `.env` at the repo root. It is gitignored.
+See `.env.example`.
