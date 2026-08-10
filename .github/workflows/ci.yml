@@ -15,14 +15,23 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+      # Pages are assembled from partials/ at build time, so validate the built
+      # output rather than the source fragments. This also checks what ships.
+      - name: Build
+        run: npm run build
       - name: Validate HTML
-        run: npx --yes html-validate "**/index.html"
+        run: npx --yes html-validate "dist/**/*.html"
 
   link-check:
     name: Link check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Build
+        run: npm run build
       - name: Check links
         uses: lycheeverse/lychee-action@v2
         with:
@@ -34,6 +43,6 @@ jobs:
             --retry-wait-time 2
             --accept '100..=103,200..=299,403'
             --exclude '^https://n8n\.bulletproofautomations\.com/webhook/nfc-lead-capture$'
-            './**/*.html'
+            './dist/**/*.html'
         env:
           GITHUB_TOKEN: ${{ github.token }}
