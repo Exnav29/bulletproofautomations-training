@@ -218,10 +218,22 @@ Every one renders in conspicuous dashed marigold. **Nothing ships with one still
 1. `npm run build && npx --yes http-server dist -p 8080 -c-1` — confirms the route is in
    `publicPaths` and actually ships.
 2. `npx --yes html-validate "dist/**/*.html"` — currently clean.
-3. Open a PR. **Do not trust the lychee link check to catch missing routes.** It runs with
-   `--base-url https://training.bulletproofautomations.com`, so root-relative links resolve
-   against the live production site rather than the build. On PR #22 it passed green while
-   `/standard`, `/pathway`, `/foundations` and five other linked routes did not exist locally.
+3. Open a PR. **The lychee link check cannot catch a missing route. Do not rely on it.**
+   It runs with `--base-url https://training.bulletproofautomations.com`, so root-relative links
+   resolve against production — and production answers **HTTP 200 with the old homepage for every
+   path**, including ones that have never existed. Measured 10 August 2026:
+
+   ```
+   /standard                     -> 200, old homepage
+   /certified-automation-builder -> 200, old homepage
+   /nonsense-does-not-exist      -> 200, old homepage
+   ```
+
+   So lychee is not merely unreliable here, it is structurally incapable of failing on a missing
+   route. PR #22's green check was meaningless rather than lucky. **Check routes by listing
+   `dist/` against the links in the shell** — the loop in §7 of this file does it in one command.
+   Worth fixing the catch-all separately: a 404 that returns 200 also tells search engines every
+   mistyped URL is a real page.
    Check unbuilt routes by hand, or by listing `dist/` against the links in the shell.
 4. 360px, 768px, 1280px. Keyboard-only pass. Contrast. `prefers-reduced-motion`.
 5. Terminology audit against the `CLAUDE.md` table.
