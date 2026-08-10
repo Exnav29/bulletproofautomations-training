@@ -3414,42 +3414,144 @@ a.rail__link:hover .rail__name {
 }
 
 /* --- 404 -----------------------------------------------------------------
-   No bespoke layout. The page borrows the credential hero and its drawn
-   canvas, because a 404 is a routing failure and this site's whole subject is
-   routing. The only new parts are the dead branch and the quoted address.
+   A routing failure, told as a router's match trace.
+
+   The first draft borrowed the credential hero and hid the idea in the
+   background canvas — which drops to 50% opacity and slides 18% off-screen
+   below 900px, so on a phone there was nothing there. This version carries the
+   idea in type, at full contrast, in the reading column. It works at 360px
+   because there is nothing to shrink.
+
+   The trace is also the navigation: the routes that do match ARE the links, so
+   there are no separate cards underneath. One object, doing both jobs.
+
+   No new colours. --ink is the credential ground, --signal marks the live
+   routes on it, --muted-on-ink carries the dead one. --marigold is reserved
+   for time-sensitive things site-wide and is deliberately absent.
    ------------------------------------------------------------------------- */
 
-/* The branch that goes nowhere. Dashed, unlit, and carrying no pulse — the
-   absence of the travelling dot is the point, so it must never get one. */
-.flow__wire--dead {
-  stroke: rgba(246, 247, 245, 0.16);
-  stroke-dasharray: 5 6;
+.lost {
+  padding-block: var(--s7) var(--s8);
 }
 
-/* An open end rather than a node. Nothing terminates here. */
-.flow__terminus {
-  fill: none;
-  stroke: rgba(246, 247, 245, 0.3);
-  stroke-width: 1.5;
+.lost__title {
+  font-size: clamp(2rem, 7.5vw, 3.75rem);
+  font-variation-settings: "wdth" 118, "wght" 700;
+  letter-spacing: -0.03em;
+  line-height: 1.02;
+  max-width: 12ch;
 }
 
-.flow__label--dead {
-  fill: var(--muted-on-ink);
-  font-variation-settings: "wdth" var(--narrow), "wght" 500;
-  text-anchor: start;
+.lost__lede {
+  margin-top: var(--s4);
+  max-width: 46ch;
 }
 
-/* The address that failed, quoted back. Set in the condensed label width so it
-   reads as a machine value rather than a sentence, and boxed so it cannot be
-   mistaken for part of the standfirst. */
-.floor__requested {
-  margin-top: var(--s5);
-  padding: var(--s3) var(--s4);
-  border: 1px dashed rgba(246, 247, 245, 0.3);
+/* The trace block. Square, because this is credential-side geometry. */
+.trace {
+  margin-top: var(--s7);
+  background: var(--ink);
+  color: var(--text-on-ink);
   border-radius: var(--r-sm);
+  padding: var(--s5) var(--s4);
+}
+
+@media (min-width: 40rem) {
+  .trace {
+    padding: var(--s6);
+  }
+}
+
+.trace__caption {
+  font-size: 0.6875rem;
+  font-variation-settings: "wdth" var(--narrow), "wght" 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
   color: var(--muted-on-ink);
-  font-variation-settings: "wdth" var(--narrow), "wght" 500;
-  font-size: 0.875rem;
+  margin-bottom: var(--s3);
+}
+
+.trace__caption--ok {
+  margin-top: var(--s6);
+  padding-top: var(--s5);
+  border-top: 1px solid rgba(246, 247, 245, 0.16);
+}
+
+/* Rows stack on a phone and become a three-part line once there is room.
+   The path is the thing being compared, so it holds the left edge at every
+   size and never wraps under the method. */
+.trace__row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--s2) var(--s3);
+  align-items: baseline;
+  padding: var(--s3) 0;
+  text-decoration: none;
+  color: inherit;
+  border-bottom: 1px solid rgba(246, 247, 245, 0.1);
+}
+
+.trace__row:last-child {
+  border-bottom: 0;
+}
+
+.trace__method {
+  font-size: 0.6875rem;
+  font-variation-settings: "wdth" var(--narrow), "wght" 700;
+  letter-spacing: 0.1em;
+  color: var(--muted-on-ink);
+  border: 1px solid rgba(246, 247, 245, 0.22);
+  border-radius: 3px;
+  padding: 0.1em 0.4em;
+}
+
+/* Condensed width marks these as machine values rather than prose — the same
+   device the rest of the site uses for labels, pushed further. */
+.trace__path {
+  font-variation-settings: "wdth" var(--narrow), "wght" 600;
+  font-size: 1rem;
   overflow-wrap: anywhere;
-  max-width: 44ch;
+}
+
+.trace__status {
+  grid-column: 2;
+  font-size: 0.875rem;
+  color: var(--muted-on-ink);
+  line-height: 1.45;
+}
+
+/* The failure. Struck through, because the line is the clearest possible
+   statement that this address leads nowhere. */
+.trace__row--fail .trace__path {
+  color: var(--muted-on-ink);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.trace__row--fail .trace__status {
+  font-variation-settings: "wdth" var(--narrow), "wght" 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.6875rem;
+}
+
+/* The live routes. --signal is the site's primary action colour on ink. */
+.trace__row--live .trace__path {
+  color: var(--signal);
+}
+
+.trace__row--live:hover .trace__path,
+.trace__row--live:focus-visible .trace__path {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.trace__row--live:focus-visible {
+  outline: 2px solid var(--verified-lift);
+  outline-offset: 3px;
+}
+
+.lost__note {
+  margin-top: var(--s6);
 }
