@@ -16,7 +16,7 @@ session can continue without re-deriving it.
 | `/` homepage | **Built, approved** ("okay with the design for now") |
 | `/certified-automation-builder` | **Built**, not yet reviewed. Enrollment form blocked — see §4 |
 | `/standard` | **Built**, not yet reviewed. No placeholders — the first page in the rebuild that ships clean |
-| `/thank-you` | **Deleted 10 August 2026** — it was pure Price by Value waitlist content and orphaned. Route stays declared in `publicPaths` and is skipped until rewritten |
+| `/thank-you` | **Rebuilt 10 August 2026** as the Paystack return page: confirmation, the dated sequence to Week 1, the training/certification separation, instalments, and a route for payment problems |
 | `/foundations` | Not started (Tier 2, needed before 5 September) |
 | `/pathway` · `/about` | Not started (Tier 2) |
 | `/verify` · `/builder-pool` · `/workshops` · `/privacy` | Not started (Tier 3) |
@@ -38,8 +38,8 @@ route as it is built.
 Per the approved plan, driven by the 12 September cohort start:
 
 1. ~~`/standard`~~ — **built 10 August 2026.** All four BCAB links to it now resolve.
-2. **`/thank-you`** — rebuild. The old waitlist page is gone, so this starts from the new design system rather than editing legacy markup. **Next.**
-3. **`/foundations`** in State 2 — showcase invite. Must be live before 5 September.
+2. ~~`/thank-you`~~ — **built 10 August 2026.**
+3. **`/foundations`** in State 2 — showcase invite. Must be live before 5 September. **Next.** Its notify-me capture writes to `foundations_interest`, where the 11 migrated signups already are.
 4. **`/pathway`**, **`/about`**.
 5. Tier 3: `/verify`, `/builder-pool`, `/workshops`, `/privacy`, `_redirects`.
 
@@ -133,6 +133,25 @@ Every one renders in conspicuous dashed marigold. **Nothing ships with one still
 ---
 
 ## 6. Other open items
+
+- **Payment capture is built but not deployed.** `payment_events` (append-only ledger, documented
+  in `supabase-payment-events.sql`) exists on the current project, and
+  `supabase/functions/paystack-webhook/index.ts` is written. **Nothing is deployed and no Paystack
+  webhook is configured yet.** To finish, once Paystack is out of review:
+
+  1. `supabase functions deploy paystack-webhook --project-ref <ref> --no-verify-jwt`
+     (`--no-verify-jwt` is required — Paystack sends no Supabase JWT; the HMAC signature is the auth)
+  2. Set `PAYSTACK_SECRET_KEY`, `PROJECT_URL`, `SERVICE_ROLE_KEY` as Edge Function secrets
+  3. Point the Paystack webhook at `https://<ref>.supabase.co/functions/v1/paystack-webhook`
+
+  Until step 2, every event verifies as `signature_valid = false` and nothing is applied to the
+  roll — safe by default, and still logged. **The browser is never in the payment path:**
+  `/thank-you` displays the reference from the return URL and writes nothing, because a query
+  string is typed by whoever holds the browser.
+
+- **`/admin` has no payments view yet.** `payment_events` is readable by the admin allowlist but
+  nothing surfaces it. That is the piece that answers "show me the status of payments for
+  troubleshooting and disputes", and it should land before Paystack goes live.
 
 - **The catch-all 404 is only half fixed.** `404.html` now ships at the root of `dist/`, which is
   where Cloudflare Pages looks. But production currently answers **200 with the old homepage for

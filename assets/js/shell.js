@@ -404,3 +404,26 @@
   slot.textContent = path;
   slot.hidden = false;
 })();
+
+/* Payment reference on /thank-you.
+   Read from the provider's return URL and shown so the visitor can quote it if
+   something goes wrong. DISPLAY ONLY — nothing here writes payment status.
+   A query string is typed by whoever holds the browser, so the authoritative
+   record comes from Paystack server-to-server via the paystack-webhook
+   function. Written through textContent, never innerHTML. */
+
+(function () {
+  var box = document.getElementById("pay-ref");
+  var slot = document.getElementById("pay-ref-value");
+  if (!box || !slot) return;
+
+  var params = new URLSearchParams(window.location.search);
+  // Paystack returns trxref and reference; either may be present.
+  var ref = params.get("reference") || params.get("trxref") || "";
+
+  // Keep it to the shape a reference actually takes, so nothing else renders.
+  if (!/^[A-Za-z0-9._-]{6,64}$/.test(ref)) return;
+
+  slot.textContent = ref;
+  box.hidden = false;
+})();

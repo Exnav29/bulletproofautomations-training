@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- include: head.html title="Your place is held — Bulletproof Automations Training" description="What happens next after enrolling in the founding Intermediate cohort: confirmation, the setup clinic, the proof-of-setup task, and the first session on 12 September 2026." canonical="https://training.bulletproofautomations.com/thank-you" -->
+</head>
+<body>
+<!-- include: header.html -->
+<!-- include: pathway-rail.html stage="2" -->
+
+<main id="main">
+
+  <!-- 1 · Confirmation. Worded to be true both now, when this records a
+       reservation, and later, when Paystack has taken a first payment. -->
+  <section class="section section--sand" aria-labelledby="held-title">
+    <div class="shell">
+      <p class="masthead__eyebrow">Founding cohort &middot; Intermediate</p>
+      <h1 class="held__title" id="held-title">That&rsquo;s your place held.</h1>
+      <p class="lede held__lede">You are on the list for the founding Intermediate cohort. We check every enrollment by hand and confirm it with you on WhatsApp within 24 hours &mdash; if anything is wrong, that is when we catch it.</p>
+
+      <!-- Filled by shell.js from the payment provider's return URL. Display
+           only: nothing on this page writes payment status, because a query
+           string is typed by whoever holds the browser. The record comes from
+           Paystack server-to-server. -->
+      <p class="ref" id="pay-ref" hidden>
+        <span class="ref__k">Payment reference</span>
+        <span class="ref__v" id="pay-ref-value"></span>
+      </p>
+    </div>
+  </section>
+
+  <!-- 2 · The sequence. The page's real job. -->
+  <section class="section" aria-labelledby="next-title">
+    <div class="shell">
+      <h2 class="section__title" id="next-title">What happens next</h2>
+
+      <ol class="next">
+        <li class="next__step">
+          <p class="next__when">Within 24 hours</p>
+          <h3 class="next__what">We confirm on WhatsApp</h3>
+          <p>We check your enrollment against the roll and confirm your seat. If you chose instalments, this is when we arrange the rest.</p>
+        </li>
+
+        <li class="next__step">
+          <p class="next__when"><time datetime="2026-09-08">Tuesday 8 September</time> <span class="next__count" data-countdown="2026-09-08"></span></p>
+          <h3 class="next__what">Enrollment closes</h3>
+          <p>Four days before the cohort starts, and two days before the proof-of-setup task is due. The cap is 25 seats and it does not move.</p>
+        </li>
+
+        <li class="next__step">
+          <p class="next__when"><time datetime="2026-09-10">Thursday 10 September</time> <span class="next__count" data-countdown="2026-09-10"></span></p>
+          <h3 class="next__what">Proof-of-setup task due</h3>
+          <p>Create a table, insert a row, call the REST endpoint, screenshot the JSON. It takes about twenty minutes and it exists so nobody spends Week 1 fighting their own environment.</p>
+        </li>
+
+        <li class="next__step">
+          <p class="next__when">Before the first session</p>
+          <h3 class="next__what">Setup clinic</h3>
+          <p>Live, recorded, with a written guide. Come if your setup is not working, or watch the recording if it is.</p>
+        </li>
+
+        <li class="next__step next__step--mark">
+          <p class="next__when"><time datetime="2026-09-12">Saturday 12 September</time> <span class="next__count" data-countdown="2026-09-12"></span></p>
+          <h3 class="next__what">Week 1 &mdash; complex data</h3>
+          <p>11:30&ndash;14:00 GMT, with a real break around the seventy-minute mark. Five Saturdays, one project that grows across all of them.</p>
+        </li>
+
+        <li class="next__step">
+          <p class="next__when">By Week 2</p>
+          <h3 class="next__what">Your webhooks must be reachable</h3>
+          <p>From the internet, not just localhost. <span class="placeholder">[WEBHOOK METHOD TO CONFIRM]</span></p>
+        </li>
+
+        <li class="next__step">
+          <p class="next__when"><time datetime="2026-11-01">1 November</time> <span class="next__count" data-countdown="2026-11-01"></span></p>
+          <h3 class="next__what">The assessment window opens</h3>
+          <p>Separate from the cohort, and sat when you are ready. See <a href="/standard">the standard</a> for what it measures.</p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- 3 · What was and was not bought -->
+  <section class="section section--ink" aria-labelledby="bought-title">
+    <div class="shell prose">
+      <h2 class="section__title" id="bought-title">What you have paid for</h2>
+      <p class="lede">The five-week Intermediate cohort, and &mdash; if you chose the bundle &mdash; one attempt at the BCAB assessment.</p>
+      <div class="callout callout--legal">
+        <p>Training and certification are separate products. Completing the cohort <strong>qualifies you to attempt the assessment</strong>. It does not award the credential, and no payment can. The credential is earned by passing.</p>
+      </div>
+      <p>If you do not reach the standard first time you receive written feedback and an outcome of Assessment Not Yet Passed or Remediation Required, and you may reattempt. Every attempt uses a different scenario.</p>
+    </div>
+  </section>
+
+  <!-- 4 · Instalments -->
+  <section class="section" aria-labelledby="instalments-title">
+    <div class="shell prose">
+      <h2 class="section__title" id="instalments-title">If you are paying in instalments</h2>
+      <p class="lede">First payment via Paystack. Remaining instalments arranged through our Slack community via MoMo.</p>
+      <ul class="bullets">
+        <li>Intermediate only &mdash; GHS 400 at enrollment, GHS 350 before Week 3.</li>
+        <li>Intermediate and assessment &mdash; GHS 400, then GHS 350, then GHS 300.</li>
+        <li>Payments do not extend beyond the five-week programme, and full payment is required before the certification assessment.</li>
+        <li>If an instalment is missed, access pauses until it is paid. We will always ask before that happens.</li>
+      </ul>
+      <p class="note">There is no automated instalment billing. You arrange each one with Johnathan directly, which also means a bad week is a conversation rather than a failed charge.</p>
+    </div>
+  </section>
+
+  <!-- 5 · Something wrong -->
+  <section class="section section--sand" aria-labelledby="wrong-title">
+    <div class="shell prose">
+      <h2 class="section__title" id="wrong-title">If something looks wrong</h2>
+      <p>If you were charged twice, charged the wrong amount, or have not heard from us within 24 hours, contact us directly rather than enrolling again. Quote the payment reference above if you have one.</p>
+      <ul class="bullets">
+        <li>WhatsApp &mdash; <span class="placeholder">[WHATSAPP NUMBER]</span></li>
+        <li>Email &mdash; <span class="placeholder">[CONTACT EMAIL]</span></li>
+      </ul>
+    </div>
+  </section>
+
+</main>
+
+<!-- include: footer.html -->
+</body>
+</html>

@@ -3555,3 +3555,138 @@ a.rail__link:hover .rail__name {
 .lost__note {
   margin-top: var(--s6);
 }
+
+/* --- Thank you -----------------------------------------------------------
+   A confirmation page has one job: say what happens next, with dates. So the
+   sequence is the page, and everything else is short.
+
+   This is the one place --marigold earns its keep. It is reserved site-wide
+   for time-sensitive things and appears nowhere else; a live day count against
+   a fixed deadline is exactly that, so the counts carry it and nothing on the
+   page competes.
+   ------------------------------------------------------------------------- */
+
+.held__title {
+  font-size: clamp(2rem, 7vw, 3.5rem);
+  font-variation-settings: "wdth" 118, "wght" 700;
+  letter-spacing: -0.03em;
+  line-height: 1.04;
+  max-width: 15ch;
+}
+
+.held__lede {
+  margin-top: var(--s4);
+  max-width: 52ch;
+}
+
+/* The reference, quoted back so it can be quoted at us. Condensed, boxed, and
+   unmistakably a machine value rather than part of the sentence above it. */
+.ref {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s2) var(--s3);
+  margin-top: var(--s5);
+  padding: var(--s3) var(--s4);
+  background: var(--field);
+  border: 1px solid var(--sand-rule);
+  border-radius: var(--r-sm);
+}
+
+.ref__k {
+  font-size: 0.6875rem;
+  font-variation-settings: "wdth" var(--narrow), "wght" 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--sand-muted);
+}
+
+.ref__v {
+  font-variation-settings: "wdth" var(--narrow), "wght" 700;
+  overflow-wrap: anywhere;
+}
+
+/* --- The sequence --------------------------------------------------------
+   A real timeline: a rule down the left with a marker per step. Ordered,
+   because these genuinely happen in this order — the numbering is information,
+   not decoration, so the markers are dates rather than 01 / 02 / 03. */
+
+.next {
+  margin-top: var(--s5);
+  position: relative;
+  padding-left: var(--s6);
+  max-width: 62ch;
+}
+
+.next::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 0.6em;
+  bottom: 0.6em;
+  width: 1px;
+  background: var(--rule);
+}
+
+.next__step {
+  position: relative;
+  padding-bottom: var(--s6);
+}
+
+.next__step:last-child {
+  padding-bottom: 0;
+}
+
+.next__step::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--s6) * -1);
+  top: 0.45em;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--paper);
+  border: 2px solid var(--rule-strong);
+}
+
+/* The session everything else is arranged around. */
+.next__step--mark::before {
+  background: var(--verified);
+  border-color: var(--verified);
+}
+
+.next__when {
+  font-size: 0.8125rem;
+  font-variation-settings: "wdth" var(--narrow), "wght" 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s3);
+  align-items: baseline;
+}
+
+/* Written by shell.js from data-countdown. Empty until then, so it collapses
+   rather than reserving a gap, and stays empty for dates already passed. */
+.next__count {
+  color: var(--marigold);
+  font-variation-settings: "wdth" var(--narrow), "wght" 700;
+  letter-spacing: 0.04em;
+}
+
+.next__count:empty {
+  display: none;
+}
+
+.next__what {
+  margin-top: var(--s2);
+  font-size: 1.0625rem;
+  font-variation-settings: "wdth" 106, "wght" 700;
+}
+
+.next__step p:last-child {
+  margin-top: var(--s2);
+  color: var(--muted);
+  line-height: 1.6;
+}
