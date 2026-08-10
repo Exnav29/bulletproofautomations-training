@@ -3970,3 +3970,110 @@ a.rail__link:hover .rail__name {
   font-size: 0.875rem;
   color: var(--muted-on-ink);
 }
+
+/* --- Policies, acknowledgements and the portrait -------------------------- */
+
+/* Legal text is long, so the measure matters more than anything decorative. */
+.policy__body {
+  max-width: 68ch;
+}
+
+.policy__h {
+  margin-top: var(--s7);
+  font-size: clamp(1.125rem, 3vw, 1.5rem);
+  scroll-margin-top: 5rem;
+}
+
+.policy__n {
+  color: var(--verified);
+  font-variation-settings: "wdth" var(--narrow), "wght" 700;
+}
+
+.policy__body p {
+  margin-top: var(--s4);
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+.policy__body .sub {
+  color: var(--text);
+}
+
+.policy__body ul {
+  margin-top: var(--s4);
+}
+
+/* A link to the refund terms sits with the money, not only in the footer.
+   Someone deciding to pay should not have to go looking for it. */
+.policy-link {
+  margin-top: var(--s5);
+  font-variation-settings: "wdth" var(--normal), "wght" 600;
+}
+
+.policy-link a {
+  color: var(--verified);
+}
+
+/* --- Acknowledgements ----------------------------------------------------
+   Deliberately not fine print. These sit directly above the button, at body
+   size, each one a separate decision — one combined checkbox would make it
+   impossible to show which term a person actually agreed to. */
+
+.acks {
+  margin-top: var(--s6);
+  padding: var(--s5);
+  border: 1px solid rgba(246, 247, 245, 0.28);
+  border-radius: var(--r-sm);
+  display: grid;
+  gap: var(--s4);
+}
+
+.ack {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--s3);
+  align-items: start;
+}
+
+.ack input {
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-top: 0.15rem;
+  accent-color: var(--signal);
+  flex: none;
+}
+
+.ack label {
+  font-size: 0.9375rem;
+  line-height: 1.55;
+}
+
+.ack a {
+  color: var(--signal);
+}
+
+.ack input:focus-visible {
+  outline: 2px solid var(--verified-lift);
+  outline-offset: 3px;
+}
+
+/* --- Portrait ------------------------------------------------------------ */
+
+.portrait {
+  margin-top: var(--s6);
+  border-radius: var(--r-card);
+  overflow: hidden;
+  max-width: 46rem;
+}
+
+.portrait img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* A portrait inside a prose column, rather than the full-width one on /about. */
+.portrait--inline {
+  max-width: 20rem;
+  border-radius: var(--r-card);
+}

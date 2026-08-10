@@ -23,7 +23,8 @@ session can continue without re-deriving it.
 | `/verify` | **Built 10 August 2026.** Explains why nothing can be verified yet rather than saying "coming soon" |
 | `/builder-pool` | **Built 10 August 2026**, deliberately thin. Non-guarantee wording verbatim in the hero |
 | `/workshops` | **Dropped 10 August 2026.** Price by Value was its only occupant and is retired. Removed from nav, footer and `publicPaths` |
-| `/privacy` | Not started. **Johnathan is writing it.** The only route the shell still links to that 404s |
+| `/privacy` | **Built 10 August 2026** from `docs/Privacy Policy.txt`, 20 sections |
+| `/refund-policy` | **Built 10 August 2026** from `docs/Refund and Cancellation Policy.txt`, 22 sections. Linked beside the pricing block, not only in the footer |
 | `404.html` | **Built 10 August 2026.** Root of `dist/`, in `publicPaths`. Cloudflare Pages serves it with a real 404 status |
 | `_redirects` | **Created 10 August 2026.** Carries `/price-by-value` → `/` only; the other two wait for their targets |
 | `/admin` | **Rebuilt 10 August 2026** against `enrollments` on the current project. Policies, auth user and sign-up lockdown all verified live. Not yet clicked through in a browser |
@@ -125,18 +126,29 @@ insert changes — the form, validation and stored record are already correct.
 
 Every one renders in conspicuous dashed marigold. **Nothing ships with one still visible.**
 
+**As of 10 August 2026 there are none. The build contains zero placeholders.**
+
 | Placeholder | Where | Needed from |
 |---|---|---|
 | ~~`[WHATSAPP NUMBER]`~~ | — | **Supplied 10 August 2026: +233 54 652 7779.** Given as `+233 054 652 7779`; the trunk `0` is dropped in international format, so links use `wa.me/233546527779`. **Confirm the digits** |
 | ~~`[CONTACT EMAIL]`~~ | — | **Supplied 10 August 2026: `info@bulletproofautomations.com`** (not `training@`, as the brief had assumed) |
-| `[REFUND AND CANCELLATION POLICY]` | BCAB FAQ | **Johnathan is writing it.** Last blocking placeholder |
+| ~~`[REFUND AND CANCELLATION POLICY]`~~ | — | **Resolved 10 August 2026.** Policy supplied and published at `/refund-policy` |
 | ~~`[MISSED-SESSION POLICY]`~~ | — | **Resolved 10 August 2026: does not apply to BCAB.** It is a paid 25-person cohort, so a missed week is handled individually. The policy belongs to Foundations only |
 | ~~`[WEBHOOK METHOD]`~~ | — | **Hidden 10 August 2026** at Johnathan's request. Both pages now say the method is confirmed at the setup clinic |
-| `[INSTRUCTOR PHOTO]` | `/about` hero | **Bio supplied 10 August 2026** and published; only the photo is outstanding |
+| ~~`[INSTRUCTOR PHOTO]`~~ | — | **Resolved 10 August 2026.** Photo supplied; AVIF/WebP/JPEG generated at three widths each, art-directed wide and tall |
 
 ---
 
 ## 6. Other open items
+
+- **Two required acknowledgements now gate registration**, directly above the button rather than in
+  fine print, each a separate checkbox so it is always clear which term a person agreed to. Wording
+  supplied verbatim by Johnathan. A third can be added later for Terms of Service.
+
+  **Not yet recorded in the database.** The page enforces them; nothing stores that they were
+  ticked. For the defensibility argument that motivated them, a timestamp per acknowledgement on
+  `enrollments` would be the difference between "the page had a checkbox" and "this person agreed
+  at this time". Additive and reversible — awaiting a decision.
 
 - **The company is US-based, not Ghanaian. Corrected site-wide 10 August 2026.** Every page had
   described Bulletproof Automations as being in Accra — the footer colophon on *every* page, the

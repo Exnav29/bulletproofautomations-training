@@ -379,6 +379,7 @@
           <li>Payments do not extend beyond the five-week programme.</li>
           <li>A missed instalment pauses access until it is paid.</li>
         </ul>
+        <p class="policy-link"><a href="/refund-policy">Read the Refund and Cancellation Policy</a> &mdash; cancellations, transfers, payment plans, and what happens if we cancel.</p>
         <p class="callout"><strong>Card and mobile money checkout is not open yet.</strong> Register below and we will contact you within 24 hours to confirm your place and arrange the first payment directly &mdash; mobile money or bank transfer. Instalments after the first are arranged through our Slack community and paid via MoMo. Full payment must be received before the certification assessment on <time datetime="2026-11-01">1 November 2026</time>.</p>
       </div>
     </div>
@@ -465,6 +466,20 @@
 
           <p class="form__error" id="form-error" role="alert" hidden></p>
 
+          <fieldset class="form__fieldset acks">
+            <legend class="form__label">Before you register</legend>
+
+            <div class="ack">
+              <input type="checkbox" id="ack-refund" name="ack_refund" required>
+              <label for="ack-refund">I have reviewed and agree to the <a href="/refund-policy">Refund and Cancellation Policy</a> and understand that my payment reserves capacity in a limited-seat live cohort.</label>
+            </div>
+
+            <div class="ack">
+              <input type="checkbox" id="ack-cert" name="ack_cert" required>
+              <label for="ack-cert">I understand that completing Intermediate training does not award BCAB certification. Certification is earned only by independently meeting the published BCAB assessment standard.</label>
+            </div>
+          </fieldset>
+
           <button class="btn btn--go form__submit" type="submit">Register for the cohort</button>
 
           <p class="form__small">We use your details only to run this cohort. We will not pass them to anyone else.</p>
@@ -488,7 +503,14 @@
       <h2 class="section__title" id="assessor-title">Who sets this standard</h2>
       <p class="lede">Bulletproof Automations is an independent training and certification provider, founded by Johnathan Lightfoot. The framework, the scenarios, and the assessment are his work.</p>
       <p>Johnathan Lightfoot is a veteran technology executive and systems integrator with more than three decades of experience, having served in CTO, CIO, application development, consulting and technology leadership roles, and as a U.S. Navy Operations Specialist. His approach to automation emphasises reliable outcomes, data inspection, testing, troubleshooting, explainability, and responsible use of AI. He leads the development of Bulletproof Automations&rsquo; training and professional certification programmes for automation builders.</p>
-      <p class="placeholder">[INSTRUCTOR PHOTO TO SUPPLY]</p>
+      <figure class="portrait portrait--inline">
+        <picture>
+          <source type="image/avif" srcset="/assets/images/about/johnathan-tall-480.avif 480w, /assets/images/about/johnathan-tall-640.avif 640w" sizes="(min-width: 40rem) 20rem, 100vw">
+          <source type="image/webp" srcset="/assets/images/about/johnathan-tall-480.webp 480w, /assets/images/about/johnathan-tall-640.webp 640w" sizes="(min-width: 40rem) 20rem, 100vw">
+          <img src="/assets/images/about/johnathan-tall-480.jpg" width="480" height="600" loading="lazy" decoding="async"
+               alt="Johnathan Lightfoot, in a dark suit and open-collar shirt, holding a tablet in front of screens showing dashboards and code.">
+        </picture>
+      </figure>
       <a class="link-arrow" href="/about">About Johnathan
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
       </a>
@@ -529,7 +551,7 @@
       <details class="faq"><summary>Can I sit the assessment without buying the training?</summary><p>Yes. That is Path B, and it is a permanent route, not an exception.</p></details>
       <details class="faq"><summary>Is this an n8n certification?</summary><p>No. Bulletproof Automations is independent and is not affiliated with, endorsed by, or accredited by n8n GmbH. n8n is the platform your competence is currently assessed on; the subject is automation engineering.</p></details>
       <details class="faq"><summary>What if I miss a session?</summary><p>Tell us as early as you can and we will work it out with you. This is a paid cohort of 25 people, not a lecture hall &mdash; a missed week is handled individually rather than by policy.</p></details>
-      <details class="faq"><summary>What is the refund policy?</summary><p><span class="placeholder">[REFUND AND CANCELLATION POLICY TO CONFIRM]</span></p></details>
+      <details class="faq"><summary>What is the refund policy?</summary><p>Cancellations, transfers and refunds are covered in full by the <a href="/refund-policy">Refund and Cancellation Policy</a>, which also sets out what happens to payment plans, bundled purchases and retakes, and what we do if <em>we</em> cancel. Read it before you pay rather than after.</p></details>
       <details class="faq"><summary>Will this get me a job?</summary><p>No. See the note below on the builder pool.</p></details>
     </div>
   </section>
