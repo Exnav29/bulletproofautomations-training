@@ -129,8 +129,11 @@ Every one renders in conspicuous dashed marigold. **Nothing ships with one still
 
 ## 6. Other open items
 
-- **Nothing is committed.** The entire rebuild is uncommitted on `site-rebuild`. Commit before
-  anything else.
+- **PR #22** is open as a draft: https://github.com/Exnav29/bulletproofautomations-training/pull/22
+  Five commits. Do not merge — merging deploys immediately and the placeholders are still visible.
+- **The Cloudflare Pages preview build fails**, which is correct: `SUPABASE_URL` and
+  `SUPABASE_ANON_KEY` are not set on the Pages project, and the build refuses rather than shipping
+  a dead enrollment form. Set both for Production and Preview to clear it.
 - **`assets/js/main.js` still hardcodes the OLD project's anon key** and serves the retiring
   legacy routes. Decide: tokenise it, or remove it with the legacy pages.
 - **The Daily Waitlist Digest action** points at an Edge Function in the old Supabase project.
@@ -152,9 +155,11 @@ Every one renders in conspicuous dashed marigold. **Nothing ships with one still
 1. `npm run build && npx --yes http-server dist -p 8080 -c-1` — confirms the route is in
    `publicPaths` and actually ships.
 2. `npx --yes html-validate "dist/**/*.html"` — currently clean.
-3. Open a PR; the lychee link check is what enforces "every internal link resolves". **It will
-   stay red until every route linked from the shell exists**, so either finish Tier 3 or narrow
-   the nav before merging.
+3. Open a PR. **Do not trust the lychee link check to catch missing routes.** It runs with
+   `--base-url https://training.bulletproofautomations.com`, so root-relative links resolve
+   against the live production site rather than the build. On PR #22 it passed green while
+   `/standard`, `/pathway`, `/foundations` and five other linked routes did not exist locally.
+   Check unbuilt routes by hand, or by listing `dist/` against the links in the shell.
 4. 360px, 768px, 1280px. Keyboard-only pass. Contrast. `prefers-reduced-motion`.
 5. Terminology audit against the `CLAUDE.md` table.
 6. Independence statement in every footer; non-guarantee wording on every page mentioning the
