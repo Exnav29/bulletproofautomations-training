@@ -2899,3 +2899,516 @@ a.rail__link:hover .rail__name {
 .choice--consent .choice__name {
   font-variation-settings: "wdth" var(--normal), "wght" 500;
 }
+
+/* ==========================================================================
+   The standard — /standard
+
+   A document page, not a marketing page. It leans ink because the whole thing
+   is credential material; sand appears once, on Stage 1, because that stage is
+   training. Paper carries the connective tissue between them.
+   ========================================================================== */
+
+/* Visually hidden, still read aloud. Used for the coverage matrix, where the
+   dot is decoration and the cell's meaning is the text behind it. */
+.vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- Document masthead --------------------------------------------------- */
+
+.doc-hero .masthead__eyebrow,
+.doc-hero .masthead__standfirst {
+  color: var(--muted-on-ink);
+}
+
+/* The metadata a standards document is judged on before it is read: version,
+   issue date, the platform version assessed against, and who owns it. */
+.doc-meta {
+  display: grid;
+  gap: 1px;
+  margin-top: var(--s7);
+  background: rgba(246, 247, 245, 0.14);
+  border: 1px solid rgba(246, 247, 245, 0.14);
+}
+
+@media (min-width: 40rem) {
+  .doc-meta {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 64rem) {
+  .doc-meta {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.doc-meta > div {
+  background: var(--ink);
+  padding: var(--s4) var(--s5);
+}
+
+.doc-meta dt {
+  font-size: 0.6875rem;
+  font-variation-settings: "wdth" var(--narrow), "wght" 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted-on-ink);
+}
+
+.doc-meta dd {
+  margin-top: var(--s2);
+  font-variation-settings: "wdth" var(--normal), "wght" 500;
+  line-height: 1.45;
+}
+
+.doc-print {
+  margin-top: var(--s6);
+}
+
+/* Inert markup until shell.js wires it up — a print button that cannot print
+   is worse than none, and the browser's own print command works regardless. */
+[data-print] {
+  display: none;
+}
+
+[data-print][data-ready] {
+  display: inline-flex;
+}
+
+/* --- Contents ------------------------------------------------------------ */
+
+.toc {
+  border-bottom: 1px solid var(--rule);
+}
+
+.toc__title {
+  font-size: 0.6875rem;
+  font-variation-settings: "wdth" var(--narrow), "wght" 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: var(--s5);
+}
+
+.toc__list {
+  display: grid;
+  gap: var(--s3) var(--s6);
+  counter-reset: toc;
+}
+
+@media (min-width: 40rem) {
+  .toc__list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 64rem) {
+  .toc__list {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.toc__list li {
+  counter-increment: toc;
+  display: flex;
+  gap: var(--s3);
+  line-height: 1.5;
+}
+
+.toc__list li::before {
+  content: counter(toc, decimal-leading-zero);
+  flex: none;
+  font-variation-settings: "wdth" var(--narrow), "wght" 600;
+  font-size: 0.8125rem;
+  color: var(--muted);
+  padding-top: 0.15em;
+}
+
+.toc__list a {
+  color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px solid var(--rule-strong);
+  padding-bottom: 1px;
+}
+
+.toc__list a:hover {
+  color: var(--verified);
+  border-bottom-color: var(--verified);
+}
+
+/* --- Section provenance --------------------------------------------------
+   Each page section names the framework section it reproduces, so a reader can
+   check the page against the source document rather than take it on trust. */
+
+.sec-ref {
+  font-size: 0.6875rem;
+  font-variation-settings: "wdth" var(--narrow), "wght" 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: var(--s3);
+}
+
+.section--sand .sec-ref {
+  color: var(--sand-muted);
+}
+
+.section--ink .sec-ref {
+  color: var(--muted-on-ink);
+}
+
+/* --- Document tables -----------------------------------------------------
+   Square, ruled, no zebra. Tables here are evidence, not decoration. Wide ones
+   scroll inside their own wrapper rather than pushing the page sideways, and
+   the wrapper is focusable so that scroll is reachable from the keyboard. */
+
+.dtable-wrap {
+  margin-top: var(--s5);
+  overflow-x: auto;
+  border: 1px solid var(--rule);
+}
+
+.section--sand .dtable-wrap {
+  border-color: var(--sand-rule);
+}
+
+.section--ink .dtable-wrap {
+  border-color: rgba(246, 247, 245, 0.2);
+}
+
+.dtable-wrap:focus-visible {
+  outline: 2px solid var(--verified);
+  outline-offset: 2px;
+}
+
+.section--ink .dtable-wrap:focus-visible {
+  outline-color: var(--verified-lift);
+}
+
+.dtable {
+  width: 100%;
+  min-width: 34rem;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  text-align: left;
+}
+
+.dtable--matrix {
+  min-width: 26rem;
+}
+
+.dtable th,
+.dtable td {
+  padding: var(--s3) var(--s4);
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+
+.section--sand .dtable th,
+.section--sand .dtable td {
+  border-bottom-color: var(--sand-rule);
+}
+
+.dtable thead th {
+  font-size: 0.6875rem;
+  font-variation-settings: "wdth" var(--narrow), "wght" 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+  border-bottom-width: 2px;
+  border-bottom-color: var(--rule-strong);
+}
+
+.dtable tbody th {
+  font-variation-settings: "wdth" var(--normal), "wght" 600;
+}
+
+.dtable tbody tr:last-child th,
+.dtable tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.dtable .num {
+  font-variation-settings: "wdth" var(--normal), "wght" 700;
+  white-space: nowrap;
+}
+
+.dtable abbr {
+  text-decoration: none;
+  border-bottom: 1px dotted currentColor;
+  cursor: help;
+}
+
+/* The matrix reads as a grid, so its marks centre and its columns stay tight. */
+.dtable--matrix thead th:not(:first-child),
+.dtable--matrix tbody td {
+  text-align: center;
+  width: 3.5rem;
+}
+
+.dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--verified);
+}
+
+.dtable--onink th,
+.dtable--onink td {
+  border-bottom-color: rgba(246, 247, 245, 0.16);
+}
+
+.dtable--onink thead th {
+  color: var(--muted-on-ink);
+  border-bottom-color: rgba(246, 247, 245, 0.35);
+}
+
+.dtable--onink .dot {
+  background: var(--verified-lift);
+}
+
+/* --- Specification lists -------------------------------------------------
+   Term-and-definition pairs too short to deserve a table and too structured to
+   be prose. */
+
+.spec {
+  margin-top: var(--s5);
+  border-top: 1px solid var(--rule);
+}
+
+.spec > div {
+  padding: var(--s4) 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+@media (min-width: 40rem) {
+  .spec > div {
+    display: grid;
+    grid-template-columns: 15rem 1fr;
+    gap: var(--s5);
+  }
+}
+
+.spec dt {
+  font-variation-settings: "wdth" var(--normal), "wght" 600;
+}
+
+.spec dd {
+  color: var(--muted);
+  line-height: 1.6;
+  margin-top: var(--s2);
+}
+
+@media (min-width: 40rem) {
+  .spec dd {
+    margin-top: 0;
+  }
+}
+
+.section--ink .spec,
+.section--ink .spec > div {
+  border-color: rgba(246, 247, 245, 0.16);
+}
+
+.section--ink .spec dd {
+  color: var(--muted-on-ink);
+}
+
+/* --- Quoted certificate wording ------------------------------------------ */
+
+.quote {
+  margin-top: var(--s4);
+  padding: var(--s5);
+  background: var(--field);
+  border-left: 3px solid var(--verified);
+  line-height: 1.65;
+}
+
+.quote p {
+  font-variation-settings: "wdth" var(--normal), "wght" 500;
+}
+
+/* --- Numbered bullets ---------------------------------------------------- */
+
+.bullets--num {
+  counter-reset: b;
+}
+
+.bullets--num li {
+  counter-increment: b;
+}
+
+.bullets--num li::before {
+  content: counter(b);
+  top: 0;
+  width: auto;
+  height: auto;
+  background: none;
+  color: var(--verified);
+  font-variation-settings: "wdth" var(--narrow), "wght" 700;
+  font-size: 0.875rem;
+}
+
+.section--ink .bullets--num li::before {
+  color: var(--signal);
+}
+
+/* ==========================================================================
+   Print
+
+   The standard has no separate PDF. This page is the PDF: printing strips the
+   navigation, the grounds and the interactive furniture, and leaves the
+   document — including the independence statement and the copyright, both of
+   which have to travel with any copy of it.
+   ========================================================================== */
+
+@media print {
+  *,
+  *::before,
+  *::after {
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+  }
+
+  body {
+    font-size: 10.5pt;
+    line-height: 1.45;
+  }
+
+  /* Site furniture. Not part of the document. */
+  .skip-link,
+  .site-header,
+  .rail,
+  .crumbs,
+  .toc,
+  .site-footer__cols,
+  .doc-print,
+  .link-arrow,
+  .event__action,
+  .nav-toggle {
+    display: none !important;
+  }
+
+  .section {
+    padding-block: 0 !important;
+  }
+
+  .shell {
+    max-width: none;
+    padding-inline: 0;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  h2.section__title {
+    font-size: 15pt;
+    margin-top: 18pt;
+    border-top: 1pt solid #000;
+    padding-top: 6pt;
+  }
+
+  .masthead__title {
+    font-size: 22pt;
+  }
+
+  .lede {
+    font-size: 11pt;
+  }
+
+  /* Tables print whole and ruled, never scrolled. */
+  .dtable-wrap {
+    overflow: visible !important;
+    border: 0;
+  }
+
+  .dtable {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .dtable th,
+  .dtable td {
+    border: 0.5pt solid #666 !important;
+    padding: 3pt 5pt;
+  }
+
+  .dtable thead {
+    display: table-header-group;
+  }
+
+  .dtable tr {
+    break-inside: avoid;
+  }
+
+  .dot {
+    background: #000 !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* Blocks carrying a claim keep a visible boundary once colour is gone. */
+  .limit,
+  .callout,
+  .reserved,
+  .quote,
+  .doc-meta > div {
+    border: 0.5pt solid #666 !important;
+    padding: 6pt 8pt;
+    break-inside: avoid;
+  }
+
+  .doc-meta {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0;
+    border: 0;
+    margin-top: 12pt;
+  }
+
+  .domains,
+  .outcomes,
+  .routes,
+  .thresholds {
+    break-inside: avoid;
+  }
+
+  .independence {
+    border-top: 1pt solid #000;
+    padding-top: 8pt;
+    margin-top: 14pt;
+  }
+
+  a {
+    text-decoration: underline;
+  }
+
+  /* In-page cross-references mean nothing on paper. Links that leave the
+     document do, so those print their destination. */
+  main a[href^="http"]::after,
+  main a[href^="/"]::after {
+    content: " (" attr(href) ")";
+    font-size: 8.5pt;
+  }
+
+  main a[href^="#"]::after {
+    content: "";
+  }
+}

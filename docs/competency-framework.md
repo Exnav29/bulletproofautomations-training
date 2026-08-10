@@ -1,8 +1,9 @@
 # Bulletproof Automation Builder Pathway
 ## Competency Framework and Certification Standard
 
-**Version 2.0 (Draft)** · Issuing body: Bulletproof Automations · Owner: Johnathan Lightfoot
-Issued: [DATE] · Platform basis for current assessments: n8n [VERSION] · Next review: [DATE + 12 months]
+**Version 2.0** · Issuing body: Bulletproof Automations · Owner: Bulletproof Automations
+Issued: 14 July 2026 · Platform basis for current assessments: n8n 2.31.6 · Next review: 10 December 2026
+© 2026 Bulletproof Automations. All rights reserved.
 
 ---
 
@@ -294,16 +295,31 @@ Bulletproof Automations is an independent training and certification provider. T
 
 ---
 
+## 12. Copyright and permitted use
+
+© 2026 Bulletproof Automations. All rights reserved.
+
+This framework, the Bulletproof Automation Builder Pathway, and the credential names issued under it — Bulletproof Automation Foundations Certificate, Bulletproof Certified Automation Builder (BCAB), and Bulletproof Certified Automation Engineer (BCAE) — are the property of Bulletproof Automations.
+
+**Permitted.** Reading, citing, and linking to this framework. Candidates and employers may reproduce short extracts to explain what a credential attests, provided the source and version are named.
+
+**Not permitted without prior written permission from Bulletproof Automations.** Reproducing or redistributing this document in whole or in substantial part; adapting it into another framework, syllabus, or rubric; or using it to assess candidates or to award, imply, or endorse any credential.
+
+Credential holders are supplied with a permitted description of their credential and may not describe it as an n8n certification (Section 8).
+
+---
+
 ## Revision history
 
 | Version | Date | Change | Author |
 |---|---|---|---|
-| 1.0 | [DATE] | Initial draft | J. Lightfoot |
-| 2.0 | [DATE] | Certificate/certification split; seven domains; four assessment components; provisional thresholds; hiring-standard governance | J. Lightfoot |
+| 1.0 | 26 May 2026 | Initial draft | J. Lightfoot |
+| 2.0 (draft) | 1 July 2026 | Certificate/certification split; seven domains; four assessment components; provisional thresholds; hiring-standard governance | J. Lightfoot |
+| 2.0 | 14 July 2026 | Published | J. Lightfoot |
 
 ---
 
-## Open decisions before publication
+## Open decisions
 
 - [ ] Assessment fee (BCAB) and readiness assessment fee (Path B)
 - [ ] Verification page host and format

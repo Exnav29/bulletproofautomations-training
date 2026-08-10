@@ -15,15 +15,18 @@ session can continue without re-deriving it.
 | Global shell — header, pathway rail, footer | **Built, approved** |
 | `/` homepage | **Built, approved** ("okay with the design for now") |
 | `/certified-automation-builder` | **Built**, not yet reviewed. Enrollment form blocked — see §4 |
-| `/standard` | Not started. **Next.** Ships with the BCAB page |
+| `/standard` | **Built**, not yet reviewed. No placeholders — the first page in the rebuild that ships clean |
 | `/thank-you` | Exists but is still the **old waitlist page**. Needs rewriting |
 | `/foundations` | Not started (Tier 2, needed before 5 September) |
 | `/pathway` · `/about` | Not started (Tier 2) |
 | `/verify` · `/builder-pool` · `/workshops` · `/privacy` | Not started (Tier 3) |
 | `_redirects` | Not created. Needed for the three legacy URLs |
 
-Build reports **11 of 20 declared paths**; the nine unbuilt routes are already declared in
+Build reports **12 of 20 declared paths**; the eight unbuilt routes are already declared in
 `publicPaths` and are skipped with a warning until their files exist.
+
+`sitemap.xml` now lists `/`, `/certified-automation-builder` and `/standard`. Add each new
+route as it is built.
 
 ---
 
@@ -31,9 +34,8 @@ Build reports **11 of 20 declared paths**; the nine unbuilt routes are already d
 
 Per the approved plan, driven by the 12 September cohort start:
 
-1. **`/standard`** — the published competency framework with PDF download. The BCAB page links
-   to it five times; the link check stays red until it exists.
-2. **`/thank-you`** — rewrite from waitlist framing.
+1. ~~`/standard`~~ — **built 10 August 2026.** All four BCAB links to it now resolve.
+2. **`/thank-you`** — rewrite from waitlist framing. **Next.**
 3. **`/foundations`** in State 2 — showcase invite. Must be live before 5 September.
 4. **`/pathway`**, **`/about`**.
 5. Tier 3: `/verify`, `/builder-pool`, `/workshops`, `/privacy`, `_redirects`.
@@ -139,8 +141,15 @@ Every one renders in conspicuous dashed marigold. **Nothing ships with one still
 - **The Daily Waitlist Digest action** points at an Edge Function in the old Supabase project.
   It will keep digesting old data or start failing. `supabase/functions/` are deployed to the old
   project too.
-- **The standard PDF** does not exist. `/standard` promises a download; only the `.docx` exists.
-- **Framework placeholders** appear verbatim on `/standard`: issue date, n8n version, review date.
+- ~~The standard PDF~~ — **resolved 10 August 2026: there will not be one.** `/standard` carries a
+  `@media print` stylesheet instead, and the BCAB page's "Download the standard (PDF)" link becomes
+  "Print or save the standard as PDF". No dependency added, and nothing to regenerate when the
+  framework changes.
+- ~~Framework placeholders~~ — **resolved 10 August 2026** and written into
+  `docs/competency-framework.md`: issued 14 July 2026, n8n 2.31.6, next review 10 December 2026,
+  revision history 26 May / 1 July / 14 July 2026. Version 2.0 is now **published**, not Draft.
+  **`docs/Bulletproof_Automation_Builder_Pathway_Framework_v2.docx` is now out of date and needs
+  regenerating from the `.md`.**
 - **Legal review** of the §7 hiring-standard wording.
 - **Locked copy tension:** the showcase copy says "The next Beginner Cohort is coming" — "Beginner"
   is on the terminology avoid-list. Flagged, deliberately unchanged, awaiting a decision.

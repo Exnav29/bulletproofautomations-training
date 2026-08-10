@@ -369,3 +369,22 @@
       });
   });
 })();
+
+/* Print the standard.
+   The page itself is the PDF — a print stylesheet strips the navigation and
+   the grounds, so there is no separate file to generate or keep in sync.
+   The button is inert markup until this runs, so it is hidden by default and
+   revealed only once wired up; without JavaScript the browser's own print
+   command still produces the same clean copy. */
+
+(function () {
+  var buttons = document.querySelectorAll("[data-print]");
+  if (!buttons.length || typeof window.print !== "function") return;
+
+  Array.prototype.forEach.call(buttons, function (button) {
+    button.addEventListener("click", function () {
+      window.print();
+    });
+    button.setAttribute("data-ready", "");
+  });
+})();

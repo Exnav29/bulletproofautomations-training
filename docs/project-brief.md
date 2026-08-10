@@ -289,10 +289,13 @@ counter · second assessor · fonts · shared markup · interim homepage.
   retired?
 - Slack invite mechanism: is there a join link to publish, or are learners invited after payment?
   The instalment path now names the Slack instance publicly.
-- Standard PDF for `/standard`: generated from `competency-framework.md`, or exported from the
-  `.docx`? And by whom.
-- Framework placeholders that appear verbatim on `/standard`: issue date, "assessed against
-  n8n [VERSION]", next review date, and the two revision-history dates.
+- ~~Standard PDF for `/standard`~~ — confirmed 10 August 2026: **no PDF file.** `/standard` carries
+  a print stylesheet so the page prints or saves to PDF from the browser. The page stays the single
+  source of truth; the `.docx` remains the circulation version.
+- ~~Framework placeholders on `/standard`~~ — confirmed 10 August 2026: issued **14 July 2026**,
+  assessed against **n8n 2.31.6**, next review **10 December 2026**; v1.0 draft **26 May 2026**,
+  v2.0 draft **1 July 2026**, v2.0 published **14 July 2026**. The standard is **Version 2.0
+  published**, no longer marked Draft.
 - Legal review of the hiring-standard wording (framework Section 7).
 - Scenario bank: two practical scenarios and two seeded troubleshooting workflows before launch.
 - Whether Foundations runs again, and when. Next Foundations cohort dates.
