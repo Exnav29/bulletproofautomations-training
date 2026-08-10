@@ -1,0 +1,110 @@
+-- Bulletproof Automations Training — foundations_interest
+--
+-- ============================================================================
+-- THIS FILE IS DOCUMENTATION, NOT A MIGRATION. DO NOT RUN IT.
+-- ============================================================================
+--
+-- Same convention as supabase-enrollments.sql: the live database is the source
+-- of truth. If you change the table, update this file in the same change.
+--
+-- Project: the training Supabase project (ref in .env, gitignored).
+-- Created and populated: 10 August 2026.
+
+
+-- ---------------------------------------------------------------------------
+-- Why this table exists rather than reusing enrollments
+-- ---------------------------------------------------------------------------
+--
+-- Eleven people signed up on the old site to be told when the next Foundations
+-- cohort opens (27 June – 1 July 2026). They were stranded on the retiring
+-- Supabase project, in waitlist_signups.
+--
+-- They are NOT enrollments, and putting them there would have been wrong on
+-- four counts:
+--
+--   * chosen_option only accepts cohort_only | cohort_and_assessment |
+--     path_b_readiness. None describes "tell me about the free Stage 1 cohort".
+--   * amount_ghs is NOT NULL. They owe nothing, so any value is invented.
+--   * payment_status defaults to 'reserved', implying they reserved a paid
+--     seat on the BCAB cohort. They did not.
+--   * /admin counts enrollments rows as SEATS TAKEN. Importing eleven leads
+--     would have read "11 of 25 seats gone" with fabricated money owed —
+--     corrupting the single number that dashboard exists to report.
+--
+-- Foundations interest is a different product at a different pathway stage
+-- with a different (zero) price. It gets its own table.
+
+
+-- ---------------------------------------------------------------------------
+-- Columns as deployed
+-- ---------------------------------------------------------------------------
+--
+--  column             type          null?  default
+--  -----------------  ------------  -----  -----------------------------
+--  id                 uuid          NO     gen_random_uuid()
+--  created_at         timestamptz   NO     now()
+--  updated_at         timestamptz   NO     now()
+--  full_name          text          NO     —
+--  email              text          NO     —          UNIQUE
+--  whatsapp           text          YES    —          (whatsapp_number upstream)
+--  city               text          YES    —
+--  experience_level   text          YES    —          free text, not a CHECK
+--  interested_class   text          YES    —          which class drew them in
+--  preferred_setup    text          YES    —          n8n Cloud / self-host etc
+--  source             text          NO     'website'  CHECK constraint
+--  notified           boolean       NO     false      told about a new cohort?
+--  notes              text          YES    —
+--  migrated_from      text          YES    —          provenance, null if native
+--
+--  source CHECK: website | showcase | whatsapp | referral | direct
+--    'direct' exists only because the migrated rows carried it. New signups
+--    from /foundations should send 'website'.
+--
+--  email is UNIQUE, so the notify-me form should insert with
+--  `on conflict do nothing` semantics, or handle 409 the way the enrollment
+--  form already handles a duplicate reservation.
+
+
+-- ---------------------------------------------------------------------------
+-- Row-level security as deployed — mirrors enrollments
+-- ---------------------------------------------------------------------------
+--
+--  policy                                  cmd     roles
+--  --------------------------------------  ------  ----------------
+--  Allow anon insert                       INSERT  {anon}
+--  Admins can read foundations interest    SELECT  {authenticated}
+--  Admins can update foundations interest  UPDATE  {authenticated}
+--  Allow service role full access          ALL     {service_role}
+--
+-- Both authenticated policies are restricted to a single admin email, the same
+-- allowlist enrollments uses. Extend both tables together when a second
+-- assessor is appointed.
+--
+-- As with enrollments: anon can insert and cannot read back, so a notify-me
+-- form MUST send `Prefer: return=minimal`.
+
+
+-- ---------------------------------------------------------------------------
+-- The migration, 10 August 2026
+-- ---------------------------------------------------------------------------
+--
+-- Source: old project ftqcexzwppcozpyjwfqh, public.waitlist_signups,
+--         workshop_slug = 'n8n-foundations'. Eleven rows, eleven distinct
+--         emails, 27 June to 1 July 2026.
+--
+-- Mapping:  whatsapp_number -> whatsapp
+--           signup_date_time/created_at -> created_at   (ORIGINAL date kept,
+--           so the record still shows when each person actually signed up)
+--           every row stamped with migrated_from
+--
+-- Dropped, because they belong to the retired Price by Value workshop and
+-- meant nothing for Foundations interest: current_build_type,
+-- biggest_pricing_challenge, vip_pricing_review_interest, price_range_interest,
+-- ticket_type, payment_status, amount_paid, payment_reference, payment_method,
+-- status, workshop_slug.
+--
+-- The insert used `on conflict (email) do nothing`, so re-running it is safe.
+--
+-- **The source rows were NOT deleted.** They remain in the old project as a
+-- fallback until that project is decommissioned. Delete them only after
+-- confirming these eleven are reachable and correct.

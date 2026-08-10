@@ -133,6 +133,15 @@ Every one renders in conspicuous dashed marigold. **Nothing ships with one still
 
 ## 6. Other open items
 
+- **The 11 Foundations notify-me signups were migrated on 10 August 2026**, from the old
+  project's `waitlist_signups` into a new `public.foundations_interest` table on the current
+  project. Documented in `supabase-foundations-interest.sql`. They were **not** put into
+  `enrollments`: `/admin` counts rows there as seats taken, so importing eleven leads would have
+  read "11 of 25 seats gone" with invented money owed. Original signup dates preserved, every row
+  stamped with `migrated_from`, insert is `on conflict (email) do nothing` so it is safe to
+  re-run. **The source rows were deliberately left in the old project** as a fallback until it is
+  decommissioned. When `/foundations` is built, its notify-me capture writes here.
+
 - **PR #22** is open as a draft: https://github.com/Exnav29/bulletproofautomations-training/pull/22
   Five commits. Do not merge — merging deploys immediately and the placeholders are still visible.
 - **The Cloudflare Pages build fails** — cause confirmed by reproduction on 10 August 2026, not
