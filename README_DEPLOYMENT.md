@@ -4,11 +4,27 @@
 
 Create a new Supabase project for the training subdomain. Do not reuse production resources from the main Bulletproof Automations website unless you intentionally want shared infrastructure.
 
-## 2. Run the SQL setup
+## 2. The database
 
-Open the Supabase SQL editor and run `supabase-setup.sql`. This creates `waitlist_signups`, duplicate-prevention indexes, constraints, and RLS policies.
+**Do not run `supabase-setup.sql`.** It creates `waitlist_signups` and belongs to the retired
+pre-rebuild system on the **old** Supabase project. It is kept only as a record of what still exists
+there.
 
-When deploying updates to the n8n Foundations interest list, rerun `supabase-setup.sql` so the existing `waitlist_signups` table has `interested_class`, `preferred_setup`, and the expanded experience-level constraint.
+The current project uses three tables, each already created by hand and documented at the repo root:
+
+| File | Table | Holds |
+|---|---|---|
+| `supabase-enrollments.sql` | `enrollments` | The BCAB cohort roll |
+| `supabase-foundations-interest.sql` | `foundations_interest` | Notify-me signups for the next Foundations cohort |
+| `supabase-payment-events.sql` | `payment_events` | Append-only Paystack ledger |
+
+**All three files are documentation, not migrations. Do not run them either — the live database is
+the source of truth.** If you change a table, update its file in the same change.
+
+Row-level security across all three: `anon` may insert into `enrollments` and
+`foundations_interest` and nothing else, and may not touch `payment_events` at all. Reads and
+updates are limited to a single admin email allowlist. Public sign-up must stay **disabled** on the
+project, or anyone could register and reach the roll.
 
 ## 3. Find Supabase URL and anon key
 
@@ -107,8 +123,9 @@ deleted from that dashboard.
 
 Use `/certified-automation-builder#enroll`, submit a reservation, and confirm the row lands in
 `public.enrollments` on the current project with `consent_given` true. Verify `/admin` login and
-CSV export — note that `/admin` still reads `waitlist_signups` on the **old** project and has yet
-to be repointed.
+CSV export — it was rebuilt on 10 August 2026 and now reads `enrollments` on the current project.
+Sign-in that succeeds but shows an empty roll means the `authenticated` select policy does not match
+the account's email.
 
 The Price by Value waitlist flow it replaced was retired on 10 August 2026 along with
 `/price-by-value` and the old `/thank-you` page.
