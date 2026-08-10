@@ -3751,3 +3751,211 @@ a.rail__link:hover .rail__name {
 .notify {
   max-width: 34rem;
 }
+
+/* --- Pathway and About ---------------------------------------------------
+   The pathway page earns its place on what the homepage does not carry: how
+   you move between stages, and the two ways in. So the rungs are compact and
+   defer to the pages holding the detail, and the routes get the space.
+   ------------------------------------------------------------------------- */
+
+.pw__title,
+.about__title {
+  font-size: clamp(1.875rem, 6vw, 3.25rem);
+  font-variation-settings: "wdth" 116, "wght" 700;
+  letter-spacing: -0.03em;
+  line-height: 1.06;
+  max-width: 20ch;
+}
+
+.about__title {
+  max-width: 26ch;
+  font-size: clamp(1.5rem, 4.4vw, 2.5rem);
+}
+
+.pw__lede,
+.about__lede {
+  margin-top: var(--s4);
+  max-width: 52ch;
+}
+
+/* --- Rungs ---------------------------------------------------------------
+   Numbered because the stages genuinely are a sequence — you cannot hold the
+   Stage 1 certificate without completing Stage 1. */
+
+.rungs {
+  margin-top: var(--s6);
+  display: grid;
+  gap: var(--s5);
+}
+
+.rung {
+  display: grid;
+  gap: var(--s2) var(--s5);
+  padding: var(--s5) 0;
+  border-top: 2px solid var(--sand-rule);
+}
+
+@media (min-width: 48rem) {
+  .rung {
+    grid-template-columns: 8rem 1fr;
+  }
+}
+
+.rung__n {
+  font-size: 0.6875rem;
+  font-variation-settings: "wdth" var(--narrow), "wght" 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--sand-muted);
+  padding-top: 0.2em;
+}
+
+.rung--now {
+  border-top-color: var(--verified);
+}
+
+.rung--now .rung__n {
+  color: var(--verified);
+}
+
+/* Stage 3 is defined and not issued, so it reads as reserved rather than
+   available — muted, and never given an action. */
+.rung--closed {
+  opacity: 0.78;
+}
+
+.rung__name {
+  font-size: 1.1875rem;
+  font-variation-settings: "wdth" 108, "wght" 700;
+}
+
+.rung__type {
+  margin-top: var(--s1);
+  font-size: 0.8125rem;
+  font-variation-settings: "wdth" var(--narrow), "wght" 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sand-muted);
+}
+
+.rung__body > p {
+  margin-top: var(--s3);
+  line-height: 1.6;
+  max-width: 62ch;
+}
+
+.rung__note {
+  font-size: 0.9375rem;
+  color: var(--sand-muted);
+}
+
+/* --- Two ways in ---------------------------------------------------------
+   Set in type and stacked on a phone, so the convergence survives at 360px
+   rather than living in a diagram that shrinks away. */
+
+.ways {
+  margin-top: var(--s6);
+  display: grid;
+  gap: var(--s5);
+}
+
+@media (min-width: 48rem) {
+  .ways {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.way {
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  padding: var(--s5);
+}
+
+.way__tag {
+  font-size: 0.6875rem;
+  font-variation-settings: "wdth" var(--narrow), "wght" 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--verified);
+}
+
+.way__steps {
+  margin-top: var(--s4);
+  counter-reset: w;
+  display: grid;
+  gap: var(--s3);
+}
+
+.way__steps li {
+  counter-increment: w;
+  position: relative;
+  padding-left: var(--s6);
+  font-variation-settings: "wdth" var(--normal), "wght" 600;
+}
+
+.way__steps li::before {
+  content: counter(w);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1.375rem;
+  height: 1.375rem;
+  border-radius: 50%;
+  border: 1px solid var(--rule-strong);
+  display: grid;
+  place-items: center;
+  font-size: 0.75rem;
+  font-variation-settings: "wdth" var(--narrow), "wght" 700;
+  color: var(--muted);
+}
+
+.way__note {
+  margin-top: var(--s4);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--rule);
+  font-size: 0.9375rem;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+/* Where both routes arrive. One shared block under two columns says
+   "these converge" without needing an arrow drawn between them. */
+.ways__join {
+  margin-top: var(--s4);
+  padding: var(--s5);
+  background: var(--ink);
+  color: var(--text-on-ink);
+  border-radius: var(--r-sm);
+  text-align: center;
+}
+
+.ways__join-label {
+  font-size: 0.6875rem;
+  font-variation-settings: "wdth" var(--narrow), "wght" 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted-on-ink);
+}
+
+.ways__join-step {
+  margin-top: var(--s2);
+  font-size: 1.125rem;
+  font-variation-settings: "wdth" 108, "wght" 700;
+  color: var(--signal);
+}
+
+/* --- About --------------------------------------------------------------- */
+
+.about__pull {
+  margin-top: var(--s5);
+  padding-left: var(--s5);
+  border-left: 3px solid var(--signal);
+  font-size: clamp(1.125rem, 3vw, 1.5rem);
+  font-variation-settings: "wdth" 110, "wght" 700;
+  line-height: 1.3;
+  max-width: 30ch;
+}
+
+.habits li {
+  font-variation-settings: "wdth" var(--normal), "wght" 500;
+}

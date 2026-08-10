@@ -8,7 +8,11 @@ it says so explicitly under "Open decisions".
 
 ## 1. The business
 
-**Bulletproof Automations** — automation consultancy, Accra, Ghana. Founder: **Johnathan Lightfoot**.
+**Bulletproof Automations** — automation consultancy. Founder: **Johnathan Lightfoot**.
+
+**Corrected 10 August 2026: the company is a US entity based in Jacksonville, Florida.** Earlier
+drafts of this brief described it as Accra-based, which was wrong and has been removed from every
+page. The audience and the delivery are Ghana-facing; the company is not.
 Training arm currently at `training.bulletproofautomations.com`.
 
 The training programme exists for three reasons, in this order:
@@ -282,7 +286,8 @@ counter · second assessor · fonts · shared markup · interim homepage.
 - Cohort 1 proof — capstone screenshots, portfolio links, named testimonials with consent.
   The 5 September showcase is where this gets collected.
 - BCAE copy on `/pathway` beyond its name, its type, and its reserved scope.
-- Company detail for `/about` beyond "automation consultancy, Accra".
+- ~~Company detail for `/about`~~ — resolved 10 August 2026: US company, Jacksonville, Florida.
+  Full bio supplied and published.
 - Contact email to publish — confirm `training@bulletproofautomations.com`.
 - Public WhatsApp number.
 - ~~Price by Value workshop~~ — **resolved 10 August 2026: retired.** No longer running. Page

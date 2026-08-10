@@ -3,8 +3,10 @@
 ## What this project is
 
 A complete rebuild of `training.bulletproofautomations.com` — a multipage marketing and
-enrollment site for Bulletproof Automations' training arm, run by Johnathan Lightfoot
-from Accra, Ghana.
+enrollment site for Bulletproof Automations' training arm, run by Johnathan Lightfoot.
+
+**Bulletproof Automations is a United States company based in Jacksonville, Florida.** Its
+training is delivered online, and its first cohorts were delivered to learners in Ghana.
 
 The site's immediate commercial job: **enroll people in the Intermediate cohort (BCAB) now.**
 Its longer-term job: present the full Bulletproof Automation Builder Pathway as a credible
@@ -31,7 +33,12 @@ Never blur them.
 
 ## Immutable rules
 
-1. **Never imply n8n affiliation or endorsement.** Bulletproof Automations is an independent
+1. **Never describe Bulletproof Automations as Ghanaian, Accra-based, or as having any business
+   presence in Ghana.** It is a **US company based in Jacksonville, Florida**. Its learners are in
+   Ghana, it prices in cedis and it delivers online — none of which makes the company Ghanaian, and
+   copy that blurs the two creates real regulatory exposure. Describe the *audience* and the
+   *delivery* as Ghana-facing; never the company.
+2. **Never imply n8n affiliation or endorsement.** Bulletproof Automations is an independent
    provider. n8n is the platform competence is assessed on, not the subject of certification.
    Every page footer carries the independence statement.
 2. **Never write job-guarantee language.** Certification is not an offer, promise, or

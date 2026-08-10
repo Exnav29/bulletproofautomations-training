@@ -18,7 +18,8 @@ session can continue without re-deriving it.
 | `/standard` | **Built**, not yet reviewed. No placeholders — the first page in the rebuild that ships clean |
 | `/thank-you` | **Rebuilt 10 August 2026** as the Paystack return page: confirmation, the dated sequence to Week 1, the training/certification separation, instalments, and a route for payment problems |
 | `/foundations` | **Built 10 August 2026** in State 2. Notify-me capture tested end to end against the live table |
-| `/pathway` · `/about` | Not started (Tier 2) |
+| `/pathway` | **Built 10 August 2026.** Three stages, two entry routes, BCAE named |
+| `/about` | **Built 10 August 2026.** Bio supplied by Johnathan. Photo still a placeholder |
 | `/verify` · `/builder-pool` · `/workshops` · `/privacy` | Not started (Tier 3) |
 | `404.html` | **Built 10 August 2026.** Root of `dist/`, in `publicPaths`. Cloudflare Pages serves it with a real 404 status |
 | `_redirects` | **Created 10 August 2026.** Carries `/price-by-value` → `/` only; the other two wait for their targets |
@@ -40,8 +41,8 @@ Per the approved plan, driven by the 12 September cohort start:
 1. ~~`/standard`~~ — **built 10 August 2026.** All four BCAB links to it now resolve.
 2. ~~`/thank-you`~~ — **built 10 August 2026.**
 3. ~~`/foundations`~~ — **built 10 August 2026** in State 2.
-4. **`/pathway`**, **`/about`**. **Next.**
-5. Tier 3: `/verify`, `/builder-pool`, `/workshops`, `/privacy`, `_redirects`.
+4. ~~`/pathway`~~, ~~`/about`~~ — **built 10 August 2026.**
+5. Tier 3: `/verify`, `/builder-pool`, `/workshops`, `/privacy`. **Next** — these four are the last routes the shell links to that do not exist.
 
 ---
 
@@ -128,11 +129,25 @@ Every one renders in conspicuous dashed marigold. **Nothing ships with one still
 | `[REFUND AND CANCELLATION POLICY]` | BCAB FAQ | policy decision |
 | `[MISSED-SESSION POLICY]` | BCAB FAQ | policy decision |
 | `[WEBHOOK METHOD]` | BCAB, before Week 1 | n8n Cloud / VPS / tunnel |
-| `[INSTRUCTOR BIO AND PHOTO]` | BCAB, and all of `/about` | Johnathan |
+| `[INSTRUCTOR PHOTO]` | `/about` hero | **Bio supplied 10 August 2026** and published; only the photo is outstanding |
 
 ---
 
 ## 6. Other open items
+
+- **The company is US-based, not Ghanaian. Corrected site-wide 10 August 2026.** Every page had
+  described Bulletproof Automations as being in Accra — the footer colophon on *every* page, the
+  homepage hero eyebrow, the BCAB provider line, and two meta descriptions. **Bulletproof
+  Automations is a United States company based in Jacksonville, Florida.** Its learners are in
+  Ghana, it prices in cedis and it delivers online; none of that makes the company Ghanaian, and
+  copy that blurred the two created real regulatory exposure. Now an immutable rule in `CLAUDE.md`
+  so it cannot drift back.
+
+  **Still to check, and outside what copy can fix:** `/nfc` carries the tagline "Woven in Ghana
+  spirit" — a carried page with its own design, left alone pending a decision. More importantly,
+  **Paystack is a Ghanaian processor settling in GHS**, which is a far stronger signal of local
+  activity than any wording on a page. That is a question for an accountant or attorney familiar
+  with US–Ghana cross-border trade, not something this repo can resolve.
 
 - **Foundations cohort cap and schedule are no longer open.** The teaching guide states **25
   participants**, Saturdays 11:30–13:00 GMT, Cohort 1 running 11 July – 29 August 2026.

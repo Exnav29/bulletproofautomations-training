@@ -1,8 +1,10 @@
 # Bulletproof Automations Training
 
 The site for **[training.bulletproofautomations.com](https://training.bulletproofautomations.com)** — the
-training and certification arm of Bulletproof Automations, an independent automation consultancy in
-Accra, Ghana, run by Johnathan Lightfoot.
+training and certification arm of Bulletproof Automations, an independent automation consultancy
+run by Johnathan Lightfoot. **Bulletproof Automations is a United States company based in
+Jacksonville, Florida.** Its training is delivered online; its learners are primarily in Ghana and
+it prices in cedis, which does not make the company Ghanaian — do not describe it as such.
 
 Plain static HTML, one stylesheet, vanilla JavaScript. **No framework and no dependencies** —
 `package.json` has none, and there is no `node_modules`. The only build step is a copy-and-include
@@ -69,7 +71,9 @@ Folder-based (`route/index.html`), links root-absolute.
 | `/standard` | The published competency framework, printable | built |
 | `/thank-you` | Paystack return page: what happens next | built |
 | `404.html` | Served with a real 404 status for unmatched paths | built |
-| `/foundations` · `/pathway` · `/about` | Stage 1, the pathway, the instructor | not built |
+| `/foundations` | Stage 1 cohort, showcase invite, notify-me capture | built |
+| `/pathway` | Three stages, two entry routes. The only page naming BCAE | built |
+| `/about` | Johnathan Lightfoot and Bulletproof Automations | built |
 | `/verify` · `/builder-pool` · `/privacy` | Credential lookup, hiring standard, data handling | not built |
 | `/workshops` | Standalone workshops — **no occupant** since Price by Value retired | not built |
 | `/admin` | Private enrollment dashboard (Supabase Auth) | built |
@@ -139,14 +143,16 @@ Read these in order before changing anything:
 
 ## Rules that override convenience
 
-1. **Never imply n8n affiliation or endorsement.** Every footer carries the independence statement.
-2. **Never write job-guarantee language.** Where the hiring standard appears, the non-guarantee
+1. **Never describe the company as Ghanaian or Accra-based.** It is a US company in Jacksonville,
+   Florida. Ghana-facing audience and delivery; not a Ghanaian entity.
+2. **Never imply n8n affiliation or endorsement.** Every footer carries the independence statement.
+3. **Never write job-guarantee language.** Where the hiring standard appears, the non-guarantee
    wording from the framework appears on the same page.
-3. **No waitlists and no "coming soon" cards.** Every open course gets real dates, a real price and a
+4. **No waitlists and no "coming soon" cards.** Every open course gets real dates, a real price and a
    payment path. BCAE is named on `/pathway` only, with no date and no signup.
-4. **Never invent dates, prices, testimonials or outcome statistics.** Use visible bracketed
+5. **Never invent dates, prices, testimonials or outcome statistics.** Use visible bracketed
    placeholders and flag them.
-5. **Never write pricing that implies the credential is bought.** "Intermediate + BCAB Assessment",
+6. **Never write pricing that implies the credential is bought.** "Intermediate + BCAB Assessment",
    never "Get BCAB Certified — [price]".
 
 ## Deployment
