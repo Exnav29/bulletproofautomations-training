@@ -167,8 +167,45 @@ Every one renders in conspicuous dashed marigold. **Nothing ships with one still
   ```
 
   No insert or delete for `authenticated` — the form inserts as `anon`, and nothing should delete
-  a paid enrollment from a browser. Also needs a Supabase Auth user to exist on the **new**
-  project; the old dashboard's account was on the old one.
+  a paid enrollment from a browser.
+
+  **Run 10 August 2026. Verified afterwards that `anon` still reads `[]`, so the grant did not
+  leak to the public key.**
+
+- **Public sign-up was open on the training project — close it.** Checked 10 August 2026:
+  `GET /auth/v1/settings` returned `disable_signup: false` with email auth enabled. Combined with
+  the `to authenticated using (true)` policies above, **anyone who registered an account could
+  read and edit the entire enrollment roll** — names, emails, WhatsApp numbers, cities, amounts
+  and payment status. Only `mailer_autoconfirm: false` stood in the way, and any working inbox
+  clears that. Three fixes, in order:
+
+  1. Create the admin user: Authentication → Users → Add user, **with "Auto Confirm User" ticked**
+     (autoconfirm is off, so an unconfirmed account fails sign-in with "Email not confirmed",
+     which reads like a wrong password).
+  2. Authentication → Sign In / Providers → Email → turn off **"Allow new users to sign up."**
+     Dashboard-created users are unaffected.
+  3. Replace the two blanket policies with an email allowlist, so the roll stays shut even if
+     sign-up is re-enabled later:
+
+  ```sql
+  drop policy "Authenticated can read enrollments"   on public.enrollments;
+  drop policy "Authenticated can update enrollments" on public.enrollments;
+
+  create policy "Admins can read enrollments"
+    on public.enrollments for select to authenticated
+    using ( (auth.jwt() ->> 'email') in ('YOUR-ADMIN-EMAIL') );
+
+  create policy "Admins can update enrollments"
+    on public.enrollments for update to authenticated
+    using      ( (auth.jwt() ->> 'email') in ('YOUR-ADMIN-EMAIL') )
+    with check ( (auth.jwt() ->> 'email') in ('YOUR-ADMIN-EMAIL') );
+  ```
+
+  Extend the `in (...)` list when a second assessor is appointed. If it grows, move it to an
+  `admins` table and test membership instead.
+
+  A Supabase Auth user must also exist on the **new** project — the old dashboard's account was
+  on the old one.
 
 - **`assets/js/main.js` still hardcodes the OLD project's anon key** (`ftqcex…`, a legacy `eyJ…`
   JWT) and serves the retiring legacy routes. The current project is a different one entirely,
