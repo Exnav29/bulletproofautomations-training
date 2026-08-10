@@ -3959,3 +3959,14 @@ a.rail__link:hover .rail__name {
 .habits li {
   font-variation-settings: "wdth" var(--normal), "wght" 500;
 }
+
+/* The escape hatch on a confirmed state. Quieter than the confirmation itself,
+   but present — someone who has heard nothing in 24 hours needs a route that
+   is not "register again", which would create a duplicate. */
+.reserved__aside {
+  margin-top: var(--s4);
+  padding-top: var(--s4);
+  border-top: 1px solid rgba(43, 232, 134, 0.35);
+  font-size: 0.875rem;
+  color: var(--muted-on-ink);
+}
