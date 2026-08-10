@@ -3412,3 +3412,44 @@ a.rail__link:hover .rail__name {
     content: "";
   }
 }
+
+/* --- 404 -----------------------------------------------------------------
+   No bespoke layout. The page borrows the credential hero and its drawn
+   canvas, because a 404 is a routing failure and this site's whole subject is
+   routing. The only new parts are the dead branch and the quoted address.
+   ------------------------------------------------------------------------- */
+
+/* The branch that goes nowhere. Dashed, unlit, and carrying no pulse — the
+   absence of the travelling dot is the point, so it must never get one. */
+.flow__wire--dead {
+  stroke: rgba(246, 247, 245, 0.16);
+  stroke-dasharray: 5 6;
+}
+
+/* An open end rather than a node. Nothing terminates here. */
+.flow__terminus {
+  fill: none;
+  stroke: rgba(246, 247, 245, 0.3);
+  stroke-width: 1.5;
+}
+
+.flow__label--dead {
+  fill: var(--muted-on-ink);
+  font-variation-settings: "wdth" var(--narrow), "wght" 500;
+  text-anchor: start;
+}
+
+/* The address that failed, quoted back. Set in the condensed label width so it
+   reads as a machine value rather than a sentence, and boxed so it cannot be
+   mistaken for part of the standfirst. */
+.floor__requested {
+  margin-top: var(--s5);
+  padding: var(--s3) var(--s4);
+  border: 1px dashed rgba(246, 247, 245, 0.3);
+  border-radius: var(--r-sm);
+  color: var(--muted-on-ink);
+  font-variation-settings: "wdth" var(--narrow), "wght" 500;
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+  max-width: 44ch;
+}

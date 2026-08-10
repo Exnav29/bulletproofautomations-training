@@ -20,6 +20,7 @@ session can continue without re-deriving it.
 | `/foundations` | Not started (Tier 2, needed before 5 September) |
 | `/pathway` · `/about` | Not started (Tier 2) |
 | `/verify` · `/builder-pool` · `/workshops` · `/privacy` | Not started (Tier 3) |
+| `404.html` | **Built 10 August 2026.** Root of `dist/`, in `publicPaths`. Cloudflare Pages serves it with a real 404 status |
 | `_redirects` | **Created 10 August 2026.** Carries `/price-by-value` → `/` only; the other two wait for their targets |
 | `/admin` | **Rebuilt 10 August 2026** against `enrollments` on the current project. Policies, auth user and sign-up lockdown all verified live. Not yet clicked through in a browser |
 
@@ -132,6 +133,19 @@ Every one renders in conspicuous dashed marigold. **Nothing ships with one still
 ---
 
 ## 6. Other open items
+
+- **The catch-all 404 is only half fixed.** `404.html` now ships at the root of `dist/`, which is
+  where Cloudflare Pages looks. But production currently answers **200 with the old homepage for
+  every unmatched path**, and `_redirects` did not exist in the repo before 10 August 2026 — so
+  that behaviour comes from somewhere outside the build. **Check Cloudflare → Rules → Redirect
+  Rules and the Pages project settings for a `/*` catch-all left over from the Netlify era.**
+  While one exists it wins, and `404.html` will never be reached. Confirm after the next deploy
+  by requesting a nonsense path and checking for a 404 status, not just a 404-looking page.
+
+- **The CI link check still points at production.** `lychee` runs with
+  `--base-url https://training.bulletproofautomations.com`, which is why it cannot fail on a
+  missing route (§7). It should check `dist/` directly. Worth doing in the same pass as the
+  catch-all, or the green tick stays meaningless even once every page exists.
 
 - **The 11 Foundations notify-me signups were migrated on 10 August 2026**, from the old
   project's `waitlist_signups` into a new `public.foundations_interest` table on the current

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Deliberately not the head.html partial. That include emits a canonical URL,
+     which is wrong on a page standing in for many different addresses, and this
+     page needs noindex, which no other page wants. -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, follow">
+<title>No route matched — Bulletproof Automations Training</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="/assets/fonts/archivo-latin-variable.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/css/site.css">
+<script src="/assets/js/shell.js" defer></script>
+</head>
+<body>
+<!-- include: header.html -->
+<!-- include: pathway-rail.html -->
+
+<main id="main">
+
+  <!-- The same hero the credential pages use, with the same drawn canvas. Here
+       the router has a branch that goes nowhere — which is what a 404 is. -->
+  <section class="floor floor--credential">
+    <div class="floor__frame">
+      <div class="floor__media">
+        <div class="floor__canvas">
+          <svg class="flow" viewBox="0 0 620 400" role="img"
+               aria-label="A workflow diagram: a request reaches a router. Two branches continue to working destinations. A third branch trails off and terminates without ever reaching an output.">
+            <!-- live wires -->
+            <path class="flow__wire" d="M124,200 C160,200 160,200 196,200"/>
+            <path class="flow__wire" d="M312,200 C352,200 352,104 392,104"/>
+            <path class="flow__wire" d="M312,200 C352,200 352,200 392,200"/>
+            <!-- the branch with no route: dashed, unlit, stopping short -->
+            <path class="flow__wire flow__wire--dead" d="M312,200 C352,200 352,300 392,300 L468,300"/>
+
+            <path class="flow__pulse" pathLength="100" d="M124,200 C160,200 160,200 196,200"/>
+            <path class="flow__pulse flow__pulse--3" pathLength="100" d="M312,200 C352,200 352,104 392,104"/>
+            <path class="flow__pulse flow__pulse--5" pathLength="100" d="M312,200 C352,200 352,200 392,200"/>
+
+            <g><rect class="flow__node flow__node--lit" x="8" y="177" width="116" height="46" rx="6"/><text class="flow__label" x="66" y="205" text-anchor="middle">Request</text><circle class="flow__port" cx="124" cy="200" r="3"/></g>
+            <g><rect class="flow__node flow__node--lit flow__node--b" x="196" y="177" width="116" height="46" rx="6"/><text class="flow__label" x="254" y="205" text-anchor="middle">Route</text><circle class="flow__port" cx="312" cy="200" r="3"/></g>
+            <g><rect class="flow__node flow__node--lit flow__node--c" x="392" y="81" width="140" height="46" rx="6"/><text class="flow__label" x="462" y="109" text-anchor="middle">Pathway</text></g>
+            <g><rect class="flow__node" x="392" y="177" width="140" height="46" rx="6"/><text class="flow__label" x="462" y="205" text-anchor="middle">Standard</text></g>
+
+            <!-- terminus: an open end, not a node -->
+            <circle class="flow__terminus" cx="468" cy="300" r="5"/>
+            <text class="flow__label flow__label--dead" x="486" y="304">no route</text>
+          </svg>
+        </div>
+      </div>
+
+      <div class="floor__scrim floor__scrim--credential" aria-hidden="true"></div>
+
+      <div class="floor__content">
+        <div class="floor__text">
+          <p class="floor__eyebrow">Error 404</p>
+          <h1 class="floor__title floor__title--page">No route matched.</h1>
+          <p class="floor__standfirst">The address you asked for doesn&rsquo;t resolve to a page. Either it was mistyped, or it existed once and we moved it without leaving a forwarding rule &mdash; which is our fault, not yours.</p>
+          <!-- Filled by shell.js. Stays collapsed without JavaScript rather
+               than rendering an empty box. -->
+          <p class="floor__requested" id="gone-path" hidden></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Real destinations only. Every link here is a route that exists. -->
+  <section class="section" aria-labelledby="fallback-title">
+    <div class="shell">
+      <h2 class="section__title" id="fallback-title">Where you were probably going</h2>
+
+      <div class="routes">
+        <article class="route">
+          <p class="route__tag">Start here</p>
+          <h3 class="route__name">The pathway</h3>
+          <p>Three stages, what each credential attests, and which of them is open now.</p>
+          <a class="event__action" href="/">Training home
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
+          </a>
+        </article>
+
+        <article class="route">
+          <p class="route__tag">Stage 2 &middot; Enrolling now</p>
+          <h3 class="route__name">Certified Automation Builder</h3>
+          <p>The credential, the five-week cohort that prepares you to attempt it, and enrollment.</p>
+          <a class="event__action" href="/certified-automation-builder">The BCAB cohort
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
+          </a>
+        </article>
+
+        <article class="route">
+          <p class="route__tag">Reference</p>
+          <h3 class="route__name">The competency framework</h3>
+          <p>Seven domains, four assessment components, and the published weights and thresholds.</p>
+          <a class="event__action" href="/standard">The standard
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
+          </a>
+        </article>
+      </div>
+
+      <p class="note">&ldquo;A branch that never reconnects to the output path&rdquo; is one of the defects listed in <a href="/standard">the assessment standard</a>. It seems fair to hold our own site to it &mdash; if a link sent you here, tell us where it was and we&rsquo;ll route it.</p>
+    </div>
+  </section>
+
+</main>
+
+<!-- include: footer.html -->
+</body>
+</html>

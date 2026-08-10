@@ -11,6 +11,9 @@ const partialsDir = path.join(root, "partials");
 const publicPaths = [
   // Shared
   "index.html",
+  // Cloudflare Pages serves this with a real 404 status for any unmatched
+  // path. It must sit at the ROOT of dist/ to be picked up.
+  "404.html",
   "assets",
   "robots.txt",
   "sitemap.xml",

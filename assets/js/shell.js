@@ -388,3 +388,19 @@
     button.setAttribute("data-ready", "");
   });
 })();
+
+/* The 404 page names the address that failed.
+   Guessing is worse than saying plainly what was asked for and did not exist,
+   and it makes a mistyped URL obvious at a glance. Escaped through textContent,
+   never innerHTML — the path is attacker-controlled by definition. */
+
+(function () {
+  var slot = document.getElementById("gone-path");
+  if (!slot) return;
+
+  var path = window.location.pathname + window.location.search;
+  if (!path || path === "/") return;
+
+  slot.textContent = path;
+  slot.hidden = false;
+})();
