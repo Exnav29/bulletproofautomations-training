@@ -3690,3 +3690,64 @@ a.rail__link:hover .rail__name {
   color: var(--muted);
   line-height: 1.6;
 }
+
+/* --- Foundations ---------------------------------------------------------
+   Stage 1 is the campus side, so this page is sand-dominant and only turns to
+   ink where it speaks about the credential itself.
+
+   Almost everything reuses existing components — the term board's event cards
+   for the showcase, the wall for the locked invitation, the BCAB page's week
+   list for the eight classes. The only additions are the two lines each class
+   needs that a five-week BCAB week did not: what you can do afterwards, and
+   the artifact it leaves behind.
+   ------------------------------------------------------------------------- */
+
+.found__title {
+  font-size: clamp(2rem, 7vw, 3.5rem);
+  font-variation-settings: "wdth" 118, "wght" 700;
+  letter-spacing: -0.03em;
+  line-height: 1.04;
+  max-width: 16ch;
+}
+
+.found__lede {
+  margin-top: var(--s4);
+  max-width: 52ch;
+}
+
+.found__events {
+  margin-top: var(--s7);
+}
+
+/* What the class leaves you able to do. Set apart from the build description
+   so the two are not read as one paragraph. */
+.week__after {
+  margin-top: var(--s3);
+  color: var(--sand-muted);
+}
+
+/* The artifact. This is the through-line of the whole cohort — proof every
+   week rather than a certificate at the end — so it gets a rule and the
+   verified green, and it is the last thing read in each class. */
+.week__proof {
+  margin-top: var(--s3);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--sand-rule);
+  font-size: 0.875rem;
+  font-variation-settings: "wdth" var(--narrow), "wght" 600;
+  color: var(--verified);
+}
+
+/* The capstone closes the sequence, so it is marked the way the BCAB timeline
+   marks its first session. */
+.week--mark .week__n {
+  color: var(--verified);
+}
+
+.notify__lede {
+  max-width: 52ch;
+}
+
+.notify {
+  max-width: 34rem;
+}

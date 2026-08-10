@@ -427,3 +427,92 @@
   slot.textContent = ref;
   box.hidden = false;
 })();
+
+/* Foundations notify-me.
+   Writes to foundations_interest, where the eleven signups migrated from the
+   old project already live. Deliberately not an enrollment: it holds nothing,
+   so it asks for almost nothing.
+
+   Like the enrollment form it must send Prefer: return=minimal — anon can
+   insert and cannot read back, and return=representation would be refused. */
+
+(function () {
+  var form = document.getElementById("notify-form");
+  var done = document.getElementById("notify-done");
+  var errorBox = document.getElementById("notify-error");
+  if (!form || !done) return;
+
+  var SUPABASE_URL = "__SUPABASE_URL__";
+  var SUPABASE_ANON_KEY = "__SUPABASE_ANON_KEY__";
+  var configured = SUPABASE_URL.length > 0 && SUPABASE_ANON_KEY.length > 0;
+
+  function show(message) {
+    errorBox.textContent = message;
+    errorBox.hidden = false;
+  }
+
+  function value(name) {
+    var el = form.elements[name];
+    return el ? (el.value || "").trim() : "";
+  }
+
+  form.addEventListener("submit", function (event) {
+    event.preventDefault();
+    errorBox.hidden = true;
+
+    if (!configured) {
+      show("This is not available right now. Please message us on WhatsApp and we will add you.");
+      return;
+    }
+
+    var invalid = form.querySelector(":invalid");
+    if (invalid) {
+      invalid.setAttribute("aria-invalid", "true");
+      invalid.focus();
+      show("Please complete the highlighted field.");
+      return;
+    }
+
+    var submit = form.querySelector(".form__submit");
+    var label = submit.textContent;
+    submit.disabled = true;
+    submit.textContent = "Adding…";
+
+    fetch(SUPABASE_URL + "/rest/v1/foundations_interest", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: "Bearer " + SUPABASE_ANON_KEY,
+        Prefer: "return=minimal"
+      },
+      body: JSON.stringify({
+        full_name: value("full_name"),
+        email: value("email"),
+        whatsapp: value("whatsapp") || null,
+        city: value("city") || null,
+        experience_level: value("experience_level") || null,
+        source: "website"
+      })
+    })
+      .then(function (response) {
+        // email is UNIQUE, so a second attempt is someone already on the list.
+        // That is not an error worth alarming them about.
+        if (response.ok || response.status === 409) return;
+        return response.text().then(function (body) {
+          throw new Error(body || "That did not save.");
+        });
+      })
+      .then(function () {
+        form.hidden = true;
+        done.hidden = false;
+        done.setAttribute("tabindex", "-1");
+        done.focus();
+      })
+      .catch(function () {
+        submit.disabled = false;
+        submit.textContent = label;
+        show("We could not save that. Please try again, or message us on WhatsApp.");
+      });
+  });
+})();

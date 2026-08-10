@@ -17,7 +17,7 @@ session can continue without re-deriving it.
 | `/certified-automation-builder` | **Built**, not yet reviewed. Enrollment form blocked — see §4 |
 | `/standard` | **Built**, not yet reviewed. No placeholders — the first page in the rebuild that ships clean |
 | `/thank-you` | **Rebuilt 10 August 2026** as the Paystack return page: confirmation, the dated sequence to Week 1, the training/certification separation, instalments, and a route for payment problems |
-| `/foundations` | Not started (Tier 2, needed before 5 September) |
+| `/foundations` | **Built 10 August 2026** in State 2. Notify-me capture tested end to end against the live table |
 | `/pathway` · `/about` | Not started (Tier 2) |
 | `/verify` · `/builder-pool` · `/workshops` · `/privacy` | Not started (Tier 3) |
 | `404.html` | **Built 10 August 2026.** Root of `dist/`, in `publicPaths`. Cloudflare Pages serves it with a real 404 status |
@@ -39,8 +39,8 @@ Per the approved plan, driven by the 12 September cohort start:
 
 1. ~~`/standard`~~ — **built 10 August 2026.** All four BCAB links to it now resolve.
 2. ~~`/thank-you`~~ — **built 10 August 2026.**
-3. **`/foundations`** in State 2 — showcase invite. Must be live before 5 September. **Next.** Its notify-me capture writes to `foundations_interest`, where the 11 migrated signups already are.
-4. **`/pathway`**, **`/about`**.
+3. ~~`/foundations`~~ — **built 10 August 2026** in State 2.
+4. **`/pathway`**, **`/about`**. **Next.**
 5. Tier 3: `/verify`, `/builder-pool`, `/workshops`, `/privacy`, `_redirects`.
 
 ---
@@ -123,8 +123,8 @@ Every one renders in conspicuous dashed marigold. **Nothing ships with one still
 
 | Placeholder | Where | Needed from |
 |---|---|---|
-| `[WHATSAPP NUMBER]` ×3 | footer, BCAB enroll intro | Johnathan |
-| `[CONTACT EMAIL]` ×2 | footer | confirm `training@bulletproofautomations.com` |
+| ~~`[WHATSAPP NUMBER]`~~ | — | **Supplied 10 August 2026: +233 54 652 7779.** Given as `+233 054 652 7779`; the trunk `0` is dropped in international format, so links use `wa.me/233546527779`. **Confirm the digits** |
+| ~~`[CONTACT EMAIL]`~~ | — | **Supplied 10 August 2026: `info@bulletproofautomations.com`** (not `training@`, as the brief had assumed) |
 | `[REFUND AND CANCELLATION POLICY]` | BCAB FAQ | policy decision |
 | `[MISSED-SESSION POLICY]` | BCAB FAQ | policy decision |
 | `[WEBHOOK METHOD]` | BCAB, before Week 1 | n8n Cloud / VPS / tunnel |
@@ -133,6 +133,15 @@ Every one renders in conspicuous dashed marigold. **Nothing ships with one still
 ---
 
 ## 6. Other open items
+
+- **Foundations cohort cap and schedule are no longer open.** The teaching guide states **25
+  participants**, Saturdays 11:30–13:00 GMT, Cohort 1 running 11 July – 29 August 2026.
+  `docs/project-brief.md` §9 still lists the cap as undecided; it is not.
+
+- **The locked showcase copy now appears twice** — the homepage `.wall` and `/foundations`. Both are
+  verbatim (diffed word-for-word against the brief, 180 words, exact match). The brief assigns it to
+  the Foundations page and the homepage borrowed it first. Decide whether the homepage keeps the
+  full text or drops to a pull quote; do not rewrite either, per rule 7.
 
 - **Payment capture is built but not deployed.** `payment_events` (append-only ledger, documented
   in `supabase-payment-events.sql`) exists on the current project, and
