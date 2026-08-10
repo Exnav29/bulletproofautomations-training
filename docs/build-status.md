@@ -21,7 +21,7 @@ session can continue without re-deriving it.
 | `/pathway` · `/about` | Not started (Tier 2) |
 | `/verify` · `/builder-pool` · `/workshops` · `/privacy` | Not started (Tier 3) |
 | `_redirects` | **Created 10 August 2026.** Carries `/price-by-value` → `/` only; the other two wait for their targets |
-| `/admin` | **Rebuilt 10 August 2026** against `enrollments` on the current project. Blocked on one RLS policy — see §4 |
+| `/admin` | **Rebuilt 10 August 2026** against `enrollments` on the current project. Policies, auth user and sign-up lockdown all verified live. Not yet clicked through in a browser |
 
 Build reports **11 of 19 declared paths**; the eight unbuilt routes are already declared in
 `publicPaths` and are skipped with a warning until their files exist. `price-by-value` was
@@ -103,8 +103,8 @@ by testing against the live API rather than assuming: `whatsapp` not `whatsapp_n
 defaults to false, so every enrollment would otherwise have recorded no consent while the page
 promised WhatsApp contact.
 
-**One test row to delete** in the enrollments table: `full_name = 'ZZ TEST ROW - safe to delete'`.
-Anon has no delete policy, so it needs removing from the dashboard.
+~~**One test row to delete**~~ — **gone.** Confirmed against the database on 10 August 2026:
+`enrollments` holds 0 rows.
 
 **Already fixed against the live schema** (verified through the API, not assumed): `whatsapp` not
 `whatsapp_number`; `chosen_option` not `option`; `amount_ghs` not `amount_due`; `cohort` not
@@ -149,63 +149,24 @@ Every one renders in conspicuous dashed marigold. **Nothing ships with one still
   `main` — Cloudflare's production branch is `main` and all rebuild work is on `site-rebuild`,
   so a push to the branch produces a *preview* build, not a production one. If a preview build
   still fails, the variables are set for Production but not Preview.
-- **`/admin` needs two RLS policies before it can read anything.** Rebuilt from scratch on
-  10 August 2026: no CDN (Chart.js and supabase-js are gone — it talks to Supabase Auth and
-  PostgREST with plain `fetch`, like the enrollment form), no `main.js`, tokens injected at build
-  time, and the site's own design tokens. It signs in as `authenticated`, but `enrollments` has
-  policies only for `anon` (insert) and `service_role`. **Until these are run in the SQL editor
-  the dashboard signs in and shows an empty roll**, and it says so in its own empty state rather
-  than looking broken:
+- ~~`/admin` RLS and auth~~ — **all closed and verified against the database on 10 August 2026**,
+  not inferred. `/admin` was rebuilt with no CDN (Chart.js and supabase-js gone; it uses plain
+  `fetch` against Supabase Auth and PostgREST), no `main.js`, build-time tokens, and the site's
+  own design tokens. Verified live:
 
-  ```sql
-  create policy "Authenticated can read enrollments"
-    on public.enrollments for select to authenticated using (true);
+  | Check | State |
+  |---|---|
+  | `enrollments` policies | `anon` INSERT · `service_role` ALL · `authenticated` SELECT and UPDATE, both restricted to `email = 'johnathan@bulletproofautomations.com'` |
+  | Admin Auth user | `johnathan@bulletproofautomations.com`, confirmed, created 10 August 2026 |
+  | Policy email vs user | exact match |
+  | Public sign-up | `disable_signup: true` — closed. Email sign-in still enabled |
+  | `anon` reading the roll | returns `[]` — sealed |
+  | `anon` inserting | still permitted, so the enrollment form is unaffected |
+  | `ZZ TEST ROW` | **gone.** `enrollments` holds 0 rows |
+  | `supabase-enrollments.sql` vs live table | all 24 columns match; nothing undocumented |
 
-  create policy "Authenticated can update enrollments"
-    on public.enrollments for update to authenticated
-    using (true) with check (true);
-  ```
-
-  No insert or delete for `authenticated` — the form inserts as `anon`, and nothing should delete
-  a paid enrollment from a browser.
-
-  **Run 10 August 2026. Verified afterwards that `anon` still reads `[]`, so the grant did not
-  leak to the public key.**
-
-- **Public sign-up was open on the training project — close it.** Checked 10 August 2026:
-  `GET /auth/v1/settings` returned `disable_signup: false` with email auth enabled. Combined with
-  the `to authenticated using (true)` policies above, **anyone who registered an account could
-  read and edit the entire enrollment roll** — names, emails, WhatsApp numbers, cities, amounts
-  and payment status. Only `mailer_autoconfirm: false` stood in the way, and any working inbox
-  clears that. Three fixes, in order:
-
-  1. Create the admin user: Authentication → Users → Add user, **with "Auto Confirm User" ticked**
-     (autoconfirm is off, so an unconfirmed account fails sign-in with "Email not confirmed",
-     which reads like a wrong password).
-  2. Authentication → Sign In / Providers → Email → turn off **"Allow new users to sign up."**
-     Dashboard-created users are unaffected.
-  3. Replace the two blanket policies with an email allowlist, so the roll stays shut even if
-     sign-up is re-enabled later:
-
-  ```sql
-  drop policy "Authenticated can read enrollments"   on public.enrollments;
-  drop policy "Authenticated can update enrollments" on public.enrollments;
-
-  create policy "Admins can read enrollments"
-    on public.enrollments for select to authenticated
-    using ( (auth.jwt() ->> 'email') in ('YOUR-ADMIN-EMAIL') );
-
-  create policy "Admins can update enrollments"
-    on public.enrollments for update to authenticated
-    using      ( (auth.jwt() ->> 'email') in ('YOUR-ADMIN-EMAIL') )
-    with check ( (auth.jwt() ->> 'email') in ('YOUR-ADMIN-EMAIL') );
-  ```
-
-  Extend the `in (...)` list when a second assessor is appointed. If it grows, move it to an
-  `admins` table and test membership instead.
-
-  A Supabase Auth user must also exist on the **new** project — the old dashboard's account was
-  on the old one.
+  The blanket `using (true)` policies were replaced by the email allowlist. Extend the check when
+  a second assessor is appointed; if the list grows, move it to an `admins` table.
 
 - **`assets/js/main.js` still hardcodes the OLD project's anon key** (`ftqcex…`, a legacy `eyJ…`
   JWT) and serves the retiring legacy routes. The current project is a different one entirely,
