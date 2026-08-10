@@ -32,7 +32,8 @@ const publicPaths = [
   // Rebuild routes - Tier 3
   "verify",
   "builder-pool",
-  "workshops",
+  // workshops: dropped 10 August 2026. Price by Value was its only occupant
+  // and it is retired, so the route has nothing to hold.
   "privacy",
 
   // Carried, outside the rebuild's scope

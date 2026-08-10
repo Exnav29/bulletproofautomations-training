@@ -20,7 +20,10 @@ session can continue without re-deriving it.
 | `/foundations` | **Built 10 August 2026** in State 2. Notify-me capture tested end to end against the live table |
 | `/pathway` | **Built 10 August 2026.** Three stages, two entry routes, BCAE named |
 | `/about` | **Built 10 August 2026.** Bio supplied by Johnathan. Photo still a placeholder |
-| `/verify` · `/builder-pool` · `/workshops` · `/privacy` | Not started (Tier 3) |
+| `/verify` | **Built 10 August 2026.** Explains why nothing can be verified yet rather than saying "coming soon" |
+| `/builder-pool` | **Built 10 August 2026**, deliberately thin. Non-guarantee wording verbatim in the hero |
+| `/workshops` | **Dropped 10 August 2026.** Price by Value was its only occupant and is retired. Removed from nav, footer and `publicPaths` |
+| `/privacy` | Not started. **Johnathan is writing it.** The only route the shell still links to that 404s |
 | `404.html` | **Built 10 August 2026.** Root of `dist/`, in `publicPaths`. Cloudflare Pages serves it with a real 404 status |
 | `_redirects` | **Created 10 August 2026.** Carries `/price-by-value` → `/` only; the other two wait for their targets |
 | `/admin` | **Rebuilt 10 August 2026** against `enrollments` on the current project. Policies, auth user and sign-up lockdown all verified live. Not yet clicked through in a browser |
@@ -126,9 +129,9 @@ Every one renders in conspicuous dashed marigold. **Nothing ships with one still
 |---|---|---|
 | ~~`[WHATSAPP NUMBER]`~~ | — | **Supplied 10 August 2026: +233 54 652 7779.** Given as `+233 054 652 7779`; the trunk `0` is dropped in international format, so links use `wa.me/233546527779`. **Confirm the digits** |
 | ~~`[CONTACT EMAIL]`~~ | — | **Supplied 10 August 2026: `info@bulletproofautomations.com`** (not `training@`, as the brief had assumed) |
-| `[REFUND AND CANCELLATION POLICY]` | BCAB FAQ | policy decision |
-| `[MISSED-SESSION POLICY]` | BCAB FAQ | policy decision |
-| `[WEBHOOK METHOD]` | BCAB, before Week 1 | n8n Cloud / VPS / tunnel |
+| `[REFUND AND CANCELLATION POLICY]` | BCAB FAQ | **Johnathan is writing it.** Last blocking placeholder |
+| ~~`[MISSED-SESSION POLICY]`~~ | — | **Resolved 10 August 2026: does not apply to BCAB.** It is a paid 25-person cohort, so a missed week is handled individually. The policy belongs to Foundations only |
+| ~~`[WEBHOOK METHOD]`~~ | — | **Hidden 10 August 2026** at Johnathan's request. Both pages now say the method is confirmed at the setup clinic |
 | `[INSTRUCTOR PHOTO]` | `/about` hero | **Bio supplied 10 August 2026** and published; only the photo is outstanding |
 
 ---
