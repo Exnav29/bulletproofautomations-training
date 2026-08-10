@@ -21,6 +21,7 @@ session can continue without re-deriving it.
 | `/pathway` · `/about` | Not started (Tier 2) |
 | `/verify` · `/builder-pool` · `/workshops` · `/privacy` | Not started (Tier 3) |
 | `_redirects` | **Created 10 August 2026.** Carries `/price-by-value` → `/` only; the other two wait for their targets |
+| `/admin` | **Rebuilt 10 August 2026** against `enrollments` on the current project. Blocked on one RLS policy — see §4 |
 
 Build reports **11 of 19 declared paths**; the eight unbuilt routes are already declared in
 `publicPaths` and are skipped with a warning until their files exist. `price-by-value` was
@@ -148,6 +149,27 @@ Every one renders in conspicuous dashed marigold. **Nothing ships with one still
   `main` — Cloudflare's production branch is `main` and all rebuild work is on `site-rebuild`,
   so a push to the branch produces a *preview* build, not a production one. If a preview build
   still fails, the variables are set for Production but not Preview.
+- **`/admin` needs two RLS policies before it can read anything.** Rebuilt from scratch on
+  10 August 2026: no CDN (Chart.js and supabase-js are gone — it talks to Supabase Auth and
+  PostgREST with plain `fetch`, like the enrollment form), no `main.js`, tokens injected at build
+  time, and the site's own design tokens. It signs in as `authenticated`, but `enrollments` has
+  policies only for `anon` (insert) and `service_role`. **Until these are run in the SQL editor
+  the dashboard signs in and shows an empty roll**, and it says so in its own empty state rather
+  than looking broken:
+
+  ```sql
+  create policy "Authenticated can read enrollments"
+    on public.enrollments for select to authenticated using (true);
+
+  create policy "Authenticated can update enrollments"
+    on public.enrollments for update to authenticated
+    using (true) with check (true);
+  ```
+
+  No insert or delete for `authenticated` — the form inserts as `anon`, and nothing should delete
+  a paid enrollment from a browser. Also needs a Supabase Auth user to exist on the **new**
+  project; the old dashboard's account was on the old one.
+
 - **`assets/js/main.js` still hardcodes the OLD project's anon key** (`ftqcex…`, a legacy `eyJ…`
   JWT) and serves the retiring legacy routes. The current project is a different one entirely,
   with an `sb_publishable_…` key. **Leave it as it is until the legacy routes retire together
