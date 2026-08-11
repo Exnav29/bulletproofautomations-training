@@ -64,12 +64,14 @@ export async function onRequest({ request, env }) {
    *
    * Name lookup is the enumeration-sensitive surface, so it keeps both. */
   if (name) {
+    // Same ordering as /api/gate: our own missing configuration is reported
+    // before the visitor is challenged, so a broken deployment names itself
+    // instead of hiding behind a 403 for the token it never received.
+    if (!env.TURNSTILE_SECRET_KEY) return refuse("turnstile-not-configured", 503);
+    if (!env.GATE_SECRET) return refuse("gate-secret-not-configured", 503);
+
     const turnstile = await verifyTurnstile(env, body.turnstileToken, request);
-    if (!turnstile.ok) {
-      // Not configured is our failure, not theirs, and should look like one.
-      const ours = turnstile.reason === "turnstile-not-configured";
-      return refuse(turnstile.reason, ours ? 503 : 403);
-    }
+    if (!turnstile.ok) return refuse(turnstile.reason, 403);
     if (!(await passIsValid(env, body.pass))) return refuse("no-gate-pass", 403);
   }
 

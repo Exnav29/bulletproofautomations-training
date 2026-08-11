@@ -19,6 +19,14 @@ export async function onRequest({ request, env }) {
     return new Response("Method not allowed", { status: 405, headers: { Allow: "POST" } });
   }
 
+  /* Configuration is checked first, before the body is even inspected.
+     A deployment missing a variable is broken for everyone regardless of what
+     they sent, and reporting that immediately is what makes it diagnosable
+     from outside with a single request. */
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return refuse("supabase-not-configured", 503);
+  if (!env.GATE_SECRET) return refuse("gate-secret-not-configured", 503);
+  if (!env.TURNSTILE_SECRET_KEY) return refuse("turnstile-not-configured", 503);
+
   const body = await readJson(request);
   if (!body) return refuse("bad-body");
 
@@ -40,14 +48,11 @@ export async function onRequest({ request, env }) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return refuse("bad-email");
   if (REASONS.indexOf(reason) === -1) return refuse("bad-reason");
 
+  /* The challenge runs last, after our own configuration and their input have
+     both been checked. Challenging someone and then telling them the service is
+     switched off wastes their time on a puzzle that could never have helped. */
   const turnstile = await verifyTurnstile(env, body.turnstileToken, request);
-  if (!turnstile.ok) {
-    const ours = turnstile.reason === "turnstile-not-configured";
-    return refuse(turnstile.reason, ours ? 503 : 403);
-  }
-
-  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return refuse("supabase-not-configured", 503);
-  if (!env.GATE_SECRET) return refuse("gate-secret-not-configured", 503);
+  if (!turnstile.ok) return refuse(turnstile.reason, 403);
 
   const res = await fetch(env.SUPABASE_URL + "/rest/v1/verification_lookups", {
     method: "POST",
