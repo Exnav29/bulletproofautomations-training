@@ -1,277 +1,334 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bulletproof Automations Training — Practical Training for Automation Builders</title>
-    <meta name="description" content="Practical workshops for automation builders who want to build, test, price, document, and deliver workflows that work beyond the demo.">
-    <link rel="canonical" href="https://training.bulletproofautomations.com/">
-    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
-    <meta property="og:type" content="website">
-    <meta property="og:title" content="Bulletproof Automations Training — Practical Training for Automation Builders">
-    <meta property="og:description" content="Practical workshops for automation builders who want to build, test, price, document, and deliver workflows that work beyond the demo.">
-    <meta property="og:url" content="https://training.bulletproofautomations.com/">
-    <meta name="twitter:card" content="summary">
-    <meta name="twitter:title" content="Bulletproof Automations Training — Practical Training for Automation Builders">
-    <meta name="twitter:description" content="Practical workshops for automation builders who want to build, test, price, document, and deliver workflows that work beyond the demo.">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/style.css">
-    <style>
-        .hero-home {
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            padding-top: 100px;
-            position: relative;
-            overflow: hidden;
-        }
-        .hero-home::before {
-            content: '';
-            position: absolute;
-            top: -30%; right: -20%;
-            width: 600px; height: 600px;
-            background: radial-gradient(circle, rgba(212, 175, 55, 0.06) 0%, transparent 70%);
-            border-radius: 50%;
-            pointer-events: none;
-        }
-        .hero-home::after {
-            content: '';
-            position: absolute;
-            bottom: -20%; left: -10%;
-            width: 500px; height: 500px;
-            background: radial-gradient(circle, rgba(45, 138, 78, 0.04) 0%, transparent 70%);
-            border-radius: 50%;
-            pointer-events: none;
-        }
-        .hero-home .container { position: relative; z-index: 2; }
-        .hero-home h1 {
-            font-size: clamp(2.2rem, 5.5vw, 3.8rem);
-            max-width: 800px;
-            margin-bottom: 24px;
-            background: linear-gradient(135deg, var(--text-primary) 0%, var(--gold-light) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        .hero-home p.subtitle {
-            font-size: clamp(1.05rem, 2vw, 1.25rem);
-            color: var(--text-secondary);
-            max-width: 640px;
-            margin-bottom: 36px;
-            line-height: 1.6;
-        }
-        .hero-cta-group {
-            display: flex;
-            gap: 16px;
-            flex-wrap: wrap;
-        }
-        .positioning {
-            background: var(--bg-card);
-            border-top: 1px solid var(--border);
-            border-bottom: 1px solid var(--border);
-        }
-        .positioning-box {
-            max-width: 800px;
-            margin: 0 auto;
-            text-align: center;
-        }
-        .positioning-box p {
-            font-size: 1.15rem;
-            color: var(--text-secondary);
-            line-height: 1.7;
-        }
-        .workshops { background: var(--bg-card); }
-        .workshop-card {
-            background: var(--bg-elevated);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-lg);
-            padding: 32px;
-            transition: var(--transition);
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-        }
-        .workshop-card:hover {
-            border-color: var(--border-strong);
-            transform: translateY(-4px);
-            box-shadow: var(--shadow-md);
-        }
-        .workshop-card .badge { margin-bottom: 16px; align-self: flex-start; }
-        .workshop-card h3 {
-            font-size: 1.3rem;
-            margin-bottom: 12px;
-        }
-        .workshop-card p {
-            color: var(--text-secondary);
-            font-size: 0.95rem;
-            line-height: 1.5;
-            flex-grow: 1;
-            margin-bottom: 20px;
-        }
-        .workshop-card .btn { align-self: flex-start; }
-        .workshop-card.coming-soon {
-            opacity: 0.7;
-        }
-        .workshop-card.coming-soon:hover {
-            opacity: 0.85;
-        }
-        .final-cta-home {
-            text-align: center;
-            position: relative;
-            overflow: hidden;
-        }
-        .final-cta-home::before {
-            content: '';
-            position: absolute;
-            top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            width: 700px; height: 700px;
-            background: radial-gradient(circle, rgba(212, 175, 55, 0.05) 0%, transparent 60%);
-            pointer-events: none;
-        }
-        .final-cta-home h2 {
-            font-size: clamp(1.8rem, 4vw, 2.6rem);
-            margin-bottom: 16px;
-            position: relative;
-            z-index: 2;
-        }
-        .final-cta-home p {
-            color: var(--text-secondary);
-            font-size: 1.1rem;
-            max-width: 560px;
-            margin: 0 auto 32px;
-            position: relative;
-            z-index: 2;
-        }
-    </style>
+<!-- include: head.html title="Bulletproof Automations Training — an academy for automation builders" description="An academy for automation builders. Live online cohorts, a three-stage pathway, and a published certification standard. The Intermediate cohort begins 12 September 2026." canonical="https://training.bulletproofautomations.com/" -->
 </head>
 <body>
+<!-- include: header.html -->
+<!-- include: pathway-rail.html -->
 
-<!-- Header -->
-<header class="site-header">
-    <div class="container">
-        <a href="/" class="brand">
-            <div class="brand-icon">⚡</div>
-            <span>Bulletproof Automations</span>
-        </a>
-        <nav class="nav-links">
-            <a href="/">Home</a>
-            <a href="/n8n-automation-builder-pathway">n8n Pathway</a>
-            <a href="/price-by-value">Workshops</a>
-            <a href="/price-by-value#waitlist">Join Waitlist</a>
-            <a href="https://bulletproofautomations.com">Main Site</a>
-        </nav>
-        <a href="/price-by-value#waitlist" class="btn btn-primary nav-cta">Join Waitlist</a>
-        <button class="mobile-menu-btn" aria-label="Menu">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                <line x1="3" y1="6" x2="21" y2="6"></line>
-                <line x1="3" y1="12" x2="21" y2="12"></line>
-                <line x1="3" y1="18" x2="21" y2="18"></line>
-            </svg>
-        </button>
-    </div>
-    <div class="mobile-nav">
-        <a href="/">Home</a>
-        <a href="/n8n-automation-builder-pathway">n8n Pathway</a>
-        <a href="/price-by-value">Workshops</a>
-        <a href="/price-by-value#waitlist">Join Waitlist</a>
-        <a href="https://bulletproofautomations.com">Main Site</a>
-    </div>
-</header>
+<main id="main">
 
-<!-- Hero -->
-<section class="hero-home">
-    <div class="container">
-        <div class="badge badge-gold animate-in" style="margin-bottom:20px;">
-            <span style="width:8px;height:8px;background:var(--green-light);border-radius:50%;animation:pulse 2s infinite;"></span>
-            <span>Training Hub for Automation Builders</span>
+  <section class="floor">
+    <div class="floor__frame">
+
+      <!-- Art-directed hero. Two crops of the same photograph: the wide one
+           from 900px up, the tall one below it, so the subject survives on a
+           phone instead of being cropped out. AVIF first, WebP next, JPEG for
+           anything that takes neither. -->
+      <div class="floor__media">
+        <picture>
+          <source media="(min-width: 900px)" type="image/avif"
+                  sizes="100vw"
+                  srcset="/assets/images/hero/learner-wide-960.avif 960w,
+                          /assets/images/hero/learner-wide-1280.avif 1280w,
+                          /assets/images/hero/learner-wide-1672.avif 1672w">
+          <source media="(min-width: 900px)" type="image/webp"
+                  sizes="100vw"
+                  srcset="/assets/images/hero/learner-wide-960.webp 960w,
+                          /assets/images/hero/learner-wide-1280.webp 1280w,
+                          /assets/images/hero/learner-wide-1672.webp 1672w">
+          <source media="(min-width: 900px)" type="image/jpeg"
+                  sizes="100vw"
+                  srcset="/assets/images/hero/learner-wide-960.jpg 960w,
+                          /assets/images/hero/learner-wide-1280.jpg 1280w,
+                          /assets/images/hero/learner-wide-1672.jpg 1672w">
+
+          <source type="image/avif"
+                  sizes="100vw"
+                  srcset="/assets/images/hero/learner-narrow-640.avif 640w,
+                          /assets/images/hero/learner-narrow-828.avif 828w,
+                          /assets/images/hero/learner-narrow-1122.avif 1122w">
+          <source type="image/webp"
+                  sizes="100vw"
+                  srcset="/assets/images/hero/learner-narrow-640.webp 640w,
+                          /assets/images/hero/learner-narrow-828.webp 828w,
+                          /assets/images/hero/learner-narrow-1122.webp 1122w">
+
+          <img src="/assets/images/hero/learner-narrow-828.jpg"
+               sizes="100vw"
+               srcset="/assets/images/hero/learner-narrow-640.jpg 640w,
+                       /assets/images/hero/learner-narrow-828.jpg 828w,
+                       /assets/images/hero/learner-narrow-1122.jpg 1122w"
+               width="1122" height="1402" fetchpriority="high" decoding="async"
+               alt="A learner working at a laptop late in the evening.">
+        </picture>
+
+      </div>
+
+      <div class="floor__scrim" aria-hidden="true"></div>
+
+      <div class="floor__content">
+
+        <div class="floor__text">
+          <p class="floor__eyebrow">An academy for automation builders</p>
+          <!-- Words are wrapped so each can rise out of its own mask. The text
+               is plain and complete in the markup — the reveal is CSS only, so
+               there is nothing to read incorrectly and nothing to wait for. -->
+          <h1 class="floor__title"><span class="rise"><span>Automation</span></span> <span class="rise"><span>builders</span></span> <span class="rise"><span>are</span></span> <span class="rise"><span>made</span></span> <span class="rise"><span>here.</span></span></h1>
         </div>
-        <h1 class="animate-in delay-1">Training for Builders Who Want Their Automations to Survive Real Clients.</h1>
-        <p class="subtitle animate-in delay-2">Practical workshops for automation builders who want to build, test, price, document, and deliver workflows that work beyond the demo.</p>
-        <div class="hero-cta-group animate-in delay-3">
-            <a href="/price-by-value" class="btn btn-primary btn-large">View Featured Workshop</a>
-            <a href="/price-by-value#waitlist" class="btn btn-secondary btn-large">Join the Waitlist</a>
+
+        <div class="floor__bottom">
+          <div>
+            <p class="floor__support">Live online cohorts, a three-stage pathway, and a certification standard we publish in full before you pay for anything.</p>
+            <div class="btn-pair">
+              <a class="btn btn--go" href="/certified-automation-builder#enroll">Enroll &mdash; cohort starts 12 September</a>
+              <a class="btn-round" href="/certified-automation-builder#enroll" tabindex="-1" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M7 17 17 7M9 7h8v8"/>
+                </svg>
+              </a>
+            </div>
+          </div>
+
+          <aside class="glass floor__card" aria-label="Next at the academy">
+            <p class="floor__card-head">Next at the academy</p>
+            <p class="floor__card-title">Foundations Cohort 1 showcase</p>
+            <p class="floor__card-meta">
+              Saturday 5 September &middot; 11:30&ndash;13:00 GMT &middot; free, open to anyone
+              <span class="count" data-countdown="2026-09-05"></span>
+            </p>
+            <a class="floor__card-link" href="https://luma.com/n8n-hj3o">
+              Reserve a place
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M7 17 17 7M9 7h8v8"/>
+              </svg>
+            </a>
+          </aside>
         </div>
-    </div>
-</section>
 
-<!-- Positioning -->
-<section class="positioning">
-    <div class="container">
-        <div class="positioning-box reveal">
-            <p>Bulletproof Automations Training helps automation builders move beyond impressive demos and start building business-ready workflows. The focus is practical: <strong style="color:var(--text-primary);">pricing, testing, documentation, delivery, client handoff, and production readiness.</strong></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="term" aria-labelledby="term-title">
+    <div class="shell">
+      <div class="term__head">
+        <h2 class="term__title" id="term-title">This term</h2>
+        <p class="term__note">All times GMT</p>
+      </div>
+
+      <ol class="term__grid">
+
+        <li class="event">
+          <p class="event__status">Open to anyone</p>
+          <p class="event__date"><time datetime="2026-09-05">Sat 5 Sep</time></p>
+          <p class="event__time">11:30&ndash;13:00</p>
+          <h3 class="event__what">Foundations Cohort 1 showcase</h3>
+          <p class="event__meta">Live demos from the first cohort. Free, and open to anyone.</p>
+          <span class="count" data-countdown="2026-09-05"></span>
+          <a class="event__action" href="https://luma.com/n8n-hj3o">
+            Reserve a place
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
+          </a>
+        </li>
+
+        <li class="event">
+          <p class="event__status">Enrolling now</p>
+          <p class="event__date"><time datetime="2026-09-12">Sat 12 Sep</time></p>
+          <p class="event__time">11:30&ndash;14:00, five Saturdays</p>
+          <h3 class="event__what">Intermediate cohort begins</h3>
+          <p class="event__meta">25 seats. One project that grows across all five weeks.</p>
+          <p class="event__deadline">Enrollment closes <time datetime="2026-09-08">Tuesday 8 September</time></p>
+          <span class="count" data-countdown="2026-09-12"></span>
+          <a class="event__action" href="/certified-automation-builder#enroll">
+            Enroll
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
+          </a>
+        </li>
+
+        <li class="event event--credential">
+          <p class="event__status">Opens 1 November</p>
+          <p class="event__date"><time datetime="2026-11-01">From 1 Nov</time></p>
+          <p class="event__time">By arrangement</p>
+          <h3 class="event__what">BCAB assessment window opens</h3>
+          <p class="event__meta">Taken separately from the training. Completing the cohort qualifies you to attempt it.</p>
+          <a class="event__action" href="/standard">
+            Read the standard
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
+          </a>
+        </li>
+
+      </ol>
+    </div>
+  </section>
+
+  <section class="wall" aria-labelledby="wall-title">
+    <div class="shell wall__grid">
+      <div class="wall__main">
+        <h2 class="wall__lead" id="wall-title">Builders don&rsquo;t W8.</h2>
+
+        <div class="wall__body">
+
+          <!-- Eight ticks, one per week of the cohort. The fill tracks reading
+               position, so a measure of eight weeks fills beside the eight-week
+               story, ending at the showcase. -->
+          <div class="wall__rail" aria-hidden="true">
+            <p class="wall__rail-cap">Week 1</p>
+            <div class="wall__track">
+              <span class="wall__fill"></span>
+              <span class="wall__tick"></span>
+              <span class="wall__tick"></span>
+              <span class="wall__tick"></span>
+              <span class="wall__tick"></span>
+              <span class="wall__tick"></span>
+              <span class="wall__tick"></span>
+              <span class="wall__tick"></span>
+              <span class="wall__tick"></span>
+            </div>
+            <p class="wall__rail-cap">Showcase</p>
+          </div>
+
+          <div class="wall__copy">
+
+        <p>Eight weeks ago, a group of people right here in this community had never built a single n8n workflow. Not one.</p>
+
+        <p>They didn&rsquo;t wait until they had a certificate. Didn&rsquo;t wait until they felt qualified. Didn&rsquo;t wait for someone else to fix the thing that was frustrating them at work. They picked a problem and built the automation themselves.</p>
+
+        <p>On Saturday 5 September they&rsquo;re showing you what they made.</p>
+
+        <p>Live demos. Real workflows solving real problems. And the honest version of how they got there, including the parts that were harder than expected.</p>
+
+        <p>Here&rsquo;s the thing to pay attention to while you watch. <span class="pivot">Every person demoing was exactly where you are eight weeks ago.</span> That&rsquo;s the whole point of the showcase.</p>
+
+        <p>If you&rsquo;ve been telling yourself you&rsquo;ll get into automation once you have more time, more experience, or a better reason, come and watch what eight weeks actually produces. Then decide whether you want to be on that stage next time.</p>
+
+        <p>The next Beginner Cohort is coming. This is your look at what you&rsquo;d walk away with.</p>
+
+          </div>
         </div>
-    </div>
-</section>
+      </div>
 
-<!-- Workshops -->
-<section class="workshops" id="workshops">
-    <div class="container">
-        <div class="section-header reveal">
-            <h2>Current and Upcoming Trainings</h2>
-            <p>Hands-on workshops designed for builders who want real-world skills.</p>
+      <aside class="wall__card" aria-label="Showcase details">
+        <dl>
+          <div>
+            <dt>Event</dt>
+            <dd>n8n Foundations &mdash; Cohort 1 Showcase</dd>
+          </div>
+          <div>
+            <dt>Date</dt>
+            <dd><time datetime="2026-09-05">Saturday, 5 September 2026</time></dd>
+          </div>
+          <div>
+            <dt>Time</dt>
+            <dd>11:30 AM &ndash; 1:00 PM GMT</dd>
+          </div>
+          <div>
+            <dt>Format</dt>
+            <dd>Online, free, open to the public</dd>
+          </div>
+        </dl>
+
+        <a class="cta-enroll" href="https://luma.com/n8n-hj3o">Reserve a place on Luma</a>
+
+        <p class="wall__forward">Cohort 1 finishes on 5 September. The Intermediate cohort begins on 12 September.</p>
+      </aside>
+    </div>
+  </section>
+
+  <section class="shell figures" aria-label="The programme in numbers">
+    <div class="figures__grid">
+
+      <div class="figure">
+        <p class="figure__value" data-count="25">25</p>
+        <p class="figure__label">learners in the first Foundations cohort</p>
+      </div>
+
+      <div class="figure">
+        <p class="figure__value" data-count="8">8</p>
+        <p class="figure__label">weeks of live, hands-on Saturdays</p>
+      </div>
+
+      <div class="figure">
+        <p class="figure__value" data-count="7">7</p>
+        <p class="figure__label">competency domains in the published standard</p>
+      </div>
+
+      <div class="figure">
+        <p class="figure__value" data-count="75" data-suffix="%">75%</p>
+        <p class="figure__label">the provisional pass mark, published before anyone sits the assessment</p>
+      </div>
+
+    </div>
+  </section>
+
+  <section class="shell stages" aria-labelledby="stages-title">
+    <div class="stages__head">
+      <h2 class="stages__title" id="stages-title">Three stages. One standard.</h2>
+      <p class="stages__intro">Each stage is a room you work in, and a credential you leave holding. Those are two different things, and this pathway keeps them apart.</p>
+    </div>
+
+    <div class="stages__bus" aria-hidden="true"></div>
+
+    <div class="stages__grid">
+
+      <article class="stage">
+        <div class="stage__tap" aria-hidden="true"></div>
+        <div class="stage__room">
+          <p class="stage__num">Stage 1</p>
+          <h3 class="stage__name">Foundations</h3>
+          <ul class="stage__facts">
+            <li>8 weeks, free</li>
+            <li>Saturdays, live online</li>
+            <li>Hands-on build-along across eight sessions</li>
+            <li>Every session produces portfolio proof you keep</li>
+          </ul>
+          <p class="stage__status">Cohort 1 in progress &middot; showcase 5 September</p>
         </div>
-        <div class="grid-3">
-            <!-- Featured -->
-            <div class="workshop-card card-featured reveal">
-                <span class="badge badge-gold">Featured Workshop</span>
-                <h3>Price by Value</h3>
-                <p>How to stop undercharging for AI automations and price workflows based on the business outcomes they create.</p>
-                <a href="/price-by-value" class="btn btn-primary">View Workshop</a>
-            </div>
-            <div class="workshop-card reveal">
-                <span class="badge badge-green">New Pathway</span>
-                <h3>n8n Automation Builder Training Pathway</h3>
-                <p>A structured ladder for serious learners who want to move from beginner n8n foundations toward practical automation building, portfolio work, and future builder pool consideration.</p>
-                <div style="display:flex;gap:12px;flex-wrap:wrap;">
-                    <a href="/n8n-automation-builder-pathway" class="btn btn-primary">View Pathway</a>
-                    <a href="/n8n-foundations" class="btn btn-secondary">Beginner Cohort</a>
-                </div>
-            </div>
-            <!-- Coming Soon 1 -->
-            <div class="workshop-card coming-soon reveal">
-                <span class="badge badge-blue">Coming Soon</span>
-                <h3>Bulletproof Workflow QA</h3>
-                <p>How to test workflows before client delivery so they survive messy data, API failures, bad inputs, and real-world business chaos.</p>
-                <button class="btn btn-secondary" disabled style="opacity:0.5;cursor:not-allowed;">Coming Soon</button>
-            </div>
-            <!-- Coming Soon 2 -->
-            <div class="workshop-card coming-soon reveal">
-                <span class="badge badge-blue">Coming Soon</span>
-                <h3>Workflow Documentation for Client Handoffs</h3>
-                <p>How to document automations so clients, teams, and future maintainers can actually understand and use them.</p>
-                <button class="btn btn-secondary" disabled style="opacity:0.5;cursor:not-allowed;">Coming Soon</button>
-            </div>
-            <!-- Coming Soon 3 -->
-            <div class="workshop-card coming-soon reveal">
-                <span class="badge badge-blue">Coming Soon</span>
-                <h3>n8n Production Readiness</h3>
-                <p>How to prepare workflows for monitoring, error handling, retries, credentials, maintenance, and real-world deployment.</p>
-                <button class="btn btn-secondary" disabled style="opacity:0.5;cursor:not-allowed;">Coming Soon</button>
-            </div>
+        <div class="stage__earn">
+          <p class="stage__earn-label">You leave holding</p>
+          <p class="stage__credential">Bulletproof Automation Foundations Certificate</p>
+          <p class="stage__type">Certificate of completion. It records that you completed the training.</p>
         </div>
-    </div>
-</section>
+      </article>
 
-<!-- Final CTA -->
-<section class="final-cta-home">
-    <div class="container">
-        <h2 class="reveal">Start With the Training That Helps Builders Make More Money.</h2>
-        <p class="reveal">The first featured workshop teaches builders how to price AI automations based on business value, not hours worked.</p>
-        <a href="/price-by-value" class="btn btn-primary btn-large reveal">Join the Price by Value Waitlist</a>
-    </div>
-</section>
+      <article class="stage">
+        <div class="stage__tap" aria-hidden="true"></div>
+        <div class="stage__room">
+          <p class="stage__num">Stage 2</p>
+          <h3 class="stage__name">Certified Automation Builder</h3>
+          <ul class="stage__facts">
+            <li>5 weeks, Saturdays 11:30&ndash;14:00 GMT</li>
+            <li>25 seats</li>
+            <li>One project that grows across all five weeks</li>
+            <li>Founding Cohort Rate &mdash; GHS 750, or GHS 1,050 for the Intermediate cohort and the BCAB assessment together</li>
+          </ul>
+          <p class="stage__status">Enrolling now &middot; begins 12 September</p>
+        </div>
+        <div class="stage__earn">
+          <p class="stage__earn-label">You leave holding</p>
+          <p class="stage__credential">Bulletproof Certified Automation Builder (BCAB)</p>
+          <p class="stage__type">Professional certification. Assessed separately from the training.</p>
+        </div>
+      </article>
 
-<!-- Footer -->
-<footer class="site-footer">
-    <div class="container">
-        <p><span class="accent">Bulletproof Automations Training</span> — Practical training for automation builders.</p>
-    </div>
-</footer>
+      <article class="stage" data-state="closed">
+        <div class="stage__tap" aria-hidden="true"></div>
+        <div class="stage__room">
+          <p class="stage__num">Stage 3</p>
+          <h3 class="stage__name">Certified Automation Engineer</h3>
+          <ul class="stage__facts">
+            <li>Architecture, security, and secrets management</li>
+            <li>Deployment, environments, and version control</li>
+            <li>Scaling, observability, and recovery</li>
+            <li>AI governance and operational ownership</li>
+          </ul>
+          <p class="stage__status">Defined, not yet open</p>
+        </div>
+        <div class="stage__earn">
+          <p class="stage__earn-label">You would leave holding</p>
+          <p class="stage__credential">Bulletproof Certified Automation Engineer (BCAE)</p>
+          <p class="stage__type">Professional certification. Its standard is written but not yet issued.</p>
+        </div>
+      </article>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="assets/js/main.js"></script>
+    </div>
+
+    <p class="stages__separation"><strong>Training and certification are separate products.</strong> Completing a cohort qualifies you to attempt the assessment. It does not award the credential.</p>
+  </section>
+
+</main>
+
+<!-- include: footer.html -->
 </body>
 </html>

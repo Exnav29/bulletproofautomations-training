@@ -1,0 +1,140 @@
+-- Bulletproof Automations Training — payment_events
+--
+-- ============================================================================
+-- THIS FILE IS DOCUMENTATION, NOT A MIGRATION. DO NOT RUN IT.
+-- ============================================================================
+--
+-- Same convention as supabase-enrollments.sql and
+-- supabase-foundations-interest.sql: the live database is the source of truth.
+--
+-- Project: the training Supabase project (ref in .env, gitignored).
+-- Created: 10 August 2026.
+
+
+-- ---------------------------------------------------------------------------
+-- Why an append-only event log rather than columns on enrollments
+-- ---------------------------------------------------------------------------
+--
+-- enrollments already carries payment_status, amount_paid_ghs,
+-- paystack_reference and paystack_payment_date. Those answer "where does this
+-- learner stand right now". They cannot answer "what did Paystack actually
+-- say, and when" — which is the only question that settles a dispute or a
+-- double charge.
+--
+-- So every webhook Paystack sends is written here verbatim, including its raw
+-- JSON, BEFORE anything is applied to the roll. Events that fail signature
+-- verification are recorded too: someone probing the endpoint is exactly the
+-- thing you want a record of. Events that cannot be matched to an enrollment
+-- are recorded and flagged rather than dropped.
+
+
+-- ---------------------------------------------------------------------------
+-- Columns as deployed
+-- ---------------------------------------------------------------------------
+--
+--  column           type          null?  default
+--  ---------------  ------------  -----  ---------------------------
+--  id               uuid          NO     gen_random_uuid()
+--  received_at      timestamptz   NO     now()        when WE got it
+--  provider         text          NO     'paystack'
+--  event            text          YES    —            e.g. charge.success
+--  reference        text          YES    —            Paystack's reference
+--  email            text          YES    —            data.customer.email
+--  amount_ghs       numeric       YES    —            MAJOR units, see below
+--  status           text          YES    —            data.status
+--  paid_at          timestamptz   YES    —            when PAYSTACK took it
+--  signature_valid  boolean       NO     false        HMAC verified?
+--  enrollment_id    uuid          YES    —            FK -> enrollments(id)
+--  matched          boolean       NO     false
+--  match_note       text          YES    —            why matched or not
+--  raw              jsonb         NO     —            the whole payload
+--
+--  UNIQUE (provider, event, reference)
+--  Indexes on reference, lower(email), received_at desc.
+
+
+-- ---------------------------------------------------------------------------
+-- Two traps this schema exists to defuse
+-- ---------------------------------------------------------------------------
+--
+-- 1. PAYSTACK SENDS MINOR UNITS. GHS 750.00 arrives as 75000 pesewas. The
+--    function divides by 100 before storing, so amount_ghs is in cedis and
+--    comparable with enrollments.amount_ghs directly. Store the raw payload
+--    anyway — if the division is ever wrong, raw is the recovery path.
+--
+-- 2. PAYSTACK RETRIES ON ANY NON-2XX RESPONSE. Without a guard, a retry of an
+--    already-applied charge would add the money a second time. The UNIQUE
+--    constraint is that guard: the function inserts with
+--    `Prefer: resolution=ignore-duplicates,return=representation` and treats an
+--    empty result as "already seen", returning 200 without touching the roll.
+--    Verified 10 August 2026: the second identical insert returns [].
+
+
+-- ---------------------------------------------------------------------------
+-- Row-level security as deployed
+-- ---------------------------------------------------------------------------
+--
+--  policy                          cmd     roles
+--  ------------------------------  ------  ----------------
+--  Admins can read payment events  SELECT  {authenticated}
+--  Allow service role full access  ALL     {service_role}
+--
+-- There is deliberately NO anon policy of any kind — not even insert. The
+-- browser has no business reading or writing a payment ledger. Only the
+-- paystack-webhook function writes here, using service_role.
+--
+-- Note the asymmetry with enrollments, which does allow anon insert: a visitor
+-- legitimately creates their own enrollment, but nobody creates their own
+-- payment record.
+
+
+-- ---------------------------------------------------------------------------
+-- How a payment reaches the roll
+-- ---------------------------------------------------------------------------
+--
+--   Paystack --POST--> supabase/functions/paystack-webhook
+--                      verify x-paystack-signature (HMAC-SHA512, raw body)
+--                      insert into payment_events        <- always
+--                      if valid AND charge.success:
+--                          match enrollments on email
+--                          amount_paid_ghs += amount     <- ADD, not overwrite
+--                          payment_status = paid | partially_paid
+--                          stamp reference + payment date
+--                          flag the event matched
+--
+-- The visitor's browser is not in that path. /thank-you displays the reference
+-- from the return URL and writes nothing: a query string is typed by whoever
+-- holds the browser, so a page that trusted it would let anyone mark themselves
+-- paid.
+--
+-- Matching is on EMAIL, not reference. Hosted Paystack Payment Pages mint their
+-- own reference at checkout, so it cannot be pre-assigned at enrollment. If the
+-- integration ever moves to Paystack Inline or the transaction API, a reference
+-- can be generated up front and matching should switch to it — email is the
+-- pragmatic key for hosted pages, not the ideal one.
+--
+-- amount_paid_ghs ACCUMULATES because the instalment plan is GHS 400 then 350
+-- (then 300 for the bundle). A second payment must add, never replace.
+
+
+-- ---------------------------------------------------------------------------
+-- Deployment — not done yet
+-- ---------------------------------------------------------------------------
+--
+--   supabase functions deploy paystack-webhook --project-ref <ref> --no-verify-jwt
+--
+-- --no-verify-jwt is required: Paystack does not send a Supabase JWT, so the
+-- platform auth gate must be off. The function's auth is the HMAC signature.
+--
+-- Secrets, set in Supabase (Edge Functions -> Secrets), never in this repo:
+--   PAYSTACK_SECRET_KEY   sk_live_… / sk_test_…
+--   PROJECT_URL           https://<ref>.supabase.co
+--   SERVICE_ROLE_KEY
+--
+-- Then in the Paystack dashboard, Settings -> API Keys & Webhooks, set the
+-- webhook URL to:
+--   https://<ref>.supabase.co/functions/v1/paystack-webhook
+--
+-- Until PAYSTACK_SECRET_KEY is set, every event verifies as false and nothing
+-- is applied to the roll. That is the safe default, not a silent failure —
+-- the events are still logged and visible.

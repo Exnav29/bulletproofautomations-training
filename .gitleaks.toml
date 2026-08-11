@@ -4,7 +4,15 @@ title = "Bulletproof Automations Training gitleaks config"
 useDefault = true
 
 [[allowlists]]
-description = "Public Supabase anon key used by browser-safe client code"
+description = """Historical only. assets/js/main.js was deleted on 11 August 2026 with the
+legacy routes it served, but gitleaks scans FULL HISTORY, so the commits that contained it are
+still scanned and this allowlist is still required. Removing it would make CI start failing on
+old commits rather than tidy anything up.
+
+The value is the OLD project's anon key. Anon keys are public by design — they reach every
+visitor's browser and row-level security is what protects the data — so this was never a
+secret. Current code carries no key at all: build-time tokens are substituted from the
+environment, which is why no new allowlist entry has been needed."""
 paths = ['''^assets/js/main\.js$''']
 regexTarget = "match"
 regexes = [

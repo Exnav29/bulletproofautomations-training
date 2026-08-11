@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Deliberately not the head.html partial: that include emits a canonical URL,
+     wrong on a page standing in for many addresses, and this page needs noindex,
+     which no other page wants. -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, follow">
+<meta name="description" content="That address does not resolve to a page on Bulletproof Automations Training. The routes that do are listed here.">
+<title>No route matched — Bulletproof Automations Training</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="/assets/fonts/archivo-latin-variable.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/css/site.css">
+<script src="/assets/js/shell.js" defer></script>
+</head>
+<body>
+<!-- include: header.html -->
+<!-- include: pathway-rail.html -->
+
+<main id="main">
+  <section class="section lost" aria-labelledby="lost-title">
+    <div class="shell">
+      <p class="masthead__eyebrow">Error 404</p>
+      <h1 class="lost__title" id="lost-title">No route matched.</h1>
+      <p class="lede lost__lede">The address you asked for doesn&rsquo;t resolve to a page. It was either mistyped, or it moved and we didn&rsquo;t leave a forwarding rule.</p>
+
+      <!-- The signature, and the navigation, are the same object. A router's
+           match trace: what was asked for, that it failed, and what would have
+           worked. Set in type rather than drawn, so it survives at 360px where
+           a background diagram would not. -->
+      <div class="trace">
+        <p class="trace__caption">Requested</p>
+
+        <div class="trace__row trace__row--fail">
+          <span class="trace__method">GET</span>
+          <!-- shell.js replaces the fallback with the real path. Never empty. -->
+          <span class="trace__path" id="gone-path">the address you typed</span>
+          <span class="trace__status">no match</span>
+        </div>
+
+        <p class="trace__caption trace__caption--ok">Routes that do match</p>
+
+        <a class="trace__row trace__row--live" href="/">
+          <span class="trace__method">GET</span>
+          <span class="trace__path">/</span>
+          <span class="trace__status">Training home &mdash; the pathway, and what is running now</span>
+        </a>
+
+        <a class="trace__row trace__row--live" href="/certified-automation-builder">
+          <span class="trace__method">GET</span>
+          <span class="trace__path">/certified-automation-builder</span>
+          <span class="trace__status">The Stage 2 credential, and the cohort that prepares you for it</span>
+        </a>
+
+        <a class="trace__row trace__row--live" href="/standard">
+          <span class="trace__method">GET</span>
+          <span class="trace__path">/standard</span>
+          <span class="trace__status">The competency framework the assessment scores against</span>
+        </a>
+      </div>
+
+      <p class="note lost__note">&ldquo;A branch that never reconnects to the output path&rdquo; is one of the defects <a href="/standard">the assessment standard</a> asks candidates to find. Fair that it applies to us too &mdash; if a link sent you here, tell us where it was and we&rsquo;ll route it.</p>
+    </div>
+  </section>
+</main>
+
+<!-- include: footer.html -->
+</body>
+</html>

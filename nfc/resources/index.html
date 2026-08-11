@@ -61,7 +61,11 @@
   .wrap { max-width: 960px; margin: 0 auto; padding: 0 24px; }
 
   /* ============ HERO ============ */
-  .hero { padding: 72px 0 48px; position: relative; overflow: visible; }
+  /* overflow-x: clip contains the decorative mark's negative right offset
+     without creating a scroll container, so the page cannot gain
+     horizontal scroll and sticky/vertical behaviour is untouched.
+     overflow: visible previously let it push the document 116px wide. */
+  .hero { padding: 72px 0 48px; position: relative; overflow-x: clip; }
 
   .web-mark {
     position: absolute;
@@ -281,12 +285,6 @@
     <h1 class="rise d1">Everything I build,<br/><span class="gold">woven into one place.</span></h1>
     <p class="rise d2">Thanks for connecting. Below is the full thread — <b>learn n8n</b>, put <b>automation to work</b> in your business or ministry, explore <b>ScriptureFlow</b>, and stay in touch.</p>
   </header>
-
-  <!--
-    LINK NOTE (for Codex): every href marked TODO below is a placeholder.
-    Wire each to the real destination. The vCard link should point to a
-    hosted .vcf file with the `download` attribute kept in place.
-  -->
 
   <!-- ============ LEARN N8N ============ -->
   <section class="section rise d2" aria-labelledby="learn-title">

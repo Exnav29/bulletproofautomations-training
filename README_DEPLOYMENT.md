@@ -4,11 +4,27 @@
 
 Create a new Supabase project for the training subdomain. Do not reuse production resources from the main Bulletproof Automations website unless you intentionally want shared infrastructure.
 
-## 2. Run the SQL setup
+## 2. The database
 
-Open the Supabase SQL editor and run `supabase-setup.sql`. This creates `waitlist_signups`, duplicate-prevention indexes, constraints, and RLS policies.
+**Do not run `supabase-setup.sql`.** It creates `waitlist_signups` and belongs to the retired
+pre-rebuild system on the **old** Supabase project. It is kept only as a record of what still exists
+there.
 
-When deploying updates to the n8n Foundations interest list, rerun `supabase-setup.sql` so the existing `waitlist_signups` table has `interested_class`, `preferred_setup`, and the expanded experience-level constraint.
+The current project uses three tables, each already created by hand and documented at the repo root:
+
+| File | Table | Holds |
+|---|---|---|
+| `supabase-enrollments.sql` | `enrollments` | The BCAB cohort roll |
+| `supabase-foundations-interest.sql` | `foundations_interest` | Notify-me signups for the next Foundations cohort |
+| `supabase-payment-events.sql` | `payment_events` | Append-only Paystack ledger |
+
+**All three files are documentation, not migrations. Do not run them either — the live database is
+the source of truth.** If you change a table, update its file in the same change.
+
+Row-level security across all three: `anon` may insert into `enrollments` and
+`foundations_interest` and nothing else, and may not touch `payment_events` at all. Reads and
+updates are limited to a single admin email allowlist. Public sign-up must stay **disabled** on the
+project, or anyone could register and reach the roll.
 
 ## 3. Find Supabase URL and anon key
 
@@ -56,17 +72,19 @@ Deploy:
 
 - `confirm-email`
 - `vip-alert`
-- `daily-digest`
 
 Example:
 
 ```bash
 supabase functions deploy confirm-email
 supabase functions deploy vip-alert
-supabase functions deploy daily-digest
 ```
 
-Redeploy `confirm-email` and `daily-digest` after n8n Foundations interest-list changes so confirmation emails and the 10:00 AM GMT digest include the new class fields.
+`daily-digest` is **retired**. Its GitHub Actions trigger was deleted on 10 August 2026 and the
+morning report has stopped. The function source is kept only as a record of what is still
+deployed on the old Supabase project; delete it from that dashboard to remove it entirely.
+
+Redeploy `confirm-email` after n8n Foundations interest-list changes so confirmation emails include the new class fields.
 
 ## 10. Deploy the static site to Cloudflare Pages
 
@@ -94,15 +112,23 @@ Add repository secrets:
 
 These GitHub Actions secret names can keep the `SUPABASE_` prefix. The reserved-prefix restriction applies to Supabase Edge Function custom secrets, where this project uses `PROJECT_URL` and `SERVICE_ROLE_KEY`.
 
-## 13. Manually trigger the daily digest
+## 13. The daily digest (removed)
 
-In GitHub Actions, open `Daily Waitlist Digest` and run `workflow_dispatch`.
+Deleted on 10 August 2026 at the owner's request. `.github/workflows/daily-digest.yml` was the
+only trigger — there is no `pg_cron` job — so removing it stopped the 10:00 AM report. Nothing
+here needs running. The Edge Function remains deployed on the old Supabase project until it is
+deleted from that dashboard.
 
-The scheduled digest runs at 10:00 AM GMT / UTC and lists signups from the previous 24 hours, grouped by workshop/class.
+## 14. Test the enrollment flow
 
-## 14. Test the full waitlist flow
+Use `/certified-automation-builder#enroll`, submit a reservation, and confirm the row lands in
+`public.enrollments` on the current project with `consent_given` true. Verify `/admin` login and
+CSV export — it was rebuilt on 10 August 2026 and now reads `enrollments` on the current project.
+Sign-in that succeeds but shows an empty roll means the `authenticated` select policy does not match
+the account's email.
 
-Use `/price-by-value?source=manual-test`, submit a signup, confirm redirect to `/thank-you`, confirm the database row exists, confirm email delivery, test VIP alert with VIP interest set to `Yes`, and verify `/admin` login and CSV export.
+The Price by Value waitlist flow it replaced was retired on 10 August 2026 along with
+`/price-by-value` and the old `/thank-you` page.
 
 ## 15. Validate the deployment output
 
@@ -120,9 +146,49 @@ Confirm `dist` contains the public site files and route folders:
 - `nfc/`
 - `n8n-foundations/`
 - `n8n-automation-builder-pathway/`
-- `price-by-value/`
-- `thank-you/`
+- `certified-automation-builder/`
+- `standard/`
+- `_redirects`
 - `robots.txt`
 - `sitemap.xml`
 
 Confirm `dist` does not contain `.git`, `.github`, `.wrangler`, `supabase`, `supabase-setup.sql`, README/deployment docs, test plans, gitleaks config, or backend/dev files.
+
+## Environment variables (required)
+
+The Supabase values are injected into the bundle at build time. They are not committed —
+source files carry `__SUPABASE_URL__` / `__SUPABASE_ANON_KEY__` tokens, and `scripts/build.js`
+substitutes them while writing `dist/`.
+
+Set both in the Cloudflare Pages project, under **Settings -> Environment variables**:
+
+| Variable | Value |
+|---|---|
+| `SUPABASE_URL` | The training project URL, `https://<ref>.supabase.co` |
+| `SUPABASE_ANON_KEY` | The anon/public key for that project |
+
+**Set them for Production *and* Preview.** Cloudflare keeps the two scopes separate, and the
+build guard fires in both. Setting only Production leaves every pull-request preview build
+failing, which is what makes a red check on an open PR look like a code problem when it is not.
+
+Newer Supabase projects label this key **publishable** and issue it in the `sb_publishable_…`
+form rather than the older `eyJ…` JWT. Either works — `SUPABASE_ANON_KEY` is just the name this
+build gives whatever public key the project hands out.
+
+The anon key is public by design — it reaches the browser either way — and row-level security
+limits it to inserting into `public.enrollments`. It cannot read the roll or mark anyone paid.
+
+**A production build with either value missing fails.** `scripts/build.js` exits non-zero when
+`CF_PAGES` is set and the values are absent, because a deploy that silently shipped a dead
+enrollment form would cost seats. This is the guard working, not a bug — the fix is always to
+supply the variables, never to relax the check. To reproduce a Cloudflare build locally,
+including the guard:
+
+```bash
+CF_PAGES=1 npm run build      # passes only when both values are resolvable
+``` Locally, and in CI — which only validates HTML and has no
+business holding secrets — the build warns instead and the form politely refuses, directing
+visitors to WhatsApp.
+
+For local development, put the same two values in a `.env` at the repo root. It is gitignored.
+See `.env.example`.

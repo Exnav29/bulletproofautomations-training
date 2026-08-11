@@ -1,0 +1,324 @@
+Privacy Policy
+
+Last updated: August 10, 2026
+
+1. Introduction
+
+Bulletproof Automations respects the privacy of individuals who visit our websites, enroll in our training programs, participate in our communities, apply for certification, or otherwise interact with us.
+
+This Privacy Policy explains how Bulletproof Automations collects, uses, stores, discloses, and protects personal information in connection with the Bulletproof Automation Builder Pathway, our training programs, certification activities, websites, communities, and related services.
+
+Bulletproof Automations is a United States-based company operating from Florida and serving learners, candidates, customers, and organizations in the United States and internationally.
+
+By using our website or providing personal information to us, you acknowledge the practices described in this Privacy Policy.
+
+2. Information we collect
+
+The information we collect depends on how you interact with us.
+
+Information you provide directly
+
+We may collect:
+
+your full name;
+email address;
+telephone or WhatsApp number;
+country or general location;
+employer or professional information that you choose to provide;
+program or cohort selections;
+payment option or payment-plan selections;
+enrollment and attendance information;
+portfolio submissions;
+workflow exports, screenshots, documentation, and other training artifacts;
+certification applications and assessment information;
+communications sent through email, Slack, WhatsApp, forms, or other support channels;
+feedback and survey responses;
+testimonials, photographs, portfolio links, or other materials where you have agreed to provide them; and
+other information you voluntarily submit.
+
+We do not ask learners to provide passwords, API keys, private credentials, or unnecessary sensitive information as part of normal enrollment.
+
+3. Payment information
+
+Payments may be processed by third-party payment processors, including Paystack or other providers that Bulletproof Automations may use from time to time.
+
+Bulletproof Automations may receive transaction-related information such as:
+
+customer name;
+email address;
+transaction reference;
+payment amount;
+payment status;
+program purchased; and
+payment method category.
+
+We generally do not receive or store full payment-card numbers when those details are entered directly into a payment processor’s systems.
+
+Payment providers process information under their own terms and privacy practices.
+
+4. Information collected automatically
+
+When you use our websites, we or our infrastructure providers may automatically receive information such as:
+
+IP address;
+browser type;
+device type;
+operating system;
+referring page or website;
+pages visited;
+approximate access time;
+security and server-log information; and
+other technical information reasonably necessary to operate and protect the website.
+
+If we introduce analytics, cookies, advertising technology, or other forms of tracking that materially change the information we collect, we will update this Policy and provide any notices or choices required by applicable law.
+
+5. How we use information
+
+We may use personal information to:
+
+process registrations and enrollments;
+administer training cohorts;
+process and reconcile payments;
+manage installment arrangements;
+provide course materials and community access;
+communicate schedules, requirements, deadlines, setup instructions, and program updates;
+respond to questions and support requests;
+administer certification assessments;
+score and review candidate work;
+maintain credential and certification records;
+administer retakes, remediation, appeals, and recertification;
+issue and verify credentials;
+maintain training and assessment integrity;
+prevent fraud, abuse, cheating, or unauthorized access;
+improve our programs and services;
+maintain the security and reliability of our systems;
+comply with legal, tax, accounting, regulatory, and recordkeeping obligations;
+enforce our agreements and policies; and
+protect the legitimate interests of Bulletproof Automations, our learners, candidates, customers, and partners.
+
+We seek to collect and use only information reasonably necessary for these purposes.
+
+6. Program communications
+
+If you register for or purchase a Bulletproof Automations program, we may send communications necessary to administer that service.
+
+These may include:
+
+enrollment confirmations;
+payment notices;
+session reminders;
+setup instructions;
+deadline notifications;
+assessment scheduling;
+certification notices; and
+important policy or program changes.
+
+Depending on the information you provide and the program you join, we may communicate through email, WhatsApp, Slack, or another stated program channel.
+
+Transactional or program-administration communications are not marketing communications and may continue even if you opt out of promotional messages.
+
+7. Marketing communications
+
+Where permitted by law, we may send information about future Bulletproof Automations programs, events, services, or opportunities.
+
+You may opt out of promotional email communications by following the unsubscribe instructions provided or by contacting us.
+
+Opting out of marketing does not prevent us from sending communications necessary to administer a service you purchased or requested.
+
+8. Slack, WhatsApp, and community spaces
+
+Bulletproof Automations may use Slack, WhatsApp, or similar services for cohort communication, learner support, payment-plan coordination, and community activities.
+
+Information posted in shared community areas may be visible to other participants.
+
+Participants should never post:
+
+passwords;
+API keys;
+authentication tokens;
+payment credentials;
+confidential employer information;
+sensitive client information; or
+information they do not have authority to disclose.
+
+Third-party community platforms operate under their own terms and privacy policies.
+
+9. Training and portfolio materials
+
+Training may require learners to create or submit:
+
+workflow exports;
+screenshots;
+README files;
+project documentation;
+capstone projects;
+portfolio evidence; and
+other learning artifacts.
+
+Learners are responsible for ensuring that submitted materials do not contain information they are not authorized to disclose.
+
+Bulletproof Automations may retain submitted materials for purposes including:
+
+evaluation;
+program administration;
+certification eligibility;
+instructor review;
+quality assurance;
+dispute resolution;
+assessment calibration; and
+program improvement.
+
+We will not publicly publish an identifiable learner’s portfolio, photograph, testimonial, project, or similar material without permission.
+
+10. Certification and assessment records
+
+Candidates participating in a Bulletproof Automations certification process may have additional records maintained, including:
+
+candidate identity;
+eligibility status;
+assessment attempts;
+scores;
+assessor comments;
+assessment artifacts;
+remediation requirements;
+appeal records;
+certification status;
+credential identifier;
+issue date;
+expiration date; and
+recertification history.
+
+Professional certification records may be retained longer than ordinary course records because they are necessary to maintain the integrity, verification, appeals, renewal, and historical record of the credentialing system.
+
+11. Public credential verification
+
+Where Bulletproof Automations provides a public credential-verification service, limited certification information may be publicly displayed.
+
+That information may include:
+
+credential holder’s name;
+credential earned;
+credential ID;
+issue date;
+expiration date;
+current credential status;
+certification-standard version; and
+assessment platform or environment.
+
+We will not publish assessment scores, private assessor comments, remediation records, addresses, telephone numbers, or payment information through the public verification system.
+
+12. How we disclose information
+
+Bulletproof Automations does not sell personal information to data brokers or advertisers.
+
+We may disclose information to service providers that help us operate our business, such as providers of:
+
+payment processing;
+database services;
+web hosting;
+communications;
+community platforms;
+email delivery;
+storage;
+security;
+analytics;
+document management; and
+related infrastructure.
+
+We may also disclose information:
+
+when required by law, subpoena, court order, or valid governmental request;
+to investigate fraud, misuse, security incidents, or unlawful activity;
+to enforce our agreements or protect our rights;
+to protect the safety or rights of learners, candidates, customers, or others;
+in connection with a merger, acquisition, restructuring, sale, or transfer of all or part of the business, subject to applicable legal requirements.
+13. International users and international processing
+
+Bulletproof Automations serves users in multiple countries.
+
+Some service providers used by Bulletproof Automations may process or store information outside your country of residence.
+
+Depending on where you live, applicable law may provide additional privacy rights or impose additional requirements.
+
+Where required, Bulletproof Automations will honor mandatory rights applicable to the processing of your personal information.
+
+14. Data security
+
+Bulletproof Automations uses reasonable administrative, technical, and organizational safeguards intended to protect personal information from unauthorized access, use, disclosure, alteration, destruction, or loss.
+
+Florida law also imposes requirements concerning reasonable measures to protect personal information and notification following certain breaches of security.
+
+No internet-based system can guarantee absolute security.
+
+Users remain responsible for protecting their own accounts, passwords, credentials, devices, and systems.
+
+15. Data retention
+
+We retain information for as long as reasonably necessary for the purposes for which it was collected and for legitimate legal and business needs.
+
+Retention may include time necessary to:
+
+administer a program;
+maintain financial and tax records;
+verify certifications;
+administer appeals and recertification;
+investigate disputes;
+prevent fraud or abuse;
+maintain security records; and
+comply with applicable laws.
+
+Different categories of information may have different retention periods.
+
+When information is no longer reasonably required, we may delete, anonymize, or securely archive it.
+
+16. Privacy rights
+
+Depending on where you live, you may have legal rights relating to your personal information.
+
+These may include rights to:
+
+request access to certain information;
+request correction of inaccurate information;
+request deletion where legally available;
+object to or limit certain processing;
+withdraw consent where processing is based on consent; and
+opt out of certain communications.
+
+Not all rights apply in every jurisdiction or circumstance.
+
+We may need to verify your identity before acting on a privacy request.
+
+Requests may be submitted using the contact information below.
+
+17. Children
+
+Bulletproof Automations training and certification programs are intended primarily for adults and working professionals.
+
+We do not knowingly collect personal information from children under 13 through our general website or programs without appropriate authorization.
+
+If we learn that information was collected from a child in violation of applicable law, we will take reasonable steps to delete it.
+
+18. Third-party websites and services
+
+Our websites and course materials may link to third-party websites, APIs, documentation, tools, platforms, or services.
+
+Bulletproof Automations does not control and is not responsible for the privacy, security, content, or availability of third-party services.
+
+Users should review the applicable policies of those providers.
+
+19. Changes to this Privacy Policy
+
+We may revise this Privacy Policy as our business, programs, technology, or legal obligations change.
+
+The current version will be published on our website with the updated date.
+
+Material changes will apply prospectively unless applicable law requires otherwise.
+
+20. Contact us
+
+Questions or requests regarding this Privacy Policy may be directed to:
+
+Bulletproof Automations
+Florida, United States
+Email: training@bulletproofautomations.com
+Website: training.bulletproofautomations.com

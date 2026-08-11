@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- include: head.html title="The competency framework and certification standard — Bulletproof Automations" description="The published standard the Bulletproof Automation Builder Pathway assesses against: seven competency domains, four assessment components, weights, thresholds, and the governance around them. Version 2.0, issued 14 July 2026." canonical="https://training.bulletproofautomations.com/standard" -->
+</head>
+<body>
+<!-- include: header.html nav="standard" -->
+<!-- include: pathway-rail.html -->
+
+<main id="main">
+
+  <!-- 1 · Breadcrumb -->
+  <nav class="crumbs" aria-label="Breadcrumb">
+    <div class="shell">
+      <ol>
+        <li><a href="/">Training</a></li>
+        <li><a href="/pathway">Pathway</a></li>
+        <li aria-current="page">The standard</li>
+      </ol>
+    </div>
+  </nav>
+
+  <!-- 2 · Hero and document metadata -->
+  <section class="section section--ink doc-hero" aria-labelledby="doc-title">
+    <div class="shell">
+      <p class="masthead__eyebrow">Competency framework and certification standard</p>
+      <h1 class="masthead__title" id="doc-title">The standard we assess against.</h1>
+      <p class="masthead__standfirst">Seven competency domains, four assessment components, published weights and published thresholds. This is the document an assessor scores against, and the one a candidate is entitled to read in full before sitting anything.</p>
+
+      <dl class="doc-meta">
+        <div><dt>Version</dt><dd>2.0</dd></div>
+        <div><dt>Issuing body</dt><dd>Bulletproof Automations</dd></div>
+        <div><dt>Owner</dt><dd>Bulletproof Automations</dd></div>
+        <div><dt>Issued</dt><dd><time datetime="2026-07-14">14 July 2026</time></dd></div>
+        <div><dt>Platform basis</dt><dd>n8n 2.31.6</dd></div>
+        <div><dt>Next review</dt><dd><time datetime="2026-12-10">10 December 2026</time></dd></div>
+        <div><dt>Status</dt><dd>Published</dd></div>
+        <div><dt>Copyright</dt><dd>&copy; 2026 Bulletproof Automations. All rights reserved.</dd></div>
+      </dl>
+
+      <p class="doc-print"><button class="btn btn--go" type="button" data-print>Print or save this page as PDF</button></p>
+    </div>
+  </section>
+
+  <!-- 3 · Contents -->
+  <nav class="section toc" aria-labelledby="toc-title">
+    <div class="shell">
+      <h2 class="toc__title" id="toc-title">Contents</h2>
+      <ol class="toc__list">
+        <li><a href="#purpose">Purpose and scope</a></li>
+        <li><a href="#pathway">The pathway</a></li>
+        <li><a href="#stage-1">Stage 1 &mdash; Foundations Certificate</a></li>
+        <li><a href="#stage-2">Stage 2 &mdash; Certified Automation Builder</a></li>
+        <li><a href="#components">Assessment components and coverage</a></li>
+        <li><a href="#thresholds">The passing standard</a></li>
+        <li><a href="#safety">Critical safety failures</a></li>
+        <li><a href="#outcomes">Outcomes and retakes</a></li>
+        <li><a href="#routes">Entry routes</a></li>
+        <li><a href="#stage-3">Stage 3 &mdash; Certified Automation Engineer</a></li>
+        <li><a href="#integrity">Assessment integrity</a></li>
+        <li><a href="#hiring">Use as a hiring standard</a></li>
+        <li><a href="#issuance">Credential issuance and validity</a></li>
+        <li><a href="#calibration">Provisional standards and calibration</a></li>
+        <li><a href="#independence">Independence statement</a></li>
+        <li><a href="#copyright">Copyright, revisions and download</a></li>
+      </ol>
+    </div>
+  </nav>
+
+  <!-- 4 · Purpose and scope -->
+  <section class="section" id="purpose" aria-labelledby="purpose-title">
+    <div class="shell prose">
+      <p class="sec-ref">Framework section 1</p>
+      <h2 class="section__title" id="purpose-title">Purpose and scope</h2>
+      <p class="lede">This framework defines the credentials issued under the Bulletproof Automation Builder Pathway: what each attests, what evidence is required, how it is assessed, and where the pass line sits.</p>
+      <p>It exists so that candidates know what is being measured, assessors apply one standard, and employers &mdash; including Bulletproof Automations itself &mdash; can interpret what a holder can actually do.</p>
+      <div class="limit">
+        <p class="limit__label">The subject of this pathway is automation engineering</p>
+        <p>n8n is the platform on which competence is currently demonstrated, not the subject being certified. This distinction is deliberate and protects the credential&rsquo;s value against platform change.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 · The pathway -->
+  <section class="section" id="pathway" aria-labelledby="pathway-title">
+    <div class="shell">
+      <p class="sec-ref">Framework section 2</p>
+      <h2 class="section__title" id="pathway-title">The pathway</h2>
+
+      <section class="dtable-wrap" tabindex="0" aria-label="The three stages of the pathway">
+        <table class="dtable">
+          <caption class="vh">The three stages of the Bulletproof Automation Builder Pathway</caption>
+          <thead>
+            <tr><th scope="col">Stage</th><th scope="col">Credential</th><th scope="col">Type</th><th scope="col">What it establishes</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">1</th>
+              <td><strong>Bulletproof Automation Foundations Certificate</strong></td>
+              <td>Certificate of completion</td>
+              <td>Completed foundational training and demonstrated basic workflow-building proficiency</td>
+            </tr>
+            <tr>
+              <th scope="row">2</th>
+              <td><strong>Bulletproof Certified Automation Builder</strong> (BCAB)</td>
+              <td>Professional certification</td>
+              <td>Can independently design, integrate, troubleshoot, test, and document moderately complex automation systems</td>
+            </tr>
+            <tr>
+              <th scope="row">3</th>
+              <td><strong>Bulletproof Certified Automation Engineer</strong> (BCAE)</td>
+              <td>Professional certification</td>
+              <td>Can architect, deploy, secure, operate, monitor, and govern production automation systems</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+      <p class="dtable-hint dtable-hint--wide">Scroll the table sideways to see every column.</p>
+
+      <p class="note">Stage 1 is active. Stage 2 launches with the first Intermediate cohort. Stage 3 is defined but not issued.</p>
+
+      <div class="prose">
+        <div class="limit">
+          <p class="limit__label">Training and certification are separate products</p>
+          <p>Completing a cohort does not confer a certification. It qualifies the learner to attempt the assessment.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 · Stage 1 -->
+  <section class="section section--sand" id="stage-1" aria-labelledby="stage1-title">
+    <div class="shell prose">
+      <p class="sec-ref">Framework section 3</p>
+      <h2 class="section__title" id="stage1-title">Stage 1 &mdash; Bulletproof Automation Foundations Certificate</h2>
+
+      <div class="limit">
+        <p class="limit__label">This is a certificate of completion, not a professional certification</p>
+        <p>It makes no independent competency claim beyond readiness to progress. This is stated on the certificate itself.</p>
+      </div>
+
+      <h3 class="sub">What it attests</h3>
+      <p>The holder completed the Foundations training programme and demonstrated the ability to:</p>
+      <ul class="bullets">
+        <li>navigate n8n and describe workflow structure in plain language;</li>
+        <li>build a workflow from trigger to output;</li>
+        <li>inspect items, fields, and JSON, and read node input and output;</li>
+        <li>use expressions to move data between nodes;</li>
+        <li>connect an application using a safely stored credential;</li>
+        <li>make a basic API request and read the response;</li>
+        <li>apply IF and Switch logic with a fallback;</li>
+        <li>implement basic error handling;</li>
+        <li>add a controlled AI step;</li>
+        <li>test multiple paths, including one handled failure;</li>
+        <li>export, document, and explain a workflow.</li>
+      </ul>
+
+      <h3 class="sub">Award standard</h3>
+      <p>Three requirements, all mandatory:</p>
+      <ol class="bullets bullets--num">
+        <li><strong>Participation</strong> &mdash; meets the published attendance minimum.</li>
+        <li><strong>Portfolio evidence</strong> &mdash; submits the required weekly artifacts (workflow export, screenshots, notes) for each class.</li>
+        <li><strong>Capstone</strong> &mdash; completes the capstone to the published specification and explains it satisfactorily in the walkthrough.</li>
+      </ol>
+      <p>There is no separate examination and no direct-entry route. A certificate of completion cannot be awarded for training that was not completed.</p>
+
+      <h3 class="sub">Certificate wording</h3>
+      <blockquote class="quote">
+        <p>[Name] completed the Bulletproof Automation Foundations programme and demonstrated the foundational skills required to progress to intermediate automation training. This certificate records completion of training. It is not a professional certification.</p>
+      </blockquote>
+
+      <a class="link-arrow" href="/foundations">The Foundations cohort
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
+      </a>
+    </div>
+  </section>
+
+  <!-- 7 · Stage 2 -->
+  <section class="section section--ink" id="stage-2" aria-labelledby="stage2-title">
+    <div class="shell">
+      <p class="sec-ref">Framework section 4</p>
+      <h2 class="section__title" id="stage2-title">Stage 2 &mdash; Bulletproof Certified Automation Builder</h2>
+      <p class="lede">The holder can independently take a moderately complex automation requirement and design, build, integrate, harden, document, and maintain a solution &mdash; and can diagnose a malfunctioning system they did not build.</p>
+
+      <div class="callout callout--legal">
+        <p><strong>Stated limitation on the credential.</strong> It does not attest to competence in scaling, infrastructure administration, deployment pipelines, or enterprise security architecture. Those are Stage 3.</p>
+      </div>
+
+      <h3 class="sub">The seven competency domains</h3>
+      <ol class="domains">
+        <li class="domain"><p class="domain__n">01</p><h4 class="domain__name">Data Engineering</h4><p class="domain__what">Transform nested, multi-item, inconsistent, and incomplete workflow data</p></li>
+        <li class="domain"><p class="domain__n">02</p><h4 class="domain__name">Integrations &amp; APIs</h4><p class="domain__what">Build integrations from API documentation rather than step-by-step instructions</p></li>
+        <li class="domain"><p class="domain__n">03</p><h4 class="domain__name">Workflow Architecture</h4><p class="domain__what">Decompose automation systems into maintainable workflows and reusable components</p></li>
+        <li class="domain"><p class="domain__n">04</p><h4 class="domain__name">Logic &amp; State</h4><p class="domain__what">Design decision paths, fallbacks, duplicate prevention, and state-aware processing</p></li>
+        <li class="domain"><p class="domain__n">05</p><h4 class="domain__name">Reliability</h4><p class="domain__what">Design retries, error paths, validation, recovery, and observable failure behaviour</p></li>
+        <li class="domain"><p class="domain__n">06</p><h4 class="domain__name">Troubleshooting</h4><p class="domain__what">Diagnose workflows the candidate did not originally build</p></li>
+        <li class="domain"><p class="domain__n">07</p><h4 class="domain__name">AI Automation</h4><p class="domain__what">Use AI selectively inside controlled workflows, with validation and deterministic safeguards</p></li>
+      </ol>
+      <p class="note"><strong>Documentation and communication are assessed within every domain</strong>, not as a separate subject. A candidate who cannot explain a design has not demonstrated the domain.</p>
+    </div>
+  </section>
+
+  <!-- 8 · Assessment components and coverage -->
+  <section class="section" id="components" aria-labelledby="components-title">
+    <div class="shell">
+      <p class="sec-ref">Framework sections 4.3 to 4.7</p>
+      <h2 class="section__title" id="components-title">Assessment components and coverage</h2>
+
+      <section class="dtable-wrap" tabindex="0" aria-label="The four assessment components">
+        <table class="dtable">
+          <caption class="vh">The four assessment components, their weights and how each is delivered</caption>
+          <thead>
+            <tr><th scope="col">Part</th><th scope="col">Component</th><th scope="col">Weight</th><th scope="col">Delivery</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">1</th><td>Knowledge &amp; Scenario Judgment</td><td class="num">20%</td><td>Timed, written. Judgment scenarios, not definitions.</td></tr>
+            <tr><th scope="row">2</th><td>Practical Build Challenge</td><td class="num">35%</td><td>Business requirement, unseen. Candidate chooses the approach.</td></tr>
+            <tr><th scope="row">3</th><td>Troubleshooting Challenge</td><td class="num">30%</td><td>Live, timeboxed, supervised. Workflow the candidate did not build.</td></tr>
+            <tr><th scope="row">4</th><td>Architecture Walkthrough</td><td class="num">15%</td><td>Live, 5&ndash;10 minutes plus follow-up questions.</td></tr>
+          </tbody>
+        </table>
+      </section>
+      <p class="dtable-hint dtable-hint--wide">Scroll the table sideways to see every column.</p>
+
+      <h3 class="sub">Domain-to-component coverage</h3>
+      <p class="lede">Every domain must be evidenced by at least two components. This prevents gaps, and prevents any single domain being judged on one artifact.</p>
+
+      <section class="dtable-wrap" tabindex="0" aria-label="Domain to component coverage map">
+        <table class="dtable dtable--matrix">
+          <caption class="vh">Which assessment component evidences each competency domain</caption>
+          <thead>
+            <tr>
+              <th scope="col">Domain</th>
+              <th scope="col"><abbr title="Part 1 — Knowledge and Scenario Judgment">P1</abbr></th>
+              <th scope="col"><abbr title="Part 2 — Practical Build Challenge">P2</abbr></th>
+              <th scope="col"><abbr title="Part 3 — Troubleshooting Challenge">P3</abbr></th>
+              <th scope="col"><abbr title="Part 4 — Architecture Walkthrough">P4</abbr></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">1. Data Engineering</th>
+              <td><span class="vh">Assessed</span><i class="dot" aria-hidden="true"></i></td>
+              <td><span class="vh">Assessed</span><i class="dot" aria-hidden="true"></i></td>
+              <td><span class="vh">Assessed</span><i class="dot" aria-hidden="true"></i></td>
+              <td><span class="vh">Not assessed</span></td></tr>
+            <tr><th scope="row">2. Integrations &amp; APIs</th>
+              <td><span class="vh">Assessed</span><i class="dot" aria-hidden="true"></i></td>
+              <td><span class="vh">Assessed</span><i class="dot" aria-hidden="true"></i></td>
+              <td><span class="vh">Assessed</span><i class="dot" aria-hidden="true"></i></td>
+              <td><span class="vh">Assessed</span><i class="dot" aria-hidden="true"></i></td></tr>
+            <tr><th scope="row">3. Workflow Architecture</th>
+              <td><span class="vh">Assessed</span><i class="dot" aria-hidden="true"></i></td>
+              <td><span class="vh">Assessed</span><i class="dot" aria-hidden="true"></i></td>
+              <td><span class="vh">Not assessed</span></td>
+              <td><span class="vh">Assessed</span><i class="dot" aria-hidden="true"></i></td></tr>
+            <tr><th scope="row">4. Logic &amp; State</th>
+              <td><span class="vh">Assessed</span><i class="dot" aria-hidden="true"></i></td>
+              <td><span class="vh">Assessed</span><i class="dot" aria-hidden="true"></i></td>
+              <td><span class="vh">Assessed</span><i class="dot" aria-hidden="true"></i></td>
+              <td><span class="vh">Assessed</span><i class="dot" aria-hidden="true"></i></td></tr>
+            <tr><th scope="row">5. Reliability</th>
+              <td><span class="vh">Assessed</span><i class="dot" aria-hidden="true"></i></td>
+              <td><span class="vh">Assessed</span><i class="dot" aria-hidden="true"></i></td>
+              <td><span class="vh">Assessed</span><i class="dot" aria-hidden="true"></i></td>
+              <td><span class="vh">Assessed</span><i class="dot" aria-hidden="true"></i></td></tr>
+            <tr><th scope="row">6. Troubleshooting</th>
+              <td><span class="vh">Assessed</span><i class="dot" aria-hidden="true"></i></td>
+              <td><span class="vh">Not assessed</span></td>
+              <td><span class="vh">Assessed</span><i class="dot" aria-hidden="true"></i></td>
+              <td><span class="vh">Assessed</span><i class="dot" aria-hidden="true"></i></td></tr>
+            <tr><th scope="row">7. AI Automation</th>
+              <td><span class="vh">Assessed</span><i class="dot" aria-hidden="true"></i></td>
+              <td><span class="vh">Assessed</span><i class="dot" aria-hidden="true"></i></td>
+              <td><span class="vh">Assessed</span><i class="dot" aria-hidden="true"></i></td>
+              <td><span class="vh">Assessed</span><i class="dot" aria-hidden="true"></i></td></tr>
+          </tbody>
+        </table>
+      </section>
+      <p class="dtable-hint dtable-hint--narrow">Scroll the table sideways to see every column.</p>
+
+      <div class="prose">
+        <h3 class="sub">Part 2 &mdash; Practical Build Challenge</h3>
+        <p>The candidate receives a business requirement they have not previously built. <strong>No node-level instructions are given.</strong> The assessment is whether they can translate a business requirement into an automation design.</p>
+        <p>Reference scenario shape, rotated each attempt: a service company receives work requests containing customer name, email, service type, priority, location, and description. The system must validate required information, normalise input, look up external information through an API, route the request, prevent duplicate processing, store the result, handle API failure, and produce a final notification.</p>
+
+        <h3 class="sub">Part 3 &mdash; Troubleshooting Challenge</h3>
+        <p>The candidate receives a workflow they did not build, with the instruction: <em>this workflow has been producing inconsistent results. Investigate it and produce a corrected version plus a short diagnostic report.</em></p>
+        <p><strong>The number of defects is not disclosed.</strong> The task is to determine whether the system is behaving correctly &mdash; not to find a stated quantity of bugs.</p>
+        <p>A rotating subset of the defect bank is seeded per attempt:</p>
+        <ul class="bullets">
+          <li>a field renamed upstream but still referenced downstream</li>
+          <li>wrong IF operator (contains where equals is required, or the reverse)</li>
+          <li>missing fallback route on a Switch</li>
+          <li>duplicate insert with no idempotency guard</li>
+          <li>retry configured on a permanent 4xx error</li>
+          <li>a branch that never reconnects to the output path</li>
+          <li>malformed AI structured output passed downstream unvalidated</li>
+          <li>missing-data path allowed to continue rather than stop</li>
+          <li>API result trusted without validation</li>
+          <li>silent partial failure: fewer records leave than entered</li>
+        </ul>
+        <p>All troubleshooting workflows run on pinned or sandboxed data. <strong>No candidate spends assessment time configuring credentials.</strong></p>
+
+        <h3 class="sub">Part 4 &mdash; Architecture Walkthrough</h3>
+        <p>Five to ten minutes, plus assessor follow-up. The candidate covers: the problem solved, the design, major data structures, where decisions occur, what can fail, what happens when it fails, how duplicate processing is prevented, what they would monitor, and why they chose this design over alternatives.</p>
+        <div class="limit">
+          <p class="limit__label">This component also serves as authorship verification</p>
+          <p>A candidate who cannot answer follow-up questions about their own submission has not demonstrated the competency, regardless of the artifact&rsquo;s quality. This is stated to candidates in advance.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9 · The passing standard -->
+  <section class="section section--ink" id="thresholds" aria-labelledby="thresholds-title">
+    <div class="shell">
+      <p class="sec-ref">Framework section 4.8</p>
+      <h2 class="section__title" id="thresholds-title">The passing standard</h2>
+      <p class="lede">Thresholds for the first assessment cycle are <strong>provisional</strong> and will be confirmed after calibration.</p>
+      <ul class="thresholds">
+        <li><span class="thresholds__v">75%</span><span class="thresholds__k">overall</span></li>
+        <li><span class="thresholds__v">70%</span><span class="thresholds__k">minimum, Practical Build</span></li>
+        <li><span class="thresholds__v">70%</span><span class="thresholds__k">minimum, Troubleshooting</span></li>
+        <li><span class="thresholds__v">50%</span><span class="thresholds__k">no domain below</span></li>
+      </ul>
+      <div class="callout callout--legal">
+        <p>Minimum scores on Parts 2 and 3 are <strong>non-compensatory</strong>. Strong theory cannot offset weak hands-on ability. A candidate who cannot diagnose an unfamiliar fault does not hold this certification.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10 · Critical safety failures -->
+  <section class="section" id="safety" aria-labelledby="safety-title">
+    <div class="shell">
+      <p class="sec-ref">Framework section 4.9</p>
+      <h2 class="section__title" id="safety-title">Critical safety failures</h2>
+      <p class="lede">Certain outcomes trigger <strong>Remediation Required</strong> regardless of overall score.</p>
+      <ul class="safety">
+        <li>Exposing credentials, API keys, or tokens in any submitted artifact</li>
+        <li>Sending sensitive or unnecessary personal data to an AI provider</li>
+        <li>Deleting or modifying production-like data without appropriate safeguards</li>
+        <li>Designing a workflow that silently discards failed records</li>
+        <li>Leaving a critical action entirely dependent on unvalidated AI output</li>
+      </ul>
+      <p class="note">These are professional standards, not scoring criteria. They are published to candidates before assessment.</p>
+    </div>
+  </section>
+
+  <!-- 11 · Outcomes and retakes -->
+  <section class="section" id="outcomes" aria-labelledby="outcomes-title">
+    <div class="shell">
+      <p class="sec-ref">Framework sections 4.10 and 4.11</p>
+      <h2 class="section__title" id="outcomes-title">Outcomes and retakes</h2>
+      <div class="outcomes">
+        <div class="outcome"><h3>Certified</h3><p>Met all requirements. Credential issued.</p></div>
+        <div class="outcome"><h3>Assessment Not Yet Passed</h3><p>Did not reach the standard. Written feedback issued. May reattempt.</p></div>
+        <div class="outcome"><h3>Remediation Required</h3><p>One or more specific competency gaps, or a critical safety failure. Named gaps must be addressed and evidenced before a further attempt.</p></div>
+      </div>
+      <p class="note">The term &ldquo;failed candidate&rdquo; is not used. The assessment measures whether the standard has been reached <em>yet</em>.</p>
+
+      <div class="prose">
+        <h3 class="sub">Retake policy</h3>
+        <ul class="bullets">
+          <li>First reattempt: minimum 7-day wait.</li>
+          <li>Second reattempt: minimum 30-day wait.</li>
+          <li>Third and subsequent: at assessor discretion, following a remediation plan.</li>
+          <li><strong>Every attempt uses a different practical scenario and a different seeded troubleshooting workflow.</strong></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 12 · Entry routes -->
+  <section class="section" id="routes" aria-labelledby="routes-title">
+    <div class="shell">
+      <p class="sec-ref">Framework section 4.12</p>
+      <h2 class="section__title" id="routes-title">Entry routes</h2>
+      <div class="routes">
+        <article class="route">
+          <p class="route__tag">Path A &middot; Training route</p>
+          <h3 class="route__name">Foundations Certificate &rarr; Intermediate Cohort &rarr; BCAB Assessment &rarr; Certified</h3>
+          <p>The taught route. Holding the Foundations Certificate waives the readiness assessment.</p>
+          <a class="event__action" href="/certified-automation-builder#enroll">The Intermediate cohort
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
+          </a>
+        </article>
+        <article class="route">
+          <p class="route__tag">Path B &middot; Experience route</p>
+          <h3 class="route__name">Working practitioner &rarr; Readiness Assessment &rarr; BCAB Assessment &rarr; Certified</h3>
+          <p>Path B candidates are <strong>not required to purchase training</strong>. A readiness assessment establishes that an attempt is realistic; it is advisory, not a gate, and its fee is credited against the assessment fee.</p>
+          <a class="event__action" href="/certified-automation-builder#enroll">Book a readiness review
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
+          </a>
+        </article>
+      </div>
+      <p class="note">Path B is essential to the credential&rsquo;s independence and is to be maintained even when it is commercially inconvenient.</p>
+    </div>
+  </section>
+
+  <!-- 13 · Stage 3 -->
+  <section class="section section--ink" id="stage-3" aria-labelledby="stage3-title">
+    <div class="shell">
+      <p class="sec-ref">Framework section 5</p>
+      <h2 class="section__title" id="stage3-title">Stage 3 &mdash; Bulletproof Certified Automation Engineer</h2>
+      <div class="reserved">
+        <p class="reserved__head">Defined, not yet issued</p>
+        <p>Defined now for pathway clarity; <strong>not to be issued until its standard and assessment are written.</strong></p>
+        <p>Reserved scope: architecture, databases, advanced integrations, security, secrets management, environments, deployment, version control, CI/CD, queue-based processing, scaling, concurrency, observability, recovery, operational ownership, AI governance, human approvals, permissions, production documentation, and system lifecycle management.</p>
+        <p>At this level the platform is the implementation detail, not the subject.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 14 · Assessment integrity -->
+  <section class="section" id="integrity" aria-labelledby="integrity-title">
+    <div class="shell prose">
+      <p class="sec-ref">Framework section 6</p>
+      <h2 class="section__title" id="integrity-title">Assessment integrity</h2>
+      <dl class="spec">
+        <div><dt>Assessor record</dt><dd>Every component is scored per domain with a one-line written justification. The record is retained and forms the basis of any appeal.</dd></div>
+        <div><dt>Second review</dt><dd>Mandatory for any result within 5 percentage points of a threshold, any Remediation Required outcome, and any candidate taught by the assessing assessor.</dd></div>
+        <div><dt>Conflict of interest &mdash; teaching</dt><dd>Where the assessor also taught the candidate, second review applies to all outcomes, not only borderline ones.</dd></div>
+        <div><dt>Conflict of interest &mdash; hiring</dt><dd>See <a href="#hiring">use as a hiring standard</a>.</dd></div>
+        <div><dt>Calibration</dt><dd>Where more than one assessor is active, both independently score the same two submissions each cycle and reconcile before results are issued.</dd></div>
+        <div><dt>Authorship</dt><dd>Part 4 verifies that submitted work is the candidate&rsquo;s own. Parts 1 and 2 are not assumed to be unaided; the live components carry the integrity weight, and this is stated to candidates openly rather than policed covertly.</dd></div>
+        <div><dt>Appeals</dt><dd>Within 14 days, reviewed by an assessor not involved in the original decision.</dd></div>
+        <div><dt>Revocation</dt><dd>For misrepresentation of the credential, or submitted work later shown not to be the candidate&rsquo;s own.</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <!-- 15 · Use as a hiring standard -->
+  <section class="section section--ink" id="hiring" aria-labelledby="hiring-title">
+    <div class="shell">
+      <p class="sec-ref">Framework section 7</p>
+      <h2 class="section__title" id="hiring-title">Use as a hiring standard</h2>
+      <p class="lede">Bulletproof Automations uses BCAB as a minimum competency standard for automation roles. This is published, because a credential with a real consumer is worth more than one without.</p>
+
+      <div class="callout callout--legal">
+        <p>BCAB is a minimum standard for automation roles at Bulletproof Automations. Holding it does not constitute an application, offer, or guarantee of employment.</p>
+      </div>
+
+      <ol class="bullets bullets--num">
+        <li><strong>Separation of decisions.</strong> Certification outcomes are determined solely against this framework. Hiring interest, or its absence, is not a factor in any assessment decision and is not discussed with the assessor before an outcome is issued.</li>
+        <li><strong>No implied employment.</strong> Certification is not an offer, promise, or indication of employment. No marketing material for the pathway may suggest that certification leads to work at Bulletproof Automations.</li>
+        <li><strong>Documented basis.</strong> Because outcomes may affect employment prospects, the per-domain score record, second review, and appeals route apply without exception.</li>
+      </ol>
+
+      <a class="link-arrow" href="/builder-pool">The builder pool and hiring standard
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
+      </a>
+    </div>
+  </section>
+
+  <!-- 16 · Credential issuance and validity -->
+  <section class="section" id="issuance" aria-labelledby="issuance-title">
+    <div class="shell prose">
+      <p class="sec-ref">Framework section 8</p>
+      <h2 class="section__title" id="issuance-title">Credential issuance and validity</h2>
+      <dl class="spec">
+        <div><dt>Credential ID</dt><dd>Unique, non-sequential, issued per credential</dd></div>
+        <div><dt>Verification</dt><dd>Public page: holder name, credential, issue date, platform version, current status. <a href="/verify">Verify a credential</a>.</dd></div>
+        <div><dt>Platform version</dt><dd>Recorded on the credential &mdash; for example, &ldquo;assessed against n8n 2.31.6&rdquo;</dd></div>
+        <div><dt>Validity &mdash; Foundations Certificate</dt><dd>Does not expire. It records completion of training on a date.</dd></div>
+        <div><dt>Validity &mdash; BCAB</dt><dd>24 months</dd></div>
+        <div><dt>Recertification</dt><dd>Submit one current workflow demonstrating continued practice, plus a short update assessment covering platform change since issue</dd></div>
+        <div><dt>Permitted description</dt><dd>Supplied with each credential. Holders may not describe it as an n8n certification.</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <!-- 17 · Provisional standards and calibration -->
+  <section class="section section--sand" id="calibration" aria-labelledby="calibration-title">
+    <div class="shell prose">
+      <p class="sec-ref">Framework sections 9 and 10</p>
+      <h2 class="section__title" id="calibration-title">Provisional standards and calibration</h2>
+      <p class="lede">The thresholds above are set before any candidate has been assessed, and are therefore <strong>provisional</strong>. We say so rather than imply a rigour we have not yet earned.</p>
+
+      <h3 class="sub">Calibration protocol</h3>
+      <ol class="bullets bullets--num">
+        <li>Assess cohort one against the provisional thresholds.</li>
+        <li>Record the full score distribution per component and per domain.</li>
+        <li>Review item-level performance in Part 1, score spread in Parts 2 and 3, and any component where nearly all candidates cluster at one end &mdash; a sign the instrument, not the candidates, needs work.</li>
+        <li>Confirm or revise thresholds and publish them as Version 3.0 with the reasoning.</li>
+        <li><strong>Candidates assessed under provisional thresholds are not disadvantaged by any subsequent increase; results stand as issued.</strong></li>
+      </ol>
+      <p>Standard-setting after piloting is normal practice and is a credibility asset, not a weakness.</p>
+
+      <h3 class="sub">Outcome tracking</h3>
+      <p>Recorded from cohort one, with holder consent:</p>
+      <ul class="bullets">
+        <li>numbers assessed, certified, not yet passed, and remediation required &mdash; per cycle, published annually;</li>
+        <li>portfolio links, where holders permit publication;</li>
+        <li>self-reported outcomes at 6 and 18 months (paid automation work, role change, projects shipped).</li>
+      </ul>
+      <p>This record is the primary long-term asset of the programme. It is built from the outset rather than reconstructed later.</p>
+    </div>
+  </section>
+
+  <!-- 18 · Independence statement -->
+  <section class="section" id="independence" aria-labelledby="independence-title">
+    <div class="shell prose">
+      <p class="sec-ref">Framework section 11</p>
+      <h2 class="section__title" id="independence-title">Independence statement</h2>
+      <p class="lede">Bulletproof Automations is an independent training and certification provider. This framework and the credentials issued under it are not affiliated with, endorsed by, or accredited by n8n GmbH or any other vendor. &ldquo;n8n&rdquo; is referenced descriptively as the platform on which competence is currently assessed. Vendor certifications are held separately and additionally.</p>
+    </div>
+  </section>
+
+  <!-- 19 · Copyright, revisions and download -->
+  <section class="section section--ink" id="copyright" aria-labelledby="copyright-title">
+    <div class="shell">
+      <p class="sec-ref">Framework section 12</p>
+      <h2 class="section__title" id="copyright-title">Copyright, revisions and download</h2>
+
+      <div class="prose">
+        <p class="lede">&copy; 2026 Bulletproof Automations. All rights reserved.</p>
+        <p>This framework, the Bulletproof Automation Builder Pathway, and the credential names issued under it &mdash; Bulletproof Automation Foundations Certificate, Bulletproof Certified Automation Builder (BCAB), and Bulletproof Certified Automation Engineer (BCAE) &mdash; are the property of Bulletproof Automations.</p>
+        <p><strong>Permitted.</strong> Reading, citing, and linking to this framework. Candidates and employers may reproduce short extracts to explain what a credential attests, provided the source and version are named.</p>
+        <p><strong>Not permitted without prior written permission from Bulletproof Automations.</strong> Reproducing or redistributing this document in whole or in substantial part; adapting it into another framework, syllabus, or rubric; or using it to assess candidates or to award, imply, or endorse any credential.</p>
+      </div>
+
+      <h3 class="sub">Revision history</h3>
+      <section class="dtable-wrap" tabindex="0" aria-label="Revision history">
+        <table class="dtable dtable--onink">
+          <caption class="vh">Revision history of this framework</caption>
+          <thead>
+            <tr><th scope="col">Version</th><th scope="col">Date</th><th scope="col">Change</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">1.0</th><td><time datetime="2026-05-26">26 May 2026</time></td><td>Initial draft</td></tr>
+            <tr><th scope="row">2.0 (draft)</th><td><time datetime="2026-07-01">1 July 2026</time></td><td>Certificate/certification split; seven domains; four assessment components; provisional thresholds; hiring-standard governance</td></tr>
+            <tr><th scope="row">2.0</th><td><time datetime="2026-07-14">14 July 2026</time></td><td>Published</td></tr>
+          </tbody>
+        </table>
+      </section>
+      <p class="dtable-hint dtable-hint--wide">Scroll the table sideways to see every column.</p>
+
+      <p class="doc-print"><button class="btn btn--go" type="button" data-print>Print or save this page as PDF</button></p>
+      <p class="note">This page is the authoritative version. Printing it produces a clean copy with the site navigation removed.</p>
+    </div>
+  </section>
+
+</main>
+
+<!-- include: footer.html -->
+</body>
+</html>

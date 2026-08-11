@@ -20,3 +20,9 @@ secrets.*
 local-secrets.*
 
 supabase/.temp/
+
+# Internal-only teaching materials — repo is public, these must never be committed
+docs/n8n_Foundations_Beginner_Cohort_Teaching_Guide.pdf
+
+# LibreOffice lock files
+.~lock.*#

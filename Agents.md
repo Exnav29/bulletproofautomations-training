@@ -11,11 +11,12 @@ Hard rules:
    as they are (field names: name, email, phone, looking_for, email_opt_in,
    source, campaign, entry_page; action: the n8n.bulletproofautomations.com webhook).
 3. NEVER change column names in supabase-setup.sql or the payload keys inserted
-   into waitlist_signups from price-by-value/index.html and n8n-foundations/index.html.
-   The admin dashboard, three Edge Functions, and the daily digest all read these.
-4. NEVER modify .github/workflows/daily-digest.yml behavior (cron 0 10 * * *,
-   secrets SUPABASE_DAILY_DIGEST_URL and SUPABASE_SERVICE_ROLE_KEY) unless the
-   task explicitly says to.
+   into waitlist_signups from n8n-foundations/index.html. The admin dashboard and
+   the remaining Edge Functions read these. (price-by-value/index.html was deleted
+   on 10 August 2026 when that workshop was retired.)
+4. The daily digest is gone. .github/workflows/daily-digest.yml was deleted on
+   10 August 2026 at the owner's request — the morning report is no longer wanted.
+   Do not reinstate it.
 5. Keep the site framework-free and build-free: plain HTML/CSS/JS, folder-based
    routes (route/index.html). Do not introduce bundlers, npm dependencies for the
    site itself, or a build command.
