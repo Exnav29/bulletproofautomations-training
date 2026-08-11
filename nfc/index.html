@@ -76,6 +76,11 @@
 
   /* ============ LAYOUT: identity panel + form ============ */
   .stage {
+    /* Contains the decorative web mark, which is offset past the right edge on
+       purpose. Without this it pushed the document 116px wider than the
+       viewport on every phone size. clip rather than hidden: no scroll
+       container, no effect on vertical overflow. */
+    overflow-x: clip;
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 64px;

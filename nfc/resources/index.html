@@ -61,7 +61,11 @@
   .wrap { max-width: 960px; margin: 0 auto; padding: 0 24px; }
 
   /* ============ HERO ============ */
-  .hero { padding: 72px 0 48px; position: relative; overflow: visible; }
+  /* overflow-x: clip contains the decorative mark's negative right offset
+     without creating a scroll container, so the page cannot gain
+     horizontal scroll and sticky/vertical behaviour is untouched.
+     overflow: visible previously let it push the document 116px wide. */
+  .hero { padding: 72px 0 48px; position: relative; overflow-x: clip; }
 
   .web-mark {
     position: absolute;

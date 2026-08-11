@@ -155,7 +155,25 @@ Every one renders in conspicuous dashed marigold. **Nothing ships with one still
   owner asked to be gone is a redeploy risk. `confirm-email` and `vip-alert` remain and are now
   equally dead, since the pages that called them are retired — **awaiting a decision.**
 
-- **Unresolved and needing a browser: mobile horizontal overflow.** The second audit measured
+- **Mobile overflow — `/nfc` and `/nfc/resources` FIXED 11 August 2026; `/standard` still open.**
+  Johnathan supplied precise measurements from a local browser.
+
+  **NFC (fixed).** The decorative Ananse Ntontan `.web-mark` SVG is absolutely positioned with
+  `right: -140px` on purpose, and `.hero` even declared `overflow: visible`. At 430px that put its
+  right edge at 546px — a constant +116px on every phone size, on both pages. Both containers now
+  use `overflow-x: clip`, which contains it without creating a scroll container or touching
+  vertical overflow. The decoration is unchanged; it is simply clipped at the edge, which is what
+  bleeding a watermark off the page was always meant to look like.
+
+  **`/standard` (open).** Reported as the `.dtable` tables, but the numbers rule that out: the
+  document's `scrollWidth` is a **constant 409px** at both 320 and 375 viewports (deltas 89 and 34,
+  and 0 at 430). A leaking 544px table starting at x=21 would give a delta of 245, not 89, and the
+  measurement confirms `.dtable-wrap` is scrolling correctly — width 280, scrollWidth 544,
+  clientWidth 278. Something else on that page is fixed at ~409px wide. **Not yet identified**, and
+  deliberately not blind-patched.
+
+- ~~Unresolved and needing a browser: mobile horizontal overflow.~~ (superseded by the entry above)
+  **Original note:** The second audit measured
   document widths exceeding the viewport on `/foundations` (320/375/430), `/standard` (320/375),
   and `/nfc` + `/nfc/resources` (320/375/430, reaching 546px). I could not reproduce or diagnose
   it — `box-sizing: border-box` is global, `.shell` is sound, every grid collapses at small
