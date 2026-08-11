@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Enrollments — Bulletproof Automations Training</title>
+<title>Enrollments and payments — Bulletproof Automations Training</title>
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="/assets/fonts/archivo-latin-variable.woff2" as="font" type="font/woff2" crossorigin>
 <!-- The public stylesheet carries the tokens, the self-hosted face and the base
@@ -162,6 +162,31 @@
     border-right-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { .spin { animation-duration: 2s; } }
+
+  /* --- Payments --------------------------------------------------------
+     The roll answers "where does this learner stand". This answers "what did
+     Paystack actually say, and when" — the only thing that settles a dispute
+     or a double charge. Read-only by design: nothing here writes, because the
+     ledger is the evidence and evidence you can edit is not evidence. */
+
+  .sec-gap { margin-top: var(--s8); padding-top: var(--s6); border-top: 2px solid var(--rule-strong); }
+  .sec-gap__lede { margin: calc(var(--s4) * -1) 0 var(--s5); font-size: 0.875rem; color: var(--muted);
+    line-height: 1.55; max-width: 60ch; }
+
+  /* A failed signature is not a deadline, so it does not take marigold.
+     Scoped to this page so the public palette keeps its three meanings. */
+  .tag--bad { border-color: #b3261e; color: #b3261e; }
+  .tag--ok { border-color: var(--verified); color: var(--verified); }
+  .board__cell--alarm .board__v { color: #b3261e; }
+
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.8125rem; word-break: break-all; }
+
+  .raw { margin-top: var(--s3); background: var(--paper); border: 1px solid var(--rule);
+    border-radius: var(--r-sm); padding: var(--s4);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.75rem; line-height: 1.55; white-space: pre-wrap; word-break: break-word;
+    max-height: 26rem; overflow: auto; }
 </style>
 </head>
 <body>
@@ -190,7 +215,7 @@
 <main class="adm" id="dash" hidden>
 
   <div class="adm-top">
-    <h1 class="adm-top__title">Enrollments</h1>
+    <h1 class="adm-top__title">Enrollments and payments</h1>
     <span class="adm-top__who" id="who"></span>
     <select class="mini" id="cohort" aria-label="Cohort"></select>
     <button class="mini" type="button" id="refresh">Refresh</button>
@@ -266,6 +291,59 @@
       </table>
     </div>
   </section>
+
+  <!-- Payments ---------------------------------------------------------- -->
+  <section class="sec-gap" aria-labelledby="pay-title">
+    <h2 class="panel__title" id="pay-title">Payments — what Paystack actually sent</h2>
+    <p class="sec-gap__lede">Every webhook is recorded here before any money is applied to the roll, including
+      ones that fail signature verification and ones that match no enrollment. Read-only: this is the evidence
+      trail for a dispute, so nothing on this page can edit it.</p>
+
+    <p class="msg msg--bad" id="pay-error" role="alert" hidden></p>
+
+    <div class="board" id="pay-board"></div>
+
+    <section class="panel" aria-labelledby="pay-attn-title">
+      <h2 class="panel__title" id="pay-attn-title">Needs investigating</h2>
+      <div class="queues" id="pay-attn"></div>
+    </section>
+
+    <div class="filters">
+      <label class="vh" for="pq">Search reference, email or event</label>
+      <input type="search" id="pq" placeholder="Search reference, email, event">
+      <label class="vh" for="f-event">Event type</label>
+      <select id="f-event"><option value="">All event types</option></select>
+      <label class="vh" for="f-pflag">Extra filter</label>
+      <select class="mini" id="f-pflag">
+        <option value="">No extra filter</option>
+        <option value="invalid">Signature not valid</option>
+        <option value="unmatched">Matched no enrollment</option>
+        <option value="success">Successful charges only</option>
+      </select>
+      <button class="mini" type="button" id="pay-clear">Clear</button>
+      <button class="mini" type="button" id="pay-csv">Export CSV</button>
+    </div>
+
+    <p class="msg msg--empty" id="pay-empty" hidden></p>
+
+    <div class="roll-wrap">
+      <table class="roll">
+        <caption class="vh">Every webhook Paystack has sent, newest first</caption>
+        <thead>
+          <tr>
+            <th scope="col"><button type="button" data-psort="received_at">Received</button></th>
+            <th scope="col"><button type="button" data-psort="event">Event</button></th>
+            <th scope="col"><button type="button" data-psort="reference">Reference</button></th>
+            <th scope="col" class="num"><button type="button" data-psort="amount_ghs">Amount</button></th>
+            <th scope="col"><button type="button" data-psort="status">Status</button></th>
+            <th scope="col">Checks</th>
+            <th scope="col"><span class="vh">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody id="pay-rows"></tbody>
+      </table>
+    </div>
+  </section>
 </main>
 
 <!-- Detail drawer -------------------------------------------------------- -->
@@ -323,6 +401,24 @@
   </div>
 </div>
 
+
+<!-- Payment event detail (read-only) ------------------------------------- -->
+<div class="drawer" id="pdrawer" hidden>
+  <button class="drawer__veil" type="button" id="pdrawer-veil" aria-label="Close"></button>
+  <div class="drawer__panel" role="dialog" aria-modal="true" aria-labelledby="pdrawer-name" tabindex="-1" id="pdrawer-panel">
+    <div class="drawer__head">
+      <h2 class="drawer__name" id="pdrawer-name">Payment event</h2>
+      <button class="mini" type="button" id="pdrawer-close">Close</button>
+    </div>
+
+    <dl class="drawer__meta" id="pdrawer-meta"></dl>
+
+    <h3 class="panel__title" style="margin-top:var(--s6)">Raw payload from Paystack</h3>
+    <p class="board__sub" style="margin-bottom:var(--s3)">Stored verbatim. If a stored figure is ever wrong, this is the recovery path.</p>
+    <button class="mini" type="button" id="pdrawer-copy">Copy raw JSON</button>
+    <pre class="raw" id="pdrawer-raw"></pre>
+  </div>
+</div>
 <script src="/assets/js/admin.js" defer></script>
 </body>
 </html>

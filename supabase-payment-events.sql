@@ -74,10 +74,21 @@
 -- Row-level security as deployed
 -- ---------------------------------------------------------------------------
 --
---  policy                          cmd     roles
---  ------------------------------  ------  ----------------
---  Admins can read payment events  SELECT  {authenticated}
---  Allow service role full access  ALL     {service_role}
+--  policy                          cmd     roles             restricted to
+--  ------------------------------  ------  ----------------  ----------------
+--  Admins can read payment events  SELECT  {authenticated}   auth.jwt()->>'email'
+--                                                            = the admin address
+--  Allow service role full access  ALL     {service_role}    —
+--
+-- Verified against the live database on 11 August 2026. The SELECT policy is
+-- email-restricted, matching enrollments rather than trusting any
+-- authenticated session — the same allowlist, so both move together when a
+-- second assessor is appointed.
+--
+-- There is deliberately NO update and NO delete policy for authenticated. The
+-- ledger is append-only even to the operator: evidence you can edit is not
+-- evidence. /admin renders it read-only for the same reason; corrections are
+-- made on the roll, where they read as corrections.
 --
 -- There is deliberately NO anon policy of any kind — not even insert. The
 -- browser has no business reading or writing a payment ledger. Only the

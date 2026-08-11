@@ -188,6 +188,9 @@ function load() {
     .then(function (rows) {
       state.rows = rows;
       renderAll();
+      /* The ledger loads after the roll, because reconciliation needs both:
+         an event is only "matched" against an enrollment we already hold. */
+      loadPayments();
     })
     .catch(function (err) {
       errorBox.textContent = err.message;
@@ -216,7 +219,7 @@ function outstanding(row) { return Math.max(0, Number(row.amount_ghs || 0) - Num
 
 /* --- Render ------------------------------------------------------------- */
 
-function renderAll() { renderBoard(); renderQueues(); renderMix(); renderRoll(); }
+function renderAll() { renderBoard(); renderQueues(); renderMix(); renderRoll(); renderPayments(); }
 
 function renderBoard() {
   var live = state.rows.filter(isLive);
@@ -567,3 +570,334 @@ document.getElementById("refresh").addEventListener("click", load);
 document.getElementById("cohort").addEventListener("change", load);
 
 if (session()) { showDash(); load(); } else { showSignin(); }
+
+/* ==========================================================================
+   Payments — the Paystack event ledger.
+
+   enrollments answers "where does this learner stand right now". It cannot
+   answer "what did Paystack actually say, and when" — which is the only thing
+   that settles a dispute or a double charge. payment_events does, because the
+   webhook writes every event verbatim BEFORE any money is applied to the roll.
+
+   This view is deliberately read-only. Nothing here can edit an event: a
+   ledger you can edit is not evidence. Corrections happen on the roll, where
+   they are visible as corrections.
+   ========================================================================== */
+
+state.payments = [];
+state.paySortBy = "received_at";
+state.paySortDir = -1;
+
+/* Paystack sets data.status to "success" on a completed charge. An event that
+   failed signature verification is never counted as money, however it reads —
+   an unverified payload is an assertion by whoever sent it. */
+function isConfirmed(e) { return !!e.signature_valid && e.status === "success"; }
+
+function ledgerFor(enrollmentId) {
+  return state.payments.reduce(function (total, e) {
+    return e.enrollment_id === enrollmentId && isConfirmed(e)
+      ? total + Number(e.amount_ghs || 0)
+      : total;
+  }, 0);
+}
+
+/* Rows where the roll and the ledger disagree.
+   Instalments arranged through Slack and paid by MoMo are recorded by hand and
+   have no Paystack event by design, so a row only qualifies once Paystack is
+   involved at all — otherwise every legitimate manual payment would flag. */
+function mismatches() {
+  if (!state.payments.length) return [];
+  return state.rows.filter(isLive).filter(function (r) {
+    var led = ledgerFor(r.id);
+    if (led === 0 && !r.paystack_reference) return false;
+    return Math.abs(led - Number(r.amount_paid_ghs || 0)) > 0.005;
+  });
+}
+
+function unmatched() { return state.payments.filter(function (e) { return !e.matched; }); }
+function rejected() { return state.payments.filter(function (e) { return !e.signature_valid; }); }
+
+function stamp(v) {
+  if (!v) return "—";
+  return new Date(v).toLocaleString("en-GB", {
+    day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"
+  });
+}
+
+function enrollmentName(id) {
+  var row = state.rows.filter(function (r) { return r.id === id; })[0];
+  return row ? row.full_name : null;
+}
+
+/* --- Render ------------------------------------------------------------- */
+
+function renderPayments() { renderPayBoard(); renderPayAttention(); renderPayRows(); }
+
+function renderPayBoard() {
+  var confirmed = state.payments.filter(isConfirmed);
+  var collected = confirmed.reduce(function (t, e) { return t + Number(e.amount_ghs || 0); }, 0);
+  var bad = rejected().length;
+  var loose = unmatched().length;
+
+  document.getElementById("pay-board").innerHTML =
+    '<div class="board__cell">' +
+      '<p class="board__k">Events received</p>' +
+      '<p class="board__v">' + state.payments.length + "</p>" +
+      '<p class="board__sub">' + (state.payments.length - bad) + " verified · " + bad + " rejected</p>" +
+    "</div>" +
+
+    '<div class="board__cell">' +
+      '<p class="board__k">Confirmed through Paystack</p>' +
+      '<p class="board__v">' + ghs(collected) + "</p>" +
+      '<p class="board__sub">' + confirmed.length + " successful charge" + (confirmed.length === 1 ? "" : "s") + "</p>" +
+    "</div>" +
+
+    '<div class="board__cell' + (loose ? " board__cell--urgent" : "") + '">' +
+      '<p class="board__k">Matched no enrollment</p>' +
+      '<p class="board__v">' + loose + "</p>" +
+      '<p class="board__sub">' + (loose ? "Money arrived that is not on the roll. Link it by hand." : "Every event found its learner.") + "</p>" +
+    "</div>" +
+
+    '<div class="board__cell' + (bad ? " board__cell--alarm" : "") + '">' +
+      '<p class="board__k">Signature rejected</p>' +
+      '<p class="board__v">' + bad + "</p>" +
+      '<p class="board__sub">' + (bad ? "Not from Paystack, or the secret is wrong. Never applied to the roll." : "Nothing has failed verification.") + "</p>" +
+    "</div>";
+}
+
+function renderPayAttention() {
+  var bad = rejected().length;
+  var loose = unmatched().length;
+  var off = mismatches().length;
+
+  var items = [
+    ["Events matching no enrollment", loose, "unmatched"],
+    ["Events failing signature verification", bad, "invalid"],
+    ["Roll and ledger disagree", off, null]
+  ];
+
+  var anything = loose + bad + off;
+
+  document.getElementById("pay-attn").innerHTML = anything
+    ? items.map(function (item) {
+        if (!item[1]) return "";
+        return '<div class="queue">' +
+          (item[2]
+            ? '<button type="button" data-pjump="' + item[2] + '">' + esc(item[0]) + "</button>"
+            : '<span class="queue__k">' + esc(item[0]) + "</span>") +
+          '<span class="queue__n">' + item[1] + "</span></div>";
+      }).join("")
+    : '<div class="queue"><span class="queue__k">Nothing outstanding. Every event verified and matched.</span>' +
+      '<span class="queue__n" data-zero="1">0</span></div>';
+
+  Array.prototype.forEach.call(document.querySelectorAll("[data-pjump]"), function (button) {
+    button.addEventListener("click", function () {
+      document.getElementById("f-pflag").value = button.getAttribute("data-pjump");
+      renderPayRows();
+    });
+  });
+}
+
+function visiblePayments() {
+  var q = document.getElementById("pq").value.trim().toLowerCase();
+  var eventType = document.getElementById("f-event").value;
+  var flag = document.getElementById("f-pflag").value;
+
+  var rows = state.payments.filter(function (e) {
+    if (eventType && e.event !== eventType) return false;
+    if (flag === "invalid" && e.signature_valid) return false;
+    if (flag === "unmatched" && e.matched) return false;
+    if (flag === "success" && !isConfirmed(e)) return false;
+    if (q) {
+      var hay = [e.reference, e.email, e.event, e.status].join(" ").toLowerCase();
+      if (hay.indexOf(q) === -1) return false;
+    }
+    return true;
+  });
+
+  var key = state.paySortBy;
+  return rows.sort(function (a, b) {
+    var x = a[key], y = b[key];
+    if (x == null) return 1;
+    if (y == null) return -1;
+    if (key === "amount_ghs") return (Number(x) - Number(y)) * state.paySortDir;
+    return String(x).localeCompare(String(y)) * state.paySortDir;
+  });
+}
+
+function renderPayRows() {
+  var rows = visiblePayments();
+  var empty = document.getElementById("pay-empty");
+
+  if (!state.payments.length) {
+    empty.textContent = "Nothing has arrived from Paystack yet. If payments have been taken, check that the "
+      + "paystack-webhook function is deployed and that the webhook URL is set in the Paystack dashboard. "
+      + "Until then, payments are whatever has been recorded by hand on the roll.";
+    empty.hidden = false;
+  } else if (!rows.length) {
+    empty.textContent = "No events match those filters.";
+    empty.hidden = false;
+  } else {
+    empty.hidden = true;
+  }
+
+  document.getElementById("pay-rows").innerHTML = rows.map(function (e) {
+    var checks =
+      '<span class="tag ' + (e.signature_valid ? "tag--ok" : "tag--bad") + '">' +
+        (e.signature_valid ? "Signed" : "Unsigned") + "</span> " +
+      '<span class="tag ' + (e.matched ? "tag--paid" : "tag--part") + '">' +
+        (e.matched ? "Matched" : "Unmatched") + "</span>";
+
+    var who = e.matched ? enrollmentName(e.enrollment_id) : null;
+
+    return "<tr>" +
+      "<td>" + stamp(e.received_at) + "</td>" +
+      "<td>" + esc(e.event || "—") +
+        (e.email ? '<span class="roll__sub">' + esc(e.email) + "</span>" : "") + "</td>" +
+      '<td><span class="mono">' + esc(e.reference || "—") + "</span>" +
+        (who ? '<span class="roll__sub">' + esc(who) + "</span>" : "") + "</td>" +
+      '<td class="num">' + (e.amount_ghs == null ? "—" : ghs(e.amount_ghs)) + "</td>" +
+      "<td>" + esc(e.status || "—") + "</td>" +
+      "<td>" + checks +
+        (e.match_note ? '<span class="roll__sub">' + esc(e.match_note) + "</span>" : "") + "</td>" +
+      '<td><button class="mini" type="button" data-pevent="' + esc(e.id) + '">Open</button></td>' +
+      "</tr>";
+  }).join("");
+
+  Array.prototype.forEach.call(document.querySelectorAll("[data-pevent]"), function (button) {
+    button.addEventListener("click", function () { openPayDrawer(button.getAttribute("data-pevent")); });
+  });
+}
+
+/* --- Detail drawer ------------------------------------------------------ */
+
+function openPayDrawer(id) {
+  var e = state.payments.filter(function (row) { return row.id === id; })[0];
+  if (!e) return;
+
+  document.getElementById("pdrawer-name").textContent = e.event || "Payment event";
+  document.getElementById("pdrawer-meta").innerHTML =
+    [["Received", stamp(e.received_at)],
+     ["Provider", e.provider],
+     ["Reference", e.reference],
+     ["Customer email", e.email],
+     ["Amount", e.amount_ghs == null ? "—" : ghs(e.amount_ghs)],
+     ["Paystack status", e.status],
+     ["Taken at", e.paid_at ? stamp(e.paid_at) : "—"],
+     ["Signature", e.signature_valid ? "Verified" : "Rejected — never applied to the roll"],
+     ["Matched", e.matched ? "Yes" : "No"],
+     ["Enrollment", e.matched ? (enrollmentName(e.enrollment_id) || e.enrollment_id) : "—"],
+     ["Match note", e.match_note]
+    ].map(function (pair) {
+      return "<div><dt>" + esc(pair[0]) + "</dt><dd>" + esc(pair[1] == null || pair[1] === "" ? "—" : pair[1]) + "</dd></div>";
+    }).join("");
+
+  var raw;
+  try { raw = JSON.stringify(e.raw, null, 2); }
+  catch (err) { raw = String(e.raw); }
+  document.getElementById("pdrawer-raw").textContent = raw;
+
+  document.getElementById("pdrawer").hidden = false;
+  document.getElementById("pdrawer-panel").focus();
+}
+
+function closePayDrawer() { document.getElementById("pdrawer").hidden = true; }
+
+document.getElementById("pdrawer-close").addEventListener("click", closePayDrawer);
+document.getElementById("pdrawer-veil").addEventListener("click", closePayDrawer);
+document.addEventListener("keydown", function (event) {
+  if (event.key === "Escape" && !document.getElementById("pdrawer").hidden) closePayDrawer();
+});
+
+document.getElementById("pdrawer-copy").addEventListener("click", function () {
+  var button = this;
+  var text = document.getElementById("pdrawer-raw").textContent;
+  var done = function () {
+    button.textContent = "Copied";
+    setTimeout(function () { button.textContent = "Copy raw JSON"; }, 1500);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done, function () { button.textContent = "Copy failed"; });
+  } else {
+    button.textContent = "Copy failed";
+  }
+});
+
+/* --- Filters, sorting, export ------------------------------------------- */
+
+function fillEventFilter() {
+  var select = document.getElementById("f-event");
+  var chosen = select.value;
+  var seen = {};
+  state.payments.forEach(function (e) { if (e.event) seen[e.event] = true; });
+  select.innerHTML = '<option value="">All event types</option>' +
+    Object.keys(seen).sort().map(function (name) {
+      return '<option value="' + esc(name) + '">' + esc(name) + "</option>";
+    }).join("");
+  select.value = chosen;
+}
+
+/* --- Load --------------------------------------------------------------- */
+
+function loadPayments() {
+  var errorBox = document.getElementById("pay-error");
+  errorBox.hidden = true;
+
+  return authFetch("/rest/v1/payment_events?select=*&order=received_at.desc")
+    .then(function (response) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("Signed in, but the ledger refused the read. payment_events needs a select policy for the authenticated role.");
+      }
+      if (!response.ok) return response.text().then(function (t) { throw new Error(t || "Could not load payments."); });
+      return response.json();
+    })
+    .then(function (rows) {
+      state.payments = rows;
+      fillEventFilter();
+      renderPayments();
+    })
+    .catch(function (err) {
+      errorBox.textContent = err.message;
+      errorBox.hidden = false;
+    });
+}
+
+["pq", "f-event", "f-pflag"].forEach(function (id) {
+  document.getElementById(id).addEventListener("input", renderPayRows);
+});
+
+document.getElementById("pay-clear").addEventListener("click", function () {
+  ["pq", "f-event", "f-pflag"].forEach(function (id) { document.getElementById(id).value = ""; });
+  renderPayRows();
+});
+
+Array.prototype.forEach.call(document.querySelectorAll("[data-psort]"), function (button) {
+  button.addEventListener("click", function () {
+    var key = button.getAttribute("data-psort");
+    state.paySortDir = state.paySortBy === key ? -state.paySortDir : 1;
+    state.paySortBy = key;
+    renderPayRows();
+  });
+});
+
+document.getElementById("pay-csv").addEventListener("click", function () {
+  var cols = ["received_at", "provider", "event", "reference", "email", "amount_ghs",
+    "status", "paid_at", "signature_valid", "matched", "match_note", "enrollment_id"];
+
+  var cell = function (v) {
+    if (v == null) return "";
+    var s = String(v);
+    return /[",\n]/.test(s) ? '"' + s.split('"').join('""') + '"' : s;
+  };
+
+  var csv = [cols.join(",")].concat(visiblePayments().map(function (e) {
+    return cols.map(function (c) { return cell(e[c]); }).join(",");
+  })).join("\n");
+
+  var url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  var link = document.createElement("a");
+  link.href = url;
+  link.download = "payment-events-" + new Date().toISOString().slice(0, 10) + ".csv";
+  link.click();
+  URL.revokeObjectURL(url);
+});
