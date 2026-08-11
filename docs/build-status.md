@@ -155,8 +155,12 @@ Every one renders in conspicuous dashed marigold. **Nothing ships with one still
   owner asked to be gone is a redeploy risk. `confirm-email` and `vip-alert` remain and are now
   equally dead, since the pages that called them are retired — **awaiting a decision.**
 
-- **Mobile overflow — `/nfc` and `/nfc/resources` FIXED 11 August 2026; `/standard` still open.**
+- **Mobile overflow — `/nfc` and `/nfc/resources` FIXED 11 August 2026; `/standard` diagnosed, see below.**
   Johnathan supplied precise measurements from a local browser.
+
+  **`/foundations` (closed by measurement).** 0 delta at 320, 375 and 430 after the same pass.
+  The original audit finding does not reproduce; the pathway rail stages sit inside
+  `.rail__track`, which owns its own scroll. Nothing to fix.
 
   **NFC (fixed).** The decorative Ananse Ntontan `.web-mark` SVG is absolutely positioned with
   `right: -140px` on purpose, and `.hero` even declared `overflow: visible`. At 430px that put its
@@ -165,12 +169,41 @@ Every one renders in conspicuous dashed marigold. **Nothing ships with one still
   vertical overflow. The decoration is unchanged; it is simply clipped at the edge, which is what
   bleeding a watermark off the page was always meant to look like.
 
-  **`/standard` (open).** Reported as the `.dtable` tables, but the numbers rule that out: the
-  document's `scrollWidth` is a **constant 409px** at both 320 and 375 viewports (deltas 89 and 34,
-  and 0 at 430). A leaking 544px table starting at x=21 would give a delta of 245, not 89, and the
-  measurement confirms `.dtable-wrap` is scrolling correctly — width 280, scrollWidth 544,
-  clientWidth 278. Something else on that page is fixed at ~409px wide. **Not yet identified**, and
-  deliberately not blind-patched.
+  **`/standard` — diagnosed 11 August 2026 as a reporting artifact, not a visible defect.**
+  An isolation pass supplied by Johnathan settled it. Three measurements at 320px, only one of
+  which reports a problem: `offenders: []` (no element's bounding box passes the viewport),
+  `bodyScrollWidth: 320` (nothing overflows the body box), and `documentElement.scrollWidth: 409`.
+
+  The number is the tell. **409px is not a width that exists in the stylesheet** — the wide
+  `.dtable` are `min-width: 34rem` (544) and `.dtable--matrix` is `26rem` (416) — and it does not
+  move between 320 and 375 viewports. A *used* width tracks the viewport; an *intrinsic* one does
+  not. 409 is the tables' min-content contribution reported on the root while `.dtable-wrap` clips
+  the paint correctly. That also explains the isolation results: `overflow-x: hidden` on `html`,
+  `body` and the wrap each changed nothing, while `display: none` on the tables changed everything
+  — hiding a box removes its intrinsic contribution, clipping it does not. `.dtable-wrap` itself
+  measures width 280, scrollWidth 544, clientWidth 278: a scroll container working as designed.
+
+  **Outstanding confirmation.** Whether the page actually scrolls has not been checked. Run on
+  `/standard` at 320px:
+
+  ```js
+  window.scrollTo(9999, 0);
+  const after = document.documentElement.scrollLeft;
+  window.scrollTo(0, 0);
+  ({ actuallyScrolls: after > 0, offset: after });
+  ```
+
+  `false` means the 409 is an artifact and there is nothing to fix. Expected, but unverified.
+
+  **Two real phone defects were fixed in the same pass (`d0c3c23`), and neither moves the 409.**
+  `.dtable-wrap` and `.rail__track` now set `overscroll-behavior-x: contain`, so a sideways flick
+  past the end of a table stays in the table instead of chaining to the document — on touch that
+  chaining reads as the page itself sliding sideways, and is the likeliest source of the original
+  report. And each wrapper now carries a `.dtable-hint` below it, outside the scroll container so
+  it does not scroll away: a table clipped at 278px with no affordance hides those columns
+  outright. Two breakpoints, because the matrix starts scrolling later than the rest — 36.5rem for
+  the 544px tables, 28.5rem for the matrix. Hidden in the print stylesheet, where tables print
+  whole and the hint would be false. Five wrappers: four on `/standard`, one on `/pathway`.
 
 - ~~Unresolved and needing a browser: mobile horizontal overflow.~~ (superseded by the entry above)
   **Original note:** The second audit measured
