@@ -180,16 +180,23 @@ Every one renders in conspicuous dashed marigold. **Nothing ships with one still
   still has inline scripts and posts to the external n8n webhook.
 
 - **Two audit items cannot be fixed from this repo:**
-  1. **The production catch-all returning HTTP 200 for unknown paths** is a Cloudflare dashboard
-     rule. Until it is removed, `404.html` is unreachable. Verify after deploy with
-     `curl -o /dev/null -w '%{http_code}' https://training.bulletproofautomations.com/does-not-exist`.
+  1. **The production catch-all returning HTTP 200 for unknown paths.** Measured before `404.html`
+     existed. Serving `404.html` from the root of the output directory is Cloudflare Pages'
+     **native, free** behaviour, so the next deploy is expected to fix this without any dashboard
+     change and without a paid plan (Johnathan is on the free plan and staying there). **Verify
+     immediately after deploy:**
+     `curl -o /dev/null -w '%{http_code}' https://training.bulletproofautomations.com/does-not-exist`
+     — `404` means solved. If it still returns `200`, look for a leftover rule under Rules →
+     Redirect Rules, which the free plan does include. **Do not add a `/*` catch-all to
+     `_redirects` as a workaround** — depending on evaluation order it can shadow real routes.
   2. **No browser-based verification has ever been run** — no viewport was tested, no console
      inspected, no Lighthouse. This remains the largest unverified risk.
 
-- **Left deliberately unchanged: the locked showcase copy still appears on both `/` and
-  `/foundations`.** Removing it from either page is an editorial decision about which page owns
-  that moment, and rule 7 forbids rewriting or tightening it. Flagged for Johnathan rather than
-  resolved unilaterally.
+- ~~Locked showcase copy duplicated~~ — **resolved 11 August 2026 by Johnathan: it belongs on `/`.**
+  The homepage keeps it verbatim (re-verified word-for-word against the brief: 180 words, exact
+  match). `/foundations` now carries a short pointer in the site's own voice plus the Luma link,
+  rather than a second copy. Rule 7 is intact — the locked text was moved off a page, never
+  rewritten.
 
 - **Two required acknowledgements now gate registration**, directly above the button rather than in
   fine print, each a separate checkbox so it is always clear which term a person agreed to. Wording
