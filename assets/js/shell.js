@@ -236,6 +236,11 @@
   // rather than implied by when it was created.
   var COHORT = "intermediate_2026_09";
 
+  // Which version of the policies was on screen when they agreed. Bump this in
+  // the same change that publishes a new policy, or the record will claim
+  // people agreed to wording they never saw.
+  var POLICY_VERSION = "2026-08-10";
+
   // Keys are the values the table's chosen_option CHECK constraint allows.
   var PRICE = {
     cohort_only: 750,
@@ -312,6 +317,13 @@
       payment_plan: instalments,
       cohort: COHORT,
       consent_given: form.elements.consent_given.checked,
+      // Both are required to submit, so these are always true on a real
+      // registration — the value is in the version below, which says WHICH
+      // wording they were shown. WHEN is created_at, set server-side, because
+      // a browser clock is not evidence of anything.
+      ack_refund: form.elements.ack_refund.checked,
+      ack_certification: form.elements.ack_certification.checked,
+      acks_policy_version: POLICY_VERSION,
       // source is constrained to website | showcase | whatsapp | referral.
       source: "website"
     };
