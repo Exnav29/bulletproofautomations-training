@@ -141,6 +141,34 @@ Every one renders in conspicuous dashed marigold. **Nothing ships with one still
 
 ## 6. Other open items
 
+- **Pre-launch audit fixes applied 11 August 2026.** The blocker (acknowledgement columns present
+  but unpopulated) is closed. Also fixed: Open Graph metadata site-wide with a 1200×630 card;
+  a `_headers` file carrying CSP, HSTS, frame-ancestors and Permissions-Policy; both WCAG 1.4.11
+  border-contrast failures; the 24px acknowledgement targets; sitemap completeness; the stale
+  developer comment on `/nfc/resources`; admin escaping hardened; and honeypots on both public
+  forms.
+
+  **The legacy pages were retired in the same pass**, now that `/foundations` and `/pathway` exist
+  to receive their traffic. That single change removed the old project's anon key from the bundle,
+  two Google Fonts CDN pages, `main.js`, `style.css` and ~8 MB of PNGs. **`dist/` went from
+  10.9 MB to 2.2 MB.**
+
+  `/admin`'s script was externalised to `assets/js/admin.js` so the strict CSP holds rather than
+  being weakened to accommodate an inline block. `/nfc` keeps a scoped, looser policy because it
+  still has inline scripts and posts to the external n8n webhook.
+
+- **Two audit items cannot be fixed from this repo:**
+  1. **The production catch-all returning HTTP 200 for unknown paths** is a Cloudflare dashboard
+     rule. Until it is removed, `404.html` is unreachable. Verify after deploy with
+     `curl -o /dev/null -w '%{http_code}' https://training.bulletproofautomations.com/does-not-exist`.
+  2. **No browser-based verification has ever been run** — no viewport was tested, no console
+     inspected, no Lighthouse. This remains the largest unverified risk.
+
+- **Left deliberately unchanged: the locked showcase copy still appears on both `/` and
+  `/foundations`.** Removing it from either page is an editorial decision about which page owns
+  that moment, and rule 7 forbids rewriting or tightening it. Flagged for Johnathan rather than
+  resolved unilaterally.
+
 - **Two required acknowledgements now gate registration**, directly above the button rather than in
   fine print, each a separate checkbox so it is always clear which term a person agreed to. Wording
   supplied verbatim by Johnathan. A third can be added later for Terms of Service.

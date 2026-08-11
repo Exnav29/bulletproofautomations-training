@@ -255,6 +255,14 @@
           </select>
         </div>
 
+        <!-- Honeypot. Hidden from people, irresistible to naive bots.
+             A filled value means the submission is automated, and it is
+             dropped silently so the bot learns nothing from the response. -->
+        <div class="trap" aria-hidden="true">
+          <label for="notify-hp">Do not fill this in</label>
+          <input type="text" id="notify-hp" name="company_website" tabindex="-1" autocomplete="off">
+        </div>
+
         <p class="form__error" id="notify-error" role="alert" hidden></p>
         <button class="btn btn--go form__submit" type="submit">Tell me when it opens</button>
         <p class="form__hint">We store your name and contact details only to tell you about the next Foundations cohort. Nothing else, and no third parties.</p>

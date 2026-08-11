@@ -302,6 +302,14 @@
       el.removeAttribute("aria-invalid");
     });
 
+    // Honeypot: a real person never sees this field, so anything in it means
+    // a bot. Pretend it worked — a bot that gets an error learns to retry.
+    if (form.elements.company_website && form.elements.company_website.value) {
+      form.hidden = true;
+      done.hidden = false;
+      return;
+    }
+
     var option = chosen("option");
     var instalments = chosen("payment_plan") === "Instalments";
 
@@ -474,6 +482,12 @@
 
     if (!configured) {
       show("This is not available right now. Please message us on WhatsApp and we will add you.");
+      return;
+    }
+
+    if (form.elements.company_website && form.elements.company_website.value) {
+      form.hidden = true;
+      done.hidden = false;
       return;
     }
 

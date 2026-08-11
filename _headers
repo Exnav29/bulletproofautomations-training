@@ -1,0 +1,27 @@
+# Cloudflare Pages response headers.
+#
+# The site is static, has no third-party scripts on any rebuild page, and loads
+# nothing cross-origin except its own Supabase project. That makes a strict CSP
+# cheap to hold, so it is set strictly rather than permissively.
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), interest-cohort=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; form-action 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests
+
+# The legacy pages and the NFC funnel still load Google Fonts and post to an
+# external n8n webhook, so they cannot hold the policy above. They keep the
+# non-CSP protections and get a policy matching what they actually do.
+/nfc/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://n8n.bulletproofautomations.com; form-action 'self' https://n8n.bulletproofautomations.com; frame-ancestors 'none'
+
+# Fingerprinted-by-content assets. Long cache, and the font is immutable.
+/assets/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+/assets/images/*
+  Cache-Control: public, max-age=2592000

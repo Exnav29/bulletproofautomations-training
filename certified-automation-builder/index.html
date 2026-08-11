@@ -466,6 +466,14 @@
 
           <p class="form__error" id="form-error" role="alert" hidden></p>
 
+          <!-- Honeypot. Hidden from people, irresistible to naive bots.
+               A filled value means the submission is automated, and it is
+               dropped silently so the bot learns nothing from the response. -->
+          <div class="trap" aria-hidden="true">
+            <label for="cab-hp">Do not fill this in</label>
+            <input type="text" id="cab-hp" name="company_website" tabindex="-1" autocomplete="off">
+          </div>
+
           <fieldset class="form__fieldset acks">
             <legend class="form__label">Before you register</legend>
 

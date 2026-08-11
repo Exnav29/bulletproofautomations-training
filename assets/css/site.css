@@ -30,7 +30,7 @@
 
   /* Line */
   --rule: #d3d8d4;
-  --rule-strong: #b4bfb8;
+  --rule-strong: #808c84;   /* WCAG 1.4.11: >=3:1 on white, paper AND sand — it borders controls */
 
   /* Text */
   --text: #0e1a15;
@@ -2681,7 +2681,7 @@ a.rail__link:hover .rail__name {
   width: 100%;
   padding: var(--s3) var(--s4);
   border-radius: var(--r-sm);
-  border: 1px solid rgba(246, 247, 245, 0.3);
+  border: 1px solid rgba(246, 247, 245, 0.46);
   background: rgba(14, 26, 21, 0.6);
   color: var(--text-on-ink);
   font: inherit;
@@ -4036,9 +4036,9 @@ a.rail__link:hover .rail__name {
 }
 
 .ack input {
-  width: 1.15rem;
-  height: 1.15rem;
-  margin-top: 0.15rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-top: 0.05rem;
   accent-color: var(--signal);
   flex: none;
 }
@@ -4076,4 +4076,14 @@ a.rail__link:hover .rail__name {
 .portrait--inline {
   max-width: 20rem;
   border-radius: var(--r-card);
+}
+
+/* Honeypot. Positioned off-screen rather than display:none — some bots skip
+   fields that are display:none, and this one is meant to be tempting. */
+.trap {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
 }

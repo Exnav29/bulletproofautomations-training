@@ -18,6 +18,7 @@ const publicPaths = [
   "robots.txt",
   "sitemap.xml",
   "_redirects",
+  "_headers",
 
   // Rebuild routes - Tier 1
   "certified-automation-builder",
@@ -41,11 +42,9 @@ const publicPaths = [
   "admin",
   "nfc",
 
-  // Legacy routes - removed once /_redirects is in place and the folders are deleted.
-  // price-by-value was retired on 10 August 2026: folder deleted, /price-by-value
-  // now 301s to / from _redirects.
-  "n8n-foundations",
-  "n8n-automation-builder-pathway"
+  // Legacy routes were retired on 11 August 2026, once /foundations and
+  // /pathway existed to receive their traffic. All three now 301 from
+  // _redirects. assets/js/main.js and assets/css/style.css went with them.
 ];
 
 /* --------------------------------------------------------------------------

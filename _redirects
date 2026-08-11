@@ -4,10 +4,12 @@
 # destination exists — a redirect to a route that has not been built is a 404
 # where a working page used to be.
 #
-# Still to add, when their targets ship:
-#   /n8n-foundations                  /foundations   301
-#   /n8n-automation-builder-pathway   /pathway       301
 
 # Price by Value workshop, retired 10 August 2026. Permanent — it is not
 # coming back and there is no successor page to send people to.
 /price-by-value  /  301
+
+# Retired 11 August 2026, once their replacements existed. Both pages carried
+# the old Supabase project's key, a Google Fonts CDN link and ~8 MB of PNGs.
+/n8n-foundations                 /foundations  301
+/n8n-automation-builder-pathway  /pathway      301

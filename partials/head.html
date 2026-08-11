@@ -5,5 +5,22 @@
 <link rel="canonical" href="{{canonical}}">
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="/assets/fonts/archivo-latin-variable.woff2" as="font" type="font/woff2" crossorigin>
+<!-- Open Graph. WhatsApp is a first-class channel for this audience, and a
+     link pasted into a chat with no card attached looks like spam. og:image
+     must be an absolute URL — relative paths are ignored by every scraper. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Bulletproof Automations Training">
+<meta property="og:title" content="{{title}}">
+<meta property="og:description" content="{{description}}">
+<meta property="og:url" content="{{canonical}}">
+<meta property="og:image" content="https://training.bulletproofautomations.com/assets/images/og-card.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Bulletproof Automations Training — an academy for automation builders.">
+<meta property="og:locale" content="en_GB">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{title}}">
+<meta name="twitter:description" content="{{description}}">
+<meta name="twitter:image" content="https://training.bulletproofautomations.com/assets/images/og-card.jpg">
 <link rel="stylesheet" href="/assets/css/site.css">
 <script src="/assets/js/shell.js" defer></script>
