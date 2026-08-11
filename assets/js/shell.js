@@ -640,6 +640,16 @@
 
   window.bpaTurnstileReady = function () {
     if (!tsHost || !window.turnstile || !siteKey) return;
+
+    /* Reveal the widget BEFORE rendering it, and leave it visible.
+       Turnstile cannot solve inside a display:none container — and in a private
+       window, where there is no prior clearance cookie, it needs to show an
+       interactive challenge, which a hidden element makes impossible. Rendering
+       it hidden and only revealing it on submit produced exactly that: the first
+       attempt waited for a token that could never arrive and failed, and the
+       failure itself unhid the widget, so the second attempt worked. */
+    if (tsBar) tsBar.hidden = false;
+
     newTokenPromise();
     widgetId = window.turnstile.render(tsHost, {
       sitekey: siteKey,
@@ -823,11 +833,17 @@
     var token = payload.id ? Promise.resolve(null) : (tsBar && (tsBar.hidden = false), consumeToken());
 
     return token.then(function (value) {
+      if (!value && !payload.id) {
+        onError("The browser check has not finished yet. Give it a moment, complete it if it asks, then try again.");
+        if (tsBar) tsBar.hidden = false;
+        return null;
+      }
       if (value) payload.turnstileToken = value;
       var pass = readPass();
       if (pass) payload.pass = pass;
       return post("/api/verify", payload);
     }).then(function (res) {
+      if (!res) return;   // challenge not ready; already reported
       if (res.status === 403 && !payload.id) {
         // The pass expired or was never issued. Ask again rather than failing.
         try { window.localStorage.removeItem(PASS_KEY); } catch (err) { /* ignore */ }
@@ -919,6 +935,17 @@
       if (tsBar) tsBar.hidden = false;
 
       consumeToken().then(function (token) {
+        /* No token means the challenge has not completed — usually it is still
+           working, sometimes it needs a click. That is not a failed submission
+           and must not read like one, or people retype a correct form. */
+        if (!token) {
+          submit.disabled = false;
+          submit.textContent = label;
+          gateError.textContent = "The browser check has not finished yet. Give it a moment, complete it if it asks, then try again.";
+          gateError.hidden = false;
+          if (tsBar) tsBar.hidden = false;
+          return null;
+        }
         return post("/api/gate", {
           full_name: gateForm.elements.full_name.value.trim(),
           email: gateForm.elements.email.value.trim(),
@@ -928,6 +955,7 @@
           turnstileToken: token
         });
       }).then(function (res) {
+        if (!res) return;   // challenge not ready; already reported
         submit.disabled = false;
         submit.textContent = label;
         if (!res.data || res.data.ok !== true) {

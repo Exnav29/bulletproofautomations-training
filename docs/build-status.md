@@ -74,6 +74,34 @@ enforced in SQL rather than trusted to the client. Full reasoning in `supabase-c
 4. **`focus()` scrolls by default**, so the deep link jumped the page during load. Focus now uses
    `preventScroll`, and scrolling only happens after someone has actually submitted something.
 
+### Two bugs found only by a person using the real thing (11 August 2026)
+
+Both were invisible to every check that came before them, including the CDP run.
+
+**5. Duplicate CSP headers made every narrower policy in `_headers` inert.**
+Cloudflare applies EVERY matching rule, not the most specific one, so `/verify`
+received two `Content-Security-Policy` headers — and a browser given two
+enforces the INTERSECTION. `script-src 'self'` from `/*` intersected with
+`script-src 'self' https://challenges.cloudflare.com` came out as `'self'`,
+Turnstile was blocked, no token was ever produced, and the gate failed for
+everyone. **`/nfc` had the same fault from the day `_headers` was written** — its
+inline scripts and Google Fonts were blocked in production the whole time. Both
+now `! Content-Security-Policy` before setting their own. The reasoning is at the
+top of `_headers`, because each rule reads correctly on its own and the failure
+only shows in the response.
+
+**6. The Turnstile widget was rendered inside a hidden container.** `#ts-bar`
+started `hidden` and was only revealed when a request began, so the widget could
+never solve. The symptom was maddening and diagnostic: the first submit failed,
+and the failure itself unhid the widget, so the second submit worked. In a
+private window it failed every time, because with no clearance cookie Turnstile
+needs an interactive challenge and cannot show one in a `display:none` box. The
+widget is now revealed before it is rendered and stays visible.
+
+Lesson for the rest of this build: **a challenge widget must be laid out before
+it is asked to solve**, and header rules must be checked in the response rather
+than read in the file.
+
 ### Browser verification — the gap in §6 is now partly closed
 
 `npx wrangler pages dev dist` against a local mock Supabase, driven in headless Chrome over the
