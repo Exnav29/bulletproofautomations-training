@@ -1,3 +1,19 @@
+# NOTE ON DUPLICATE HEADERS — this cost a live bug, so it is written down.
+#
+# Cloudflare applies EVERY matching rule, it does not pick the most specific
+# one. A path matching both /* and /verify* therefore receives TWO
+# Content-Security-Policy headers, and a browser given two CSPs enforces the
+# INTERSECTION of them — the most restrictive value for each directive.
+#
+# So the narrower policies below did not widen anything. script-src 'self' from
+# /* intersected with script-src 'self' https://challenges.cloudflare.com came
+# out as 'self', Turnstile was blocked, and the gate form failed for every
+# visitor. /nfc had the same fault from the day this file was written: its
+# inline scripts and Google Fonts were blocked in production.
+#
+# The fix is to UNSET the inherited header with `! Content-Security-Policy`
+# before setting the specific one. Any rule that overrides CSP must do this.
+
 # Cloudflare Pages response headers.
 #
 # The site is static, has no third-party scripts on any rebuild page, and loads
@@ -18,6 +34,7 @@
 /nfc/*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
+  ! Content-Security-Policy
   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://n8n.bulletproofautomations.com; form-action 'self' https://n8n.bulletproofautomations.com; frame-ancestors 'none'
 
 # /verify loads the Turnstile widget and renders certificate previews out of
@@ -34,6 +51,7 @@
   X-Frame-Options: DENY
   Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), interest-cohort=()
   Strict-Transport-Security: max-age=31536000; includeSubDomains
+  ! Content-Security-Policy
   Content-Security-Policy: default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.supabase.co; font-src 'self'; connect-src 'self'; form-action 'self'; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests
 
 # The short form the certificate QR code points at. Same page, same policy.
@@ -43,6 +61,7 @@
   X-Frame-Options: DENY
   Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), interest-cohort=()
   Strict-Transport-Security: max-age=31536000; includeSubDomains
+  ! Content-Security-Policy
   Content-Security-Policy: default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.supabase.co; font-src 'self'; connect-src 'self'; form-action 'self'; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests
 
 # The verification endpoints. Never cached, never framed, never crawled.
