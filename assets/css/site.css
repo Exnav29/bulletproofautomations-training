@@ -506,6 +506,7 @@ svg {
 .rail__track {
   display: flex;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
   scroll-snap-type: x proximity;
   scroll-padding-inline: var(--gutter);
   margin-top: var(--s3);
@@ -3074,6 +3075,8 @@ a.rail__link:hover .rail__name {
 .dtable-wrap {
   margin-top: var(--s5);
   overflow-x: auto;
+  /* A sideways flick stays in the table instead of chaining to the page. */
+  overscroll-behavior-x: contain;
   border: 1px solid var(--rule);
 }
 
@@ -3177,6 +3180,39 @@ a.rail__link:hover .rail__name {
 
 .dtable--onink .dot {
   background: var(--verified-lift);
+}
+
+/* --- Table scroll affordance ---------------------------------------------
+   The wide tables scroll inside their own wrapper rather than pushing the
+   page sideways. Below the width where that starts, say so: a clipped column
+   with no affordance is a column nobody knows is there. Two breakpoints,
+   because the coverage matrix is narrower than the rest and starts scrolling
+   later than they do. */
+
+.dtable-hint {
+  display: none;
+  margin-top: var(--s2);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--muted);
+  font-variation-settings: "wdth" var(--narrow), "wght" 500;
+  letter-spacing: 0.04em;
+}
+
+.section--ink .dtable-hint {
+  color: var(--muted-on-ink);
+}
+
+@media (max-width: 36.5rem) {
+  .dtable-hint--wide {
+    display: block;
+  }
+}
+
+@media (max-width: 28.5rem) {
+  .dtable-hint--narrow {
+    display: block;
+  }
 }
 
 /* --- Specification lists -------------------------------------------------
@@ -3338,6 +3374,11 @@ a.rail__link:hover .rail__name {
   .dtable-wrap {
     overflow: visible !important;
     border: 0;
+  }
+
+  /* Nothing scrolls on paper, so the affordance would be a lie. */
+  .dtable-hint {
+    display: none !important;
   }
 
   .dtable {
