@@ -24,12 +24,22 @@ export function json(body, status) {
   });
 }
 
-/* A deliberately vague failure. Telling a prober which part of the request
-   they got wrong is telling them how to get it right. The specific reason is
-   still logged for us. */
+/* A deliberately vague failure. Telling a prober which part of the request they
+   got wrong is telling them how to get it right. The specific reason is still
+   logged for us.
+
+   The exception is 503 — a missing environment variable is OUR failure, not a
+   probe, and hiding it produced a real incident: the page told a visitor "we
+   could not save that", implying their details were rejected, when in fact the
+   service was never switched on. Nobody can exploit "this site is not
+   configured", and pretending otherwise wastes the operator's afternoon. */
 export function refuse(reason, status) {
   console.log("refused:", reason);
-  return json({ ok: false, error: "That request could not be completed." }, status || 400);
+  const code = status || 400;
+  if (code === 503) {
+    return json({ ok: false, code: "not_configured", detail: reason, error: "Verification is not switched on yet." }, 503);
+  }
+  return json({ ok: false, error: "That request could not be completed." }, code);
 }
 
 /* Bodies here are tiny. Anything large is not a mistake, it is an attempt. */

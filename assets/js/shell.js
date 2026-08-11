@@ -837,7 +837,9 @@
         return;
       }
       if (!res.data || res.data.ok !== true) {
-        onError("We could not complete that check. Please try again, or email info@bulletproofautomations.com.");
+        onError(res.status === 503
+          ? "Credential verification is not switched on yet. Please email info@bulletproofautomations.com with the credential ID and we will confirm it by reply."
+          : "We could not complete that check. Please try again, or email info@bulletproofautomations.com.");
         return;
       }
       if (!res.data.results.length) {
@@ -929,7 +931,12 @@
         submit.disabled = false;
         submit.textContent = label;
         if (!res.data || res.data.ok !== true) {
-          gateError.textContent = "We could not save that. Please try again, or email info@bulletproofautomations.com.";
+          /* 503 means the service is not configured, which is our problem, not
+             theirs. Saying "we could not save that" implies their details were
+             rejected and sends them round the loop retyping a correct form. */
+          gateError.textContent = res.status === 503
+            ? "Credential verification is not switched on yet. Please email info@bulletproofautomations.com and we will confirm any credential by reply."
+            : "We could not save that. Please try again, or email info@bulletproofautomations.com.";
           gateError.hidden = false;
           return;
         }
