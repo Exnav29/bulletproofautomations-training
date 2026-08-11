@@ -4175,3 +4175,145 @@ a.rail__link:hover .rail__name {
   align-content: center;
 }
 
+
+/* --- Verify ---------------------------------------------------------------
+   The credential is the object here, so the result blocks follow the ink
+   geometry rule: square-ish corners at --r-sm, never the campus --r-card. The
+   forms sit on an ink ground because every .form* rule in this file is written
+   for one, and because --ink is the credential.
+   ------------------------------------------------------------------------- */
+
+.verify {
+  max-width: 34rem;
+}
+
+.verify__lede {
+  max-width: 52ch;
+}
+
+.ts-bar {
+  margin-top: var(--s5);
+  max-width: 34rem;
+}
+
+/* Turnstile renders its own iframe; give it room without reserving a gap when
+   it is invisible. */
+#ts-host:not(:empty) {
+  margin-bottom: var(--s3);
+}
+
+.credential {
+  margin-top: var(--s6);
+  padding: var(--s5);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-sm);
+  background: var(--field);
+}
+
+.credential + .credential {
+  margin-top: var(--s5);
+}
+
+.credential__top {
+  margin-bottom: var(--s3);
+}
+
+.credential__name {
+  font-size: clamp(1.125rem, 3vw, 1.5rem);
+  font-variation-settings: "wdth" 112, "wght" 700;
+  line-height: 1.2;
+}
+
+.credential__holder {
+  margin-top: var(--s2);
+  color: var(--muted);
+}
+
+.credential .spec {
+  margin-top: var(--s4);
+}
+
+/* Status. --verified for valid, --marigold for time-expired (it is the token
+   that marks anything time-sensitive and appears nowhere else), and a red that
+   clears 4.5:1 on --field for revoked. All three carry a text label as well as
+   a colour — colour alone is not a status. */
+.vstatus {
+  display: inline-block;
+  padding: var(--s1) var(--s3);
+  border: 1px solid currentColor;
+  border-radius: var(--r-pill);
+  font-size: 0.6875rem;
+  font-variation-settings: "wdth" var(--narrow), "wght" 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.vstatus[data-state="valid"]   { color: var(--verified); background: rgba(11, 107, 74, 0.08); }
+.vstatus[data-state="expired"] { color: var(--marigold); background: rgba(154, 78, 18, 0.08); }
+.vstatus[data-state="revoked"] { color: #8a1c10;         background: rgba(138, 28, 16, 0.08); }
+
+.cert {
+  margin-top: var(--s5);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--rule);
+}
+
+.cert__img {
+  display: block;
+  width: 100%;
+  max-width: 26rem;
+  height: auto;
+  margin-bottom: var(--s3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+}
+
+.attests {
+  margin-top: var(--s5);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--rule);
+  max-width: 62ch;
+}
+
+.attests p {
+  margin-top: var(--s3);
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: var(--muted);
+}
+
+.attests p strong {
+  color: var(--text);
+}
+
+.attests .sub {
+  margin-bottom: var(--s2);
+}
+
+/* LinkedIn field list. The value and its copy button share a line and wrap
+   together on a phone. */
+.li-spec dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  align-items: center;
+  color: var(--text);
+}
+
+.copy {
+  flex: none;
+  min-height: 24px;
+  padding: var(--s1) var(--s3);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.75rem;
+  font-variation-settings: "wdth" var(--narrow), "wght" 600;
+  cursor: pointer;
+}
+
+.copy:hover {
+  background: var(--field);
+}

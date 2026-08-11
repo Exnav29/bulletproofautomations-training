@@ -1,0 +1,192 @@
+-- Bulletproof Automations Training — credentials
+--
+-- ============================================================================
+-- THIS FILE IS DOCUMENTATION, NOT A MIGRATION. DO NOT RUN IT.
+-- ============================================================================
+--
+-- Same convention as supabase-enrollments.sql: the live database is the source
+-- of truth. If you change the table, update this file in the same change.
+--
+-- Project: the training Supabase project (ref in .env, gitignored).
+-- Created: 11 August 2026, to give /verify a data source.
+
+
+-- ---------------------------------------------------------------------------
+-- What this table is for
+-- ---------------------------------------------------------------------------
+--
+-- One row per credential issued under the Bulletproof Automation Builder
+-- Pathway. It backs /verify and is written by /admin when a credential is
+-- issued. It is NOT a copy of the enrollment roll: a person can hold a
+-- credential without ever having enrolled (Path B), and can enroll without
+-- ever earning one.
+
+
+-- ---------------------------------------------------------------------------
+-- Columns as deployed
+-- ---------------------------------------------------------------------------
+--
+--  column                  type          null?  default
+--  ----------------------  ------------  -----  ---------------------------
+--  id                      uuid          NO     gen_random_uuid()
+--  created_at              timestamptz   NO     now()
+--  updated_at              timestamptz   NO     now()     trigger-maintained
+--  credential_id           text          NO     —         UNIQUE, the public ID
+--  holder_name             text          NO     —         as on the certificate
+--  holder_name_normalised  text          NO     ''        TRIGGER-maintained
+--  holder_email            text          YES    —         NEVER published
+--  credential              text          NO     —         CHECK
+--  issued_on               date          NO     —
+--  expires_on              date          YES    —         NULL = never expires
+--  platform_version        text          YES    —         e.g. 'n8n 2.31.6'
+--  cohort                  text          YES    —         internal
+--  status                  text          NO     'valid'   CHECK
+--  revoked_on              date          YES    —         internal
+--  revoked_reason          text          YES    —         internal
+--  publish_consent         boolean       NO     true      hides it entirely
+--  allow_name_lookup       boolean       NO     true      ID yes, name no
+--  pdf_path                text          YES    —         storage object path
+--  preview_path            text          YES    —         storage object path
+--  enrollment_id           uuid          YES    —         FK enrollments(id)
+--  notes                   text          YES    —         internal
+--
+--  credential CHECK: foundations | bcab
+--  status     CHECK: valid | revoked
+--
+--  enrollment_id is ON DELETE SET NULL. A credential outlives the enrollment
+--  record that produced it; deleting an enrollment must never delete proof
+--  that somebody earned something.
+--
+--  Indexes: credentials_name_idx   (holder_name_normalised)
+--           credentials_issued_idx (issued_on desc)
+
+
+-- ---------------------------------------------------------------------------
+-- Three decisions worth not re-litigating
+-- ---------------------------------------------------------------------------
+--
+-- 1. EXPIRED IS DERIVED, NEVER STORED. status only ever holds 'valid' or
+--    'revoked'. Expiry is computed as expires_on < current_date at read time.
+--    A nightly job that flips a status column is a job that can fail silently;
+--    a comparison cannot. Foundations carries expires_on = NULL, because a
+--    certificate of completion records something that happened on a date and
+--    does not stop having happened (framework section 8).
+--
+-- 2. REVOCATION NEVER DELETES. A deleted row reads as "not found", which is
+--    exactly what a credential that was never issued reads as. If revocation
+--    is indistinguishable from non-existence then revocation means nothing.
+--    Set status = 'revoked'; the lookup reports it explicitly.
+--
+-- 3. holder_name_normalised IS TRIGGER-MAINTAINED, never written by hand.
+--    set_credential_normalised() applies exactly three operations:
+--
+--      lower(btrim(regexp_replace(holder_name, '\s+', ' ', 'g')))
+--
+--    lowercase, trim, collapse internal whitespace. NO ACCENT FOLDING —
+--    unaccent() is not immutable, and this value has to be reproducible
+--    character-for-character by the lookup. Change these three operations and
+--    name lookup silently stops matching for everyone already issued.
+
+
+-- ---------------------------------------------------------------------------
+-- Row-level security as deployed
+-- ---------------------------------------------------------------------------
+--
+--  policy                          cmd     roles
+--  ------------------------------  ------  ----------------
+--  Allow service role full access  ALL     {service_role}
+--  Admins can read credentials     SELECT  {authenticated}
+--  Admins can issue credentials    INSERT  {authenticated}
+--  Admins can update credentials   UPDATE  {authenticated}
+--
+-- All three authenticated policies are restricted to
+-- johnathan@bulletproofautomations.com — the same allowlist enrollments,
+-- foundations_interest and payment_events use. Extend them together when a
+-- second assessor is appointed; if the list grows past two, move it into an
+-- admins table.
+--
+-- Note the INSERT policy. This is the first table where the admin WRITES
+-- rather than only reads, because /admin issues credentials.
+--
+-- There is NO anon policy, and `revoke all on public.credentials from anon`
+-- is applied on top of that. Verified against the live API on 11 August 2026:
+-- anon receives 401 on select, on insert, and on the rpc alike.
+
+
+-- ---------------------------------------------------------------------------
+-- The public lookup is a FUNCTION, not a readable view. This is the whole
+-- security model of /verify, so it is worth stating plainly.
+-- ---------------------------------------------------------------------------
+--
+--   public.verify_credential(p_id text, p_name text)
+--   public.verify_credentials_for(p_normalised text)
+--
+-- Both are `security definer`, `stable`, `set search_path = public`, and
+-- EXECUTE is granted to service_role ONLY — explicitly revoked from public,
+-- anon and authenticated. Postgres grants EXECUTE to PUBLIC by default, so
+-- forgetting that revoke would undo the entire design.
+--
+-- WHY A FUNCTION. An earlier draft of this work exposed a view to anon. A view
+-- granted to anon can be dumped with a single ?select=* request: the complete
+-- holder list, in one call, from anywhere, by anyone who read the JavaScript.
+-- A function has no "return everything" form. It can only be asked about one
+-- exact ID or one exact name.
+--
+-- Enforced INSIDE the function, deliberately not trusted to the client:
+--
+--   * exact matching only — no ilike, no wildcards, no ranges
+--   * minimum input lengths (12 for an ID, 4 for a name), rejecting the empty
+--     and single-character probing that enumeration starts with
+--   * allow_name_lookup, so a holder who opts out of name search cannot be
+--     found by name even by something calling the API directly
+--   * publish_consent, which removes the row from every result
+--
+-- The browser never calls these. /verify posts to a Cloudflare Pages Function
+-- at /api/verify, which verifies a Turnstile token and then calls the RPC with
+-- the service key. See functions/api/verify.js.
+
+
+-- ---------------------------------------------------------------------------
+-- Credential ID format
+-- ---------------------------------------------------------------------------
+--
+--   BPA-FND-2026-4K7QX2      Bulletproof Automation Foundations Certificate
+--   BPA-BCAB-2026-9M2XQ4     Bulletproof Certified Automation Builder
+--
+-- Prefix, credential, issue year, then SIX characters of Crockford base32
+-- (no I, L, O or U, so it survives being read aloud or copied off paper),
+-- drawn from crypto.getRandomValues. Exactly 19 characters, which is why the
+-- certificate template can size the field rather than let it reflow.
+--
+-- Six characters, not four: four is ~1.05 million combinations, which is
+-- brute-forceable, and enumerating it would harvest the holder list. Six is
+-- 1.07 billion.
+--
+-- The UNIQUE constraint on credential_id is the real collision guard. /admin
+-- generates, attempts the insert, and regenerates on 409 rather than checking
+-- first — a check-then-insert has a race it cannot see.
+--
+-- THIS ID IS PRINTED ON THE CERTIFICATE. It cannot be changed after issue
+-- without invalidating an artifact somebody may already have posted publicly.
+
+
+-- ---------------------------------------------------------------------------
+-- Storage buckets
+-- ---------------------------------------------------------------------------
+--
+--   credential-templates   PRIVATE. The fillable PDF templates:
+--                          foundations-template.pdf, bcab-template.pdf.
+--                          Read by the admin JWT only. Deliberately not in the
+--                          repo — the copy allowlist would either ship them
+--                          publicly or need a carve-out, and the blank
+--                          template is the forgeable artifact.
+--
+--   credentials            PUBLIC READ. Filled certificates and their preview
+--                          images, named by credential ID:
+--                            BPA-FND-2026-4K7QX2.pdf
+--                            BPA-FND-2026-4K7QX2.webp
+--                          Public is consistent — the object shows only what
+--                          the verification page already displays — and the ID
+--                          is unguessable. Withholding a credential is
+--                          publish_consent, which drops the row from the
+--                          function's results so no path is ever surfaced.

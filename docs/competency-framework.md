@@ -1,7 +1,7 @@
 # Bulletproof Automation Builder Pathway
 ## Competency Framework and Certification Standard
 
-**Version 2.0** · Issuing body: Bulletproof Automations · Owner: Bulletproof Automations
+**Version 2.1** · Issuing body: Bulletproof Automations · Owner: Bulletproof Automations
 Issued: 14 July 2026 · Platform basis for current assessments: n8n 2.31.6 · Next review: 10 December 2026
 © 2026 Bulletproof Automations. All rights reserved.
 
@@ -65,7 +65,31 @@ There is no separate examination and no direct-entry route. A certificate of com
 
 ### 3.4 Certificate wording
 
-> [Name] completed the Bulletproof Automation Foundations programme and demonstrated the foundational skills required to progress to intermediate automation training. This certificate records completion of training. It is not a professional certification.
+This is the attestation as it appears on the certificate itself, on `/verify`, and anywhere else the
+certificate is described. It is a single canonical text — it is not paraphrased per surface.
+
+> This certifies that the named participant attended and completed the Bulletproof Automation
+> Foundations programme, an eight-week introductory program in workflow automation conducted from
+> [COHORT START] to [COHORT END] by Bulletproof Automations.
+>
+> The program covered the fundamentals of automation workflow design using the n8n platform,
+> including trigger and node configuration, data transformation, API and service integration, error
+> handling, and the planning and delivery of an individual capstone automation project.
+>
+> This certificate attests to attendance and completion of the program requirements, including
+> submission of a capstone project. It is not an assessment or certification of professional
+> competence, and does not constitute a credential in workflow automation.
+>
+> Bulletproof Automations is an independent training provider. This certificate is issued solely by
+> Bulletproof Automations and is not issued, endorsed, or accredited by n8n GmbH.
+
+The cohort dates are the only variable part. On `/verify`, where a single record can belong to any
+cohort, the first paragraph drops the dates and names the programme alone.
+
+**The programme is the Bulletproof Automation Foundations programme.** It is not the "n8n Beginner
+Cohort": "Beginner" is on the terminology avoid-list, and naming the programme after the platform
+inverts the relationship the whole pathway depends on — n8n is what competence is demonstrated on,
+not what is being certified.
 
 ---
 
@@ -316,6 +340,7 @@ Credential holders are supplied with a permitted description of their credential
 | 1.0 | 26 May 2026 | Initial draft | J. Lightfoot |
 | 2.0 (draft) | 1 July 2026 | Certificate/certification split; seven domains; four assessment components; provisional thresholds; hiring-standard governance | J. Lightfoot |
 | 2.0 | 14 July 2026 | Published | J. Lightfoot |
+| 2.1 | 11 August 2026 | Section 3.4 replaced with the canonical certificate attestation, which now reads identically on the certificate, on /verify and in this framework. Programme named as Bulletproof Automation Foundations throughout | J. Lightfoot |
 
 ---
 

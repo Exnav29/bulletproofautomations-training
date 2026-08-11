@@ -1,6 +1,6 @@
 # Build status — site rebuild
 
-**Updated:** 10 August 2026 · **Branch:** `site-rebuild` · **Nothing merged to `main` yet.**
+**Updated:** 11 August 2026 · **Branch:** `site-rebuild` · **Nothing merged to `main` yet.**
 
 Read this with `CLAUDE.md`, `docs/project-brief.md` (confirmed decisions in §12) and
 `docs/competency-framework.md`. This file records where the build actually is, so a new
@@ -35,6 +35,127 @@ dropped from the allowlist entirely on 10 August 2026, taking the count from 20 
 
 `sitemap.xml` now lists `/`, `/certified-automation-builder` and `/standard`. Add each new
 route as it is built.
+
+---
+
+## 1a. `/verify` rebuilt — 11 August 2026
+
+Credential lookup, an admin register behind it, and the first real credentials issued.
+
+**Two surfaces, gated differently.** `/verify` is a gated search box: name, email and reason before
+you can look anyone up, kept 30 days per browser. `/verify/<credential-id>` and `/v/<credential-id>`
+are **ungated** — that is the URL a holder puts in LinkedIn's Credential URL field, which LinkedIn
+renders as a "Show credential" button, and a form in front of it would break every holder's
+credential for exactly the audience it exists to convince.
+
+**The browser no longer talks to Supabase on this page.** The anon key is public by design, so a
+lookup the browser can make is a lookup an attacker can make — and Cloudflare protects our domain,
+not supabase.co. Everything goes through Pages Functions on our own origin.
+
+**The lookup is a FUNCTION, not a readable view.** An earlier draft granted a view to anon; a view
+granted to anon can be dumped with one `?select=*`. `verify_credential()` has no "return everything"
+form. Exact matching, minimum input lengths, `allow_name_lookup` and `publish_consent` are all
+enforced in SQL rather than trusted to the client. Full reasoning in `supabase-credentials.sql`.
+
+### Four things that were measured, not assumed
+
+1. **`_redirects` 200-rewrites are silently ignored.** `/verify/*  /verify/index.html  200` looked
+   right and did nothing — every `/verify/<id>` fell through to `404.html`. Only symptom would have
+   been a dead credential on somebody's LinkedIn. Routing is now
+   `functions/verify/[[path]].js` + `functions/v/[[path]].js`. **Do not put the rewrite back.**
+2. **Turnstile on the ID path made a real credential read as missing.** A browser that could not
+   obtain a token got 403 and the page rendered "no credential matches". Turnstile + gate pass are
+   now required for **name** lookups only; an ID lookup needs neither, because the ID *is* the access
+   control — the same model Cisco and Credly use. Brute force is bounded by the rate-limiting rule.
+3. **A service failure must never render as "not found".** Those are opposite claims: one says the
+   register was checked and is empty, the other says it could not be reached. Saying the first when
+   the second is true tells a recruiter a real holder is lying. There is now a separate `#failed`
+   state that says so explicitly.
+4. **`focus()` scrolls by default**, so the deep link jumped the page during load. Focus now uses
+   `preventScroll`, and scrolling only happens after someone has actually submitted something.
+
+### Two bugs found only by a person using the real thing (11 August 2026)
+
+Both were invisible to every check that came before them, including the CDP run.
+
+**5. Duplicate CSP headers made every narrower policy in `_headers` inert.**
+Cloudflare applies EVERY matching rule, not the most specific one, so `/verify`
+received two `Content-Security-Policy` headers — and a browser given two
+enforces the INTERSECTION. `script-src 'self'` from `/*` intersected with
+`script-src 'self' https://challenges.cloudflare.com` came out as `'self'`,
+Turnstile was blocked, no token was ever produced, and the gate failed for
+everyone. **`/nfc` had the same fault from the day `_headers` was written** — its
+inline scripts and Google Fonts were blocked in production the whole time. Both
+now `! Content-Security-Policy` before setting their own. The reasoning is at the
+top of `_headers`, because each rule reads correctly on its own and the failure
+only shows in the response.
+
+**6. The Turnstile widget was rendered inside a hidden container.** `#ts-bar`
+started `hidden` and was only revealed when a request began, so the widget could
+never solve. The symptom was maddening and diagnostic: the first submit failed,
+and the failure itself unhid the widget, so the second submit worked. In a
+private window it failed every time, because with no clearance cookie Turnstile
+needs an interactive challenge and cannot show one in a `display:none` box. The
+widget is now revealed before it is rendered and stays visible.
+
+Lesson for the rest of this build: **a challenge widget must be laid out before
+it is asked to solve**, and header rules must be checked in the response rather
+than read in the file.
+
+### Browser verification — the gap in §6 is now partly closed
+
+`npx wrangler pages dev dist` against a local mock Supabase, driven in headless Chrome over the
+DevTools Protocol (`scratchpad/drive-form.js`). **16 checks pass**: gate submit, pass stored, search
+revealed, both credentials rendered, LinkedIn block populated, partial-name rejected, no uncaught
+JavaScript errors. Turnstile refuses to solve in headless by design, so the widget alone is stubbed —
+everything downstream is the real code path.
+
+Screenshots at 360/390px confirmed the deep link, the gate and the not-found state.
+
+### Live security posture, verified by curl against the live project
+
+| Check | Result |
+|---|---|
+| anon `GET /credentials` | **401** |
+| anon `GET /verification_lookups` | **401** |
+| anon `POST /rpc/verify_credential` | **401** |
+| anon `POST /rpc/verify_credentials_for` | **401** |
+| `service_role` occurrences in `dist/` | **0** |
+| `credentials` table contents | 2 rows, both real, no test data |
+
+### The first credentials are issued, and they need a decision
+
+`BPA-FND-2026-4GGY96` (Foundations) and `BPA-BCAB-2026-39VF9Z` (BCAB), both to Johnathan Lightfoot,
+both dated **15 June 2026**, both **non-expiring** by an explicit founder exception recorded in the
+row's `notes`. Three tensions, flagged and deliberately not resolved unilaterally:
+
+- The Foundations certificate is a **certificate of completion** awarded on participation, portfolio
+  and capstone (§3.3), issued to the person who taught the programme.
+- BCAB is assessed and failable, public conferral opens 1 November 2026, and §6 makes second review
+  mandatory where the assessor taught the candidate. There is no second assessor yet.
+- 15 June 2026 predates both the cohort (11 July) and this framework's publication (14 July).
+
+The cleanest fix if they are to stand: have the second assessor assess him once appointed, and say
+so publicly. That converts the weakness into the rigour claim.
+
+### Still to do on this feature
+
+- **Certificate PDF generation is NOT built.** It is blocked on Kim's two fillable templates, and
+  the code fills fields *by name* — building it before the field names exist would be guesswork.
+  The spec to send her (field names, the 22mm QR box, the three-part verification block) is in the
+  plan file. `pdf_path`/`preview_path` columns and the storage buckets are designed and documented;
+  the result panel already renders a certificate when one exists and omits it cleanly when it does
+  not.
+- **Six environment values** must be set on the Pages project, for **Production and Preview
+  separately**: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `TURNSTILE_SITE_KEY` (build-time, and the build
+  now **exits 1** without it under `CF_PAGES`), plus `SUPABASE_SERVICE_ROLE_KEY`,
+  `TURNSTILE_SECRET_KEY`, `GATE_SECRET` (read by the Functions at runtime).
+- **Dashboard state, not in version control:** Turnstile keys, Bot Fight Mode, and one rate-limiting
+  rule on `/api/*`.
+- **Verify `functions/` is picked up on a preview deploy before merging.** If the directory is
+  missed, `/api/verify` 404s and every lookup fails, including the LinkedIn path.
+- The credential page's **Open Graph card is generic** — it renders client-side, so a pasted link
+  unfurls as "Verify a credential", not as the individual's credential.
 
 ---
 

@@ -1,7 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- include: head.html title="Verify a credential — Bulletproof Automations Training" description="Public verification for credentials issued under the Bulletproof Automation Builder Pathway. The first BCAB assessments are sat from 1 November 2026, so no credentials exist to verify yet." canonical="https://training.bulletproofautomations.com/verify" -->
+<!-- include: head.html title="Verify a credential — Bulletproof Automations Training" description="Public verification for credentials issued under the Bulletproof Automation Builder Pathway. Check a credential ID or a holder's name and see what the credential attests to." canonical="https://training.bulletproofautomations.com/verify" -->
+<!-- Turnstile. Loaded only on this page, and allowed only by the /verify* block
+     in _headers — the site-wide policy stays script-src 'self'. Explicit render
+     so the token can be consumed and the widget reset per request; shell.js is
+     deferred and included first, so bpaTurnstileReady exists before this runs. -->
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&amp;onload=bpaTurnstileReady" defer></script>
 </head>
 <body>
 <!-- include: header.html nav="verify" -->
@@ -21,39 +26,261 @@
   <section class="section section--ink" aria-labelledby="ver-title">
     <div class="shell">
       <p class="masthead__eyebrow">Credential verification</p>
-      <h1 class="pw__title" id="ver-title">Nothing to verify yet.</h1>
-      <p class="lede pw__lede">A credential you cannot check is just a claim, so this page will exist for as long as the pathway does. It is empty today for a straightforward reason: <strong>the first BCAB assessments are not sat until <time datetime="2026-11-01">1 November 2026</time></strong>, so no certifications have been issued.</p>
+      <h1 class="pw__title" id="ver-title">Verify a credential.</h1>
+      <p class="lede pw__lede">A credential you cannot check is just a claim. Enter a credential ID, or the holder&rsquo;s full name as it appears on their certificate, and you will see what they hold, whether it is still valid, and exactly what it attests to.</p>
     </div>
   </section>
 
-  <section class="section" aria-labelledby="willshow-title">
+  <!-- The lookup. Two forms in sequence: identify yourself, then search.
+       In deep-link state (/verify/<id>) both are hidden and the credential
+       resolves straight from the address. -->
+  <section class="section section--ink" id="lookup" aria-labelledby="lookup-title">
     <div class="shell">
-      <h2 class="section__title" id="willshow-title">What this page will show</h2>
-      <p class="lede">Enter a credential ID and you will see exactly this, and nothing more. No contact details, and nothing the holder did not agree to publish.</p>
+      <h2 class="section__title" id="lookup-title">Look up a credential</h2>
+
+      <!-- Step 1. Gate. -->
+      <div id="gate-step">
+        <p class="lede verify__lede">Verification is free. We ask who is checking so we know who the credential is reaching &mdash; nothing more. You will only be asked once.</p>
+
+        <form class="form verify" id="gate-form" novalidate>
+          <div class="form__row">
+            <label class="form__label" for="g-name">Your name</label>
+            <input class="form__input" type="text" id="g-name" name="full_name" autocomplete="name" required>
+          </div>
+          <div class="form__row">
+            <label class="form__label" for="g-email">Your email</label>
+            <input class="form__input" type="email" id="g-email" name="email" autocomplete="email" required>
+          </div>
+          <div class="form__row">
+            <label class="form__label" for="g-reason">Why are you checking?</label>
+            <select class="form__input" id="g-reason" name="reason" required>
+              <option value="">Choose one</option>
+              <option value="hiring">I am hiring or verifying a candidate</option>
+              <option value="own_credential">I am checking my own credential</option>
+              <option value="considering_training">I am considering the training</option>
+              <option value="other">Something else</option>
+            </select>
+          </div>
+
+          <label class="choice choice--consent">
+            <input type="checkbox" id="g-optin" name="marketing_opt_in">
+            <span class="choice__body">
+              <span class="choice__name">Email me occasionally about cohorts and the standard</span>
+              <span class="choice__price">Optional. Unsubscribe any time.</span>
+            </span>
+          </label>
+
+          <!-- Honeypot. Hidden from people, irresistible to naive bots.
+               A filled value is answered as though it worked, so a bot learns
+               nothing from the response. -->
+          <div class="trap" aria-hidden="true">
+            <label for="gate-hp">Do not fill this in</label>
+            <input type="text" id="gate-hp" name="company_website" tabindex="-1" autocomplete="off">
+          </div>
+
+          <p class="form__error" id="gate-error" role="alert" hidden></p>
+          <button class="btn btn--go form__submit" type="submit">Continue to the lookup</button>
+          <p class="form__hint">We store your name, email and reason so we know who is verifying credentials. See the <a href="/privacy">privacy notice</a>.</p>
+        </form>
+      </div>
+
+      <!-- Step 2. Search. Revealed once the gate is passed. -->
+      <div id="search-step" hidden>
+        <form class="form verify" id="search-form" novalidate>
+          <fieldset class="form__row form__fieldset">
+            <legend class="form__label">Search by</legend>
+            <label class="choice">
+              <input type="radio" name="mode" value="id" checked>
+              <span class="choice__body">
+                <span class="choice__name">Credential ID</span>
+                <span class="choice__price">Printed on the certificate, e.g. BPA-FND-2026-4K7QX2</span>
+              </span>
+            </label>
+            <label class="choice">
+              <input type="radio" name="mode" value="name">
+              <span class="choice__body">
+                <span class="choice__name">Holder name</span>
+                <span class="choice__price">The full name exactly as it appears on the certificate</span>
+              </span>
+            </label>
+          </fieldset>
+
+          <div class="form__row">
+            <label class="form__label" for="s-query" id="s-query-label">Credential ID</label>
+            <input class="form__input" type="text" id="s-query" name="query" autocomplete="off" required>
+            <p class="form__hint" id="s-query-hint">Dashes, spaces and capitals do not matter.</p>
+          </div>
+
+          <div class="trap" aria-hidden="true">
+            <label for="look-hp">Do not fill this in</label>
+            <input type="text" id="look-hp" name="company_website" tabindex="-1" autocomplete="off">
+          </div>
+
+          <p class="form__error" id="search-error" role="alert" hidden></p>
+          <button class="btn btn--go form__submit" type="submit">Show me the result</button>
+        </form>
+      </div>
+
+      <!-- Turnstile. Rendered here for both flows, including the deep link,
+           where the forms above are hidden. -->
+      <div class="ts-bar" id="ts-bar" hidden>
+        <div id="ts-host" data-sitekey="__TURNSTILE_SITE_KEY__"></div>
+        <p class="form__hint" id="ts-note">Checking your browser&hellip;</p>
+      </div>
+
+      <p class="form__hint" id="js-off">This lookup needs JavaScript. If you would rather not enable it, email <a href="mailto:info@bulletproofautomations.com">info@bulletproofautomations.com</a> with the credential ID and we will confirm it by reply.</p>
+    </div>
+  </section>
+
+  <!-- Result. Populated from a template; nothing here is built by string
+       concatenation and nothing is written with innerHTML. -->
+  <section class="section" id="result" aria-labelledby="result-title" hidden tabindex="-1">
+    <div class="shell">
+      <h2 class="section__title" id="result-title">Verification result</h2>
+      <p class="lede" id="result-lede"></p>
+      <div id="credential-list"></div>
+      <p class="note" id="verified-on"></p>
+    </div>
+  </section>
+
+  <!-- Not found. Deliberately not styled as an error: the commonest cause is
+       a typo, and the second commonest is a credential that was never issued.
+       Neither is the visitor's fault. -->
+  <section class="section" id="notfound" aria-labelledby="notfound-title" hidden tabindex="-1">
+    <div class="shell prose">
+      <h2 class="section__title" id="notfound-title">No credential matches that.</h2>
+      <p class="lede">Nothing in our register matches what you entered. There are three usual reasons.</p>
+      <ul class="bullets">
+        <li><strong>A typo in the ID.</strong> Credential IDs look like <code>BPA-FND-2026-4K7QX2</code>. Capitals, dashes and spaces do not matter, but the characters do.</li>
+        <li><strong>The name is not an exact match.</strong> We match the full name as it appears on the certificate, not part of it. &ldquo;Ama&rdquo; will not find &ldquo;Ama Boateng&rdquo;.</li>
+        <li><strong>No such credential was issued.</strong> If someone has told you they hold one, this is what that looks like.</li>
+      </ul>
+      <p>If you believe a credential exists and this page cannot find it, email <a href="mailto:info@bulletproofautomations.com">info@bulletproofautomations.com</a> with the name and we will tell you plainly.</p>
+      <p><button class="btn btn--ghost" type="button" id="try-again">Search again</button></p>
+    </div>
+  </section>
+
+  <!-- Service failure. Deliberately a separate state from "no credential
+       matches": one says the register was checked and is empty, the other says
+       the register could not be reached. Showing the first when the second is
+       true tells a recruiter that a real holder is lying. -->
+  <section class="section" id="failed" aria-labelledby="failed-title" hidden tabindex="-1">
+    <div class="shell prose">
+      <h2 class="section__title" id="failed-title">We could not check that right now.</h2>
+      <p class="lede"><strong>This does not mean the credential is invalid.</strong> It means our verification service did not answer, so we have not checked the register at all.</p>
+      <p class="note" id="failed-detail"></p>
+      <p>Please try again in a moment. If it keeps failing, email <a href="mailto:info@bulletproofautomations.com">info@bulletproofautomations.com</a> with the credential ID and we will confirm it by reply, usually the same day.</p>
+      <p><button class="btn btn--ghost" type="button" id="retry">Try again</button></p>
+    </div>
+  </section>
+
+  <!-- LinkedIn. Autofill was deprecated platform-wide, so a one-click button is
+       no longer buildable by anyone. These are the exact six fields LinkedIn's
+       Licenses & certifications form asks for. -->
+  <section class="section section--sand" id="linkedin" aria-labelledby="li-title" hidden>
+    <div class="shell">
+      <h2 class="section__title" id="li-title">Add this to LinkedIn</h2>
+      <p class="lede">If this is your credential, these are the exact values LinkedIn asks for under <strong>Licenses &amp; certifications</strong>. LinkedIn no longer accepts pre-filled links, so they have to be typed or pasted.</p>
+      <dl class="spec li-spec" id="li-fields">
+        <div><dt>Name</dt><dd><span data-li="name"></span> <button class="copy" type="button" data-copy="name">Copy</button></dd></div>
+        <div><dt>Issuing organization</dt><dd><span data-li="org">Bulletproof Automations</span> <button class="copy" type="button" data-copy="org">Copy</button></dd></div>
+        <div><dt>Issue date</dt><dd><span data-li="issued"></span></dd></div>
+        <div><dt>Expiration date</dt><dd><span data-li="expires"></span></dd></div>
+        <div><dt>Credential ID</dt><dd><span data-li="id"></span> <button class="copy" type="button" data-copy="id">Copy</button></dd></div>
+        <div><dt>Credential URL</dt><dd><span data-li="url"></span> <button class="copy" type="button" data-copy="url">Copy</button></dd></div>
+      </dl>
+      <p class="note">Holders are supplied with a permitted description of their credential and <strong>may not describe it as an n8n certification</strong>. The issuing organization is Bulletproof Automations.</p>
+    </div>
+  </section>
+
+  <!-- Standing explainer. Hidden once a result is on screen, so the page shows
+       either the promise or the thing itself, never both. -->
+  <section class="section" id="explainer" aria-labelledby="willshow-title">
+    <div class="shell">
+      <h2 class="section__title" id="willshow-title">What a result shows</h2>
+      <p class="lede">You will see exactly this, and nothing more. No contact details, and nothing the holder did not agree to publish.</p>
       <dl class="spec">
         <div><dt>Holder name</dt><dd>As it appears on the credential</dd></div>
         <div><dt>Credential</dt><dd>Which credential, and which stage of the pathway it belongs to</dd></div>
         <div><dt>Issue date</dt><dd>When it was awarded</dd></div>
         <div><dt>Platform version</dt><dd>What it was assessed against &mdash; for example, &ldquo;assessed against n8n 2.31.6&rdquo;</dd></div>
         <div><dt>Current status</dt><dd>Valid, expired, or revoked. BCAB is valid for 24 months</dd></div>
+        <div><dt>The certificate itself</dt><dd>Where one has been issued, the PDF as awarded</dd></div>
       </dl>
-      <p class="note">Credential IDs are unique and non-sequential, so one cannot be guessed from another.</p>
+      <p class="note">Credential IDs are unique and non-sequential, so one cannot be guessed from another. A holder can also ask to be excluded from name search, or from this register entirely.</p>
     </div>
   </section>
 
-  <section class="section section--sand" aria-labelledby="until-title">
+  <section class="section section--sand" aria-labelledby="split-title">
     <div class="shell prose">
-      <h2 class="section__title" id="until-title">Checking a claim before then</h2>
-      <p class="lede">If someone has told you they hold a Bulletproof Automations credential and you want to confirm it, email <a href="mailto:info@bulletproofautomations.com">info@bulletproofautomations.com</a> with the name and we will tell you plainly.</p>
-      <p>Two things worth knowing while you wait. The <strong>Foundations Certificate is a certificate of completion</strong> &mdash; it records that someone finished the training and makes no independent competency claim. Only BCAB attests to assessed competence, and no one holds it yet. Anyone claiming otherwise today is mistaken.</p>
-      <p>Holders are also supplied with a permitted description of their credential and <strong>may not describe it as an n8n certification</strong>.</p>
+      <h2 class="section__title" id="split-title">A certificate is not a certification</h2>
+      <p class="lede">The pathway issues two different things, and the difference is the whole point of the standard.</p>
+      <p>The <strong>Bulletproof Automation Foundations Certificate</strong> records completion of training. It attests that someone attended and completed the programme and submitted a capstone project. It is not an assessment of professional competence, and it makes no independent competency claim.</p>
+      <p>The <strong>Bulletproof Certified Automation Builder (BCAB)</strong> is a professional certification. It is assessed across four components against a published standard, it can be failed, and it is valid for 24 months. <strong>Public conferral of BCAB opens on <time datetime="2026-11-01">1 November 2026</time></strong>, when the first assessment window begins.</p>
       <a class="link-arrow" href="/standard">What the assessment measures
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
       </a>
     </div>
   </section>
 
+  <section class="section section--sand" aria-labelledby="forgery-title">
+    <div class="shell prose">
+      <h2 class="section__title" id="forgery-title">Checking a claim you have been handed</h2>
+      <p class="lede">Our certificates carry a QR code. It is a convenience, not a proof &mdash; and it is worth being plain about why.</p>
+      <p><strong>A QR code on a printed certificate can point anywhere.</strong> Whoever printed the document chose where it goes. So if it matters, do not scan it: type <strong>training.bulletproofautomations.com/verify</strong> into your browser yourself and enter the credential ID printed alongside it. A forged certificate can imitate this page; what it cannot do is make <em>our</em> address return <em>its</em> record.</p>
+      <p>Every certificate we issue prints the ID and the address in plain text next to the code, precisely so you never have to trust the code.</p>
+      <p>If someone has told you they hold a Bulletproof Automations credential and this page cannot confirm it, email <a href="mailto:info@bulletproofautomations.com">info@bulletproofautomations.com</a> with the name and we will tell you plainly.</p>
+    </div>
+  </section>
+
 </main>
+
+<!-- Result card. Cloned per credential; every field set with textContent. -->
+<template id="tpl-credential">
+  <article class="credential">
+    <p class="credential__top"><span class="vstatus" data-f="status"></span></p>
+    <h3 class="credential__name" data-f="name">Credential</h3>
+    <p class="credential__holder">Held by <strong data-f="holder"></strong></p>
+    <dl class="spec credential__spec">
+      <div><dt>Credential ID</dt><dd><code data-f="id"></code></dd></div>
+      <div><dt>Issued</dt><dd data-f="issued"></dd></div>
+      <div><dt>Valid until</dt><dd data-f="expires"></dd></div>
+      <div><dt>Assessed against</dt><dd data-f="platform"></dd></div>
+    </dl>
+    <div class="cert" data-f="cert" hidden>
+      <!-- src is a 1x1 transparent placeholder; the real preview and its alt
+           text are set from the record, and the element stays hidden until
+           a certificate has actually been issued. -->
+      <img class="cert__img" data-f="preview" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="" width="420" height="297" loading="lazy" decoding="async" hidden>
+      <a class="link-arrow" data-f="pdf" href="#">Download the certificate (PDF)
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
+      </a>
+    </div>
+    <div class="attests" data-f="attests"></div>
+  </article>
+</template>
+
+<!-- What each credential attests to. Kept in the markup rather than in JS so
+     the wording is reviewable where the rest of the page copy lives. -->
+<template id="tpl-attests-foundations">
+  <div>
+    <h4 class="sub">What this certificate attests to</h4>
+    <p>This certifies that the named participant attended and completed the Bulletproof Automation Foundations programme, an eight-week introductory program in workflow automation conducted by Bulletproof Automations.</p>
+    <p>The program covered the fundamentals of automation workflow design using the n8n platform, including trigger and node configuration, data transformation, API and service integration, error handling, and the planning and delivery of an individual capstone automation project.</p>
+    <p><strong>This certificate attests to attendance and completion of the program requirements, including submission of a capstone project. It is not an assessment or certification of professional competence, and does not constitute a credential in workflow automation.</strong></p>
+    <p>Bulletproof Automations is an independent training provider. This certificate is issued solely by Bulletproof Automations and is not issued, endorsed, or accredited by n8n GmbH.</p>
+  </div>
+</template>
+
+<template id="tpl-attests-bcab">
+  <div>
+    <h4 class="sub">What this certification attests to</h4>
+    <p>The holder can independently take a moderately complex automation requirement and design, build, integrate, harden, document and maintain a solution &mdash; and can diagnose a malfunctioning system they did not build.</p>
+    <p>Assessed across seven competency domains: data engineering, integrations and APIs, workflow architecture, logic and state, reliability, troubleshooting, and AI automation. Four components: a written knowledge and scenario judgment paper, an unseen practical build, a live supervised troubleshooting challenge, and an architecture walkthrough.</p>
+    <p><strong>Stated limitation.</strong> This certification does not attest to competence in scaling, infrastructure administration, deployment pipelines, or enterprise security architecture. Those belong to Stage 3.</p>
+    <p>Bulletproof Automations is an independent training and certification provider. This credential is not affiliated with, endorsed by, or accredited by n8n GmbH. Holders may not describe it as an n8n certification.</p>
+  </div>
+</template>
 
 <!-- include: footer.html -->
 </body>

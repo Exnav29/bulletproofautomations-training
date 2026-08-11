@@ -187,6 +187,23 @@
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 0.75rem; line-height: 1.55; white-space: pre-wrap; word-break: break-word;
     max-height: 26rem; overflow: auto; }
+
+/* Issue a credential. Deliberately plain: this form creates a real thing in
+   the world, so it reads like a record being written, not a marketing block. */
+.issue__grid { display: grid; gap: var(--s4); margin-top: var(--s4); }
+@media (min-width: 46rem) { .issue__grid { grid-template-columns: 1fr 1fr; } }
+.issue label { display: block; font-size: .8125rem; font-weight: 600; }
+.issue input, .issue select {
+  display: block; width: 100%; margin-top: .35rem; padding: .55rem .7rem;
+  border: 1px solid var(--rule-strong); border-radius: var(--r-sm);
+  background: var(--field); color: var(--text); font: inherit; font-size: .9375rem;
+}
+.issue input:focus-visible, .issue select:focus-visible { outline: 2px solid var(--verified); outline-offset: 1px; }
+.issue__hint { display: block; font-weight: 400; color: var(--muted); font-size: .75rem; }
+.issue__note { margin-top: var(--s4); color: var(--muted); font-size: .875rem; }
+.issue__confirm { display: block; margin-top: var(--s5); max-width: 26rem; }
+.issue .btn { margin-top: var(--s4); }
+.roll td .mini { margin: 0 .25rem .25rem 0; }
 </style>
 </head>
 <body>
@@ -341,6 +358,128 @@
           </tr>
         </thead>
         <tbody id="pay-rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Credentials ---------------------------------------------------------
+       Issuing writes the row that /verify reads. There is no deploy in the
+       loop: issue here and the credential resolves on the next lookup. -->
+  <section class="sec-gap" aria-labelledby="cred-title">
+    <h2 class="panel__title" id="cred-title">Credentials — the register behind /verify</h2>
+    <p class="sec-gap__lede">Issuing a credential here makes it verifiable immediately at
+      training.bulletproofautomations.com/verify. Revoking never deletes: a deleted row reads as
+      &ldquo;never issued&rdquo;, which is the one thing revocation must not look like.</p>
+
+    <p class="msg msg--bad" id="cred-error" role="alert" hidden></p>
+
+    <section class="panel" aria-labelledby="issue-title">
+      <h2 class="panel__title" id="issue-title">Issue a credential</h2>
+      <form id="issue-form" class="issue">
+        <div class="issue__grid">
+          <label>Holder name <span class="issue__hint">exactly as it will read on the certificate</span>
+            <input type="text" id="i-name" name="holder_name" required autocomplete="off">
+          </label>
+          <label>Holder email <span class="issue__hint">internal, never published</span>
+            <input type="email" id="i-email" name="holder_email" autocomplete="off">
+          </label>
+          <label>Credential
+            <select id="i-credential" name="credential" required>
+              <option value="foundations">Bulletproof Automation Foundations Certificate</option>
+              <option value="bcab">Bulletproof Certified Automation Builder (BCAB)</option>
+            </select>
+          </label>
+          <label>Issue date
+            <input type="date" id="i-issued" name="issued_on" required>
+          </label>
+          <label>Cohort <span class="issue__hint">optional, internal</span>
+            <input type="text" id="i-cohort" name="cohort" autocomplete="off">
+          </label>
+          <label>Assessed against
+            <input type="text" id="i-platform" name="platform_version" value="n8n 2.31.6" autocomplete="off">
+          </label>
+        </div>
+
+        <p class="issue__note" id="i-expiry-note"></p>
+
+        <label class="issue__confirm">Type the holder&rsquo;s name again to confirm
+          <input type="text" id="i-confirm" autocomplete="off" required>
+        </label>
+        <p class="issue__hint">An issued credential is a real thing in the world. Undoing one means
+          revoking it, which stays on the record &mdash; so this asks twice.</p>
+
+        <p class="msg msg--bad" id="issue-error" role="alert" hidden></p>
+        <p class="msg" id="issue-done" role="status" hidden></p>
+        <button class="btn btn--go" type="submit" id="issue-btn">Issue credential</button>
+      </form>
+    </section>
+
+    <div class="filters">
+      <label class="vh" for="cq">Search holder or credential ID</label>
+      <input type="search" id="cq" placeholder="Search holder name or credential ID">
+      <label class="vh" for="f-cred">Credential</label>
+      <select id="f-cred">
+        <option value="">All credentials</option>
+        <option value="foundations">Foundations Certificate</option>
+        <option value="bcab">BCAB</option>
+      </select>
+      <label class="vh" for="f-cstatus">Status</label>
+      <select id="f-cstatus">
+        <option value="">All statuses</option>
+        <option value="valid">Valid</option>
+        <option value="expired">Expired</option>
+        <option value="revoked">Revoked</option>
+        <option value="hidden">Hidden from lookup</option>
+      </select>
+      <button class="mini" type="button" id="cred-clear">Clear</button>
+      <button class="mini" type="button" id="cred-csv">Export CSV</button>
+    </div>
+
+    <p class="msg msg--empty" id="cred-empty" hidden></p>
+
+    <div class="roll-wrap">
+      <table class="roll">
+        <caption class="vh">Every credential issued, newest first</caption>
+        <thead>
+          <tr>
+            <th scope="col">Holder</th>
+            <th scope="col">Credential</th>
+            <th scope="col">Credential ID</th>
+            <th scope="col">Issued</th>
+            <th scope="col">Status</th>
+            <th scope="col">Visible</th>
+            <th scope="col">Certificate</th>
+            <th scope="col"><span class="vh">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody id="cred-rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Verification enquiries ---------------------------------------------- -->
+  <section class="sec-gap" aria-labelledby="enq-title">
+    <h2 class="panel__title" id="enq-title">Verification enquiries &mdash; <span id="enq-count">0</span></h2>
+    <p class="sec-gap__lede">Everyone who identified themselves to use the lookup. The ones marked
+      <strong>hiring</strong> are employers consuming the credential, which is the audience the whole
+      standard exists to convince.</p>
+
+    <p class="msg msg--bad" id="enq-error" role="alert" hidden></p>
+    <p class="msg msg--empty" id="enq-empty" hidden></p>
+
+    <div class="roll-wrap">
+      <table class="roll">
+        <caption class="vh">People who used the credential lookup, newest first</caption>
+        <thead>
+          <tr>
+            <th scope="col">When</th>
+            <th scope="col">Name</th>
+            <th scope="col">Email</th>
+            <th scope="col">Why</th>
+            <th scope="col">Marketing</th>
+          </tr>
+        </thead>
+        <tbody id="enq-rows"></tbody>
       </table>
     </div>
   </section>

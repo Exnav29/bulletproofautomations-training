@@ -13,3 +13,12 @@
 # the old Supabase project's key, a Google Fonts CDN link and ~8 MB of PNGs.
 /n8n-foundations                 /foundations  301
 /n8n-automation-builder-pathway  /pathway      301
+
+# /verify/<credential-id> and /v/<credential-id> are handled by Pages Functions
+# (functions/verify/[[path]].js), NOT by rewrites here.
+#
+# The obvious form
+#     /verify/*  /verify/index.html  200
+# was tried first and is silently ignored — measured 11 August 2026, every
+# /verify/<id> fell through to 404.html. Do not add it back: it looks like it
+# works, and the only symptom is a dead credential on a holder's LinkedIn.
