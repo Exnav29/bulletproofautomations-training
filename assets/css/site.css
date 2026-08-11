@@ -4087,3 +4087,56 @@ a.rail__link:hover .rail__name {
   height: 1px;
   overflow: hidden;
 }
+
+/* --- Touch targets -------------------------------------------------------
+   WCAG 2.2 AA (2.5.8) sets a 24x24 CSS px floor; 44x44 is the practical
+   target on a phone. Several controls met neither. These rules grow the hit
+   area without changing how anything looks: the box gets taller, the ink does
+   not. Applied to the menu button, the utility and footer link rows, and the
+   pathway rail's stage links.
+   ------------------------------------------------------------------------- */
+
+.nav-toggle {
+  min-height: 44px;
+  min-width: 44px;
+  align-items: center;
+  justify-content: center;
+}
+
+.header-utility a,
+.footer-col__list a,
+.site-nav__secondary a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+/* The footer lists are a grid, so growing the anchors would otherwise add a
+   gap on top of the row gap. Pull the row gap back to compensate. */
+.footer-col__list {
+  gap: 0;
+}
+
+.footer-col__list li {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+/* Non-link list items in the footer (the closed Stage 3 entry, the contact
+   lines) keep the same rhythm so the column does not look ragged. */
+.footer-col__list li[data-state="closed"] {
+  min-height: 44px;
+}
+
+.rail__link {
+  min-height: 44px;
+  align-content: center;
+}
+
+/* Native controls on the carried NFC form were 13x13. */
+.nfc-target-fix input[type="radio"],
+.nfc-target-fix input[type="checkbox"] {
+  width: 1.25rem;
+  height: 1.25rem;
+}

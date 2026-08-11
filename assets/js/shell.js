@@ -276,6 +276,16 @@
     return picked ? picked.value : "";
   }
 
+  // Reading .checked off a field that does not exist throws, and the throw
+  // happens while building the payload — before any request, with the form
+  // still on screen and no error shown. A renamed input then looks like a dead
+  // button. This degrades to false instead, and the required attribute is what
+  // actually enforces the tick.
+  function ticked(name) {
+    var el = form.elements[name];
+    return !!(el && el.checked);
+  }
+
   form.addEventListener("submit", function (event) {
     event.preventDefault();
     clearError();
@@ -324,13 +334,13 @@
       // payment_plan is a boolean in the table: true means instalments.
       payment_plan: instalments,
       cohort: COHORT,
-      consent_given: form.elements.consent_given.checked,
+      consent_given: ticked("consent_given"),
       // Both are required to submit, so these are always true on a real
       // registration — the value is in the version below, which says WHICH
       // wording they were shown. WHEN is created_at, set server-side, because
       // a browser clock is not evidence of anything.
-      ack_refund: form.elements.ack_refund.checked,
-      ack_certification: form.elements.ack_certification.checked,
+      ack_refund: ticked("ack_refund"),
+      ack_certification: ticked("ack_certification"),
       acks_policy_version: POLICY_VERSION,
       // source is constrained to website | showcase | whatsapp | referral.
       source: "website"

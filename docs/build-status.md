@@ -141,6 +141,28 @@ Every one renders in conspicuous dashed marigold. **Nothing ships with one still
 
 ## 6. Other open items
 
+- **Second audit (browser-driven) run 11 August 2026 — findings triaged.** It caught a genuine
+  launch blocker my static audit could not: the enrollment form's second acknowledgement was
+  `name="ack_cert"` while the JS read `form.elements.ack_certification`, so submit threw
+  `Cannot read properties of undefined` **before any request**, with no error shown. I had verified
+  the payload against Supabase directly and never driven the form, which is exactly the gap a
+  browser closes. Fixed, plus a `ticked()` helper so a renamed field degrades to `false` instead
+  of crashing the form.
+
+  Also fixed from that audit: touch targets below the 24px floor (menu button was ~20px tall),
+  and the stale `.gitleaks.toml` description. `supabase/functions/daily-digest` is deleted —
+  documentation already records that it existed, and keeping deployable source for something the
+  owner asked to be gone is a redeploy risk. `confirm-email` and `vip-alert` remain and are now
+  equally dead, since the pages that called them are retired — **awaiting a decision.**
+
+- **Unresolved and needing a browser: mobile horizontal overflow.** The second audit measured
+  document widths exceeding the viewport on `/foundations` (320/375/430), `/standard` (320/375),
+  and `/nfc` + `/nfc/resources` (320/375/430, reaching 546px). I could not reproduce or diagnose
+  it — `box-sizing: border-box` is global, `.shell` is sound, every grid collapses at small
+  widths, and both `.rail__track` and `.dtable-wrap` contain their own scroll. **I deliberately
+  did not blind-patch layout I cannot see**, because a wrong fix would be undetectable from here.
+  This needs someone with devtools open.
+
 - **Pre-launch audit fixes applied 11 August 2026.** The blocker (acknowledgement columns present
   but unpopulated) is closed. Also fixed: Open Graph metadata site-wide with a 1200×630 card;
   a `_headers` file carrying CSP, HSTS, frame-ancestors and Permissions-Policy; both WCAG 1.4.11
