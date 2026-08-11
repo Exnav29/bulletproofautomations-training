@@ -26,3 +26,7 @@ docs/n8n_Foundations_Beginner_Cohort_Teaching_Guide.pdf
 
 # LibreOffice lock files
 .~lock.*#
+
+# Wrangler local-dev vars for Pages Functions. Never committed.
+.dev.vars
+.wrangler/

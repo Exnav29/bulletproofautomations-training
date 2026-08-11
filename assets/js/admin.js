@@ -191,6 +191,11 @@ function load() {
       /* The ledger loads after the roll, because reconciliation needs both:
          an event is only "matched" against an enrollment we already hold. */
       loadPayments();
+      /* The register and the enquiry list stand on their own — a credential can
+         exist with no enrollment behind it (Path B), so neither waits on the
+         roll, and a failure in either must not take the dashboard down. */
+      loadCredentials();
+      loadEnquiries();
     })
     .catch(function (err) {
       errorBox.textContent = err.message;
@@ -901,3 +906,384 @@ document.getElementById("pay-csv").addEventListener("click", function () {
   link.click();
   URL.revokeObjectURL(url);
 });
+
+/* ---------------------------------------------------------------------------
+   Credentials — the register behind /verify
+
+   This is the only place a credential comes into existence. Issuing writes the
+   row that the public lookup reads, with no deploy in between.
+
+   Two rules the UI enforces because the database cannot:
+
+     * REVOKE, NEVER DELETE. A deleted row reads as "never issued", which is
+       precisely what a revoked credential must not look like. There is no
+       delete control here at all.
+     * The credential ID is generated, never typed. It gets printed on the
+       certificate and cannot be changed afterwards without invalidating an
+       artifact somebody may already have posted publicly.
+   --------------------------------------------------------------------------- */
+
+var CRED_NAMES = {
+  foundations: "Foundations Certificate",
+  bcab: "BCAB"
+};
+
+// Crockford base32: no I, L, O or U, so an ID survives being read aloud or
+// copied off paper. Six characters is 1.07 billion — four would be a million,
+// which is brute-forceable and would harvest the holder list.
+var ID_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+
+function newCredentialId(credential, issuedOn) {
+  var bytes = new Uint8Array(6);
+  crypto.getRandomValues(bytes);
+  var tail = "";
+  for (var i = 0; i < bytes.length; i++) tail += ID_ALPHABET[bytes[i] % 32];
+  var year = (issuedOn || "").slice(0, 4) || String(new Date().getFullYear());
+  return "BPA-" + (credential === "bcab" ? "BCAB" : "FND") + "-" + year + "-" + tail;
+}
+
+// Mirrors the SQL: expired is DERIVED, never stored, so a job that fails to run
+// can never leave an expired credential reading as valid.
+function credStatus(row) {
+  if (row.status === "revoked") return "revoked";
+  if (row.expires_on && row.expires_on < new Date().toISOString().slice(0, 10)) return "expired";
+  return "valid";
+}
+
+var credState = { rows: [], enquiries: [] };
+
+function loadCredentials() {
+  var errorBox = document.getElementById("cred-error");
+  if (errorBox) errorBox.hidden = true;
+
+  return authFetch("/rest/v1/credentials?select=*&order=created_at.desc")
+    .then(function (response) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("Signed in, but the register refused the read. credentials needs a select policy for the authenticated role.");
+      }
+      if (!response.ok) throw new Error("Could not load credentials (" + response.status + ").");
+      return response.json();
+    })
+    .then(function (rows) {
+      credState.rows = rows;
+      renderCredentials();
+    })
+    .catch(function (err) {
+      if (!errorBox) return;
+      errorBox.textContent = err.message;
+      errorBox.hidden = false;
+    });
+}
+
+function visibleCredentials() {
+  var q = (document.getElementById("cq").value || "").trim().toLowerCase();
+  var cred = document.getElementById("f-cred").value;
+  var status = document.getElementById("f-cstatus").value;
+
+  return credState.rows.filter(function (row) {
+    if (cred && row.credential !== cred) return false;
+    if (status === "hidden") {
+      if (row.publish_consent) return false;
+    } else if (status && credStatus(row) !== status) {
+      return false;
+    }
+    if (!q) return true;
+    return (row.holder_name + " " + row.credential_id + " " + (row.holder_email || ""))
+      .toLowerCase().indexOf(q) !== -1;
+  });
+}
+
+function renderCredentials() {
+  var body = document.getElementById("cred-rows");
+  var empty = document.getElementById("cred-empty");
+  var rows = visibleCredentials();
+
+  while (body.firstChild) body.removeChild(body.firstChild);
+
+  if (!rows.length) {
+    empty.textContent = credState.rows.length
+      ? "No credentials match those filters."
+      : "No credentials issued yet.";
+    empty.hidden = false;
+    return;
+  }
+  empty.hidden = true;
+
+  rows.forEach(function (row) {
+    var status = credStatus(row);
+    var tr = document.createElement("tr");
+
+    function cell(text, className) {
+      var td = document.createElement("td");
+      td.textContent = text;
+      if (className) td.className = className;
+      tr.appendChild(td);
+      return td;
+    }
+
+    cell(row.holder_name);
+    cell(CRED_NAMES[row.credential] || row.credential);
+    cell(row.credential_id);
+    cell(shortDate(row.issued_on));
+    cell(status === "valid" ? "Valid" : status === "expired" ? "Expired" : "Revoked");
+    cell(row.publish_consent ? (row.allow_name_lookup ? "Yes" : "By ID only") : "Hidden");
+    cell(row.pdf_path ? "Attached" : "None");
+
+    var actions = document.createElement("td");
+
+    // publish_consent removes the credential from the lookup entirely;
+    // allow_name_lookup keeps it findable by ID but not by name.
+    [
+      { field: "publish_consent", on: "Hide from lookup", off: "Show in lookup" },
+      { field: "allow_name_lookup", on: "Name search off", off: "Name search on" }
+    ].forEach(function (toggle) {
+      var button = document.createElement("button");
+      button.type = "button";
+      button.className = "mini";
+      button.textContent = row[toggle.field] ? toggle.on : toggle.off;
+      button.addEventListener("click", function () {
+        patchCredential(row, toggle.field, !row[toggle.field]);
+      });
+      actions.appendChild(button);
+    });
+
+    var revoke = document.createElement("button");
+    revoke.type = "button";
+    revoke.className = "mini";
+    revoke.textContent = row.status === "revoked" ? "Reinstate" : "Revoke";
+    revoke.addEventListener("click", function () {
+      if (row.status === "revoked") {
+        patchCredential(row, "status", "valid", { revoked_on: null, revoked_reason: null });
+        return;
+      }
+      var why = window.prompt("Revoking " + row.credential_id + " for " + row.holder_name +
+        ".\n\nThis stays on the record and the lookup will say REVOKED.\n\nReason:");
+      if (why === null) return;
+      patchCredential(row, "status", "revoked", {
+        revoked_on: new Date().toISOString().slice(0, 10),
+        revoked_reason: why || "Not stated"
+      });
+    });
+    actions.appendChild(revoke);
+
+    tr.appendChild(actions);
+    body.appendChild(tr);
+  });
+}
+
+function patchCredential(row, field, value, extra) {
+  var payload = {};
+  payload[field] = value;
+  if (extra) Object.keys(extra).forEach(function (k) { payload[k] = extra[k]; });
+
+  return authFetch("/rest/v1/credentials?id=eq." + encodeURIComponent(row.id), {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Prefer: "return=minimal" },
+    body: JSON.stringify(payload)
+  }).then(function (response) {
+    if (!response.ok) throw new Error("That change did not save (" + response.status + ").");
+    return loadCredentials();
+  }).catch(function (err) {
+    var errorBox = document.getElementById("cred-error");
+    errorBox.textContent = err.message;
+    errorBox.hidden = false;
+  });
+}
+
+/* Issue ------------------------------------------------------------------- */
+
+(function () {
+  var form = document.getElementById("issue-form");
+  if (!form) return;
+
+  var note = document.getElementById("i-expiry-note");
+  var errorBox = document.getElementById("issue-error");
+  var doneBox = document.getElementById("issue-done");
+
+  function describeExpiry() {
+    var credential = form.elements.credential.value;
+    var issued = form.elements.issued_on.value;
+    if (credential === "bcab") {
+      if (!issued) { note.textContent = "BCAB is valid for 24 months from the issue date."; return; }
+      var d = new Date(issued + "T00:00:00");
+      d.setFullYear(d.getFullYear() + 2);
+      note.textContent = "Valid for 24 months — expires " + d.toISOString().slice(0, 10) + ".";
+    } else {
+      note.textContent = "The Foundations Certificate records completion on a date and does not expire.";
+    }
+  }
+
+  form.elements.credential.addEventListener("change", describeExpiry);
+  form.elements.issued_on.addEventListener("change", describeExpiry);
+  form.elements.issued_on.value = new Date().toISOString().slice(0, 10);
+  describeExpiry();
+
+  form.addEventListener("submit", function (event) {
+    event.preventDefault();
+    errorBox.hidden = true;
+    doneBox.hidden = true;
+
+    var name = form.elements.holder_name.value.trim();
+    var confirm = document.getElementById("i-confirm").value.trim();
+
+    // Compared the way the database normalises, so a stray double space is not
+    // treated as a different person.
+    var norm = function (s) { return s.replace(/\s+/g, " ").trim().toLowerCase(); };
+    if (!name || norm(name) !== norm(confirm)) {
+      errorBox.textContent = "The confirmation does not match the holder name.";
+      errorBox.hidden = false;
+      return;
+    }
+
+    var credential = form.elements.credential.value;
+    var issued = form.elements.issued_on.value;
+    var expires = null;
+    if (credential === "bcab") {
+      var d = new Date(issued + "T00:00:00");
+      d.setFullYear(d.getFullYear() + 2);
+      expires = d.toISOString().slice(0, 10);
+    }
+
+    var button = document.getElementById("issue-btn");
+    var label = button.textContent;
+    button.disabled = true;
+    button.textContent = "Issuing…";
+
+    // credential_id is UNIQUE, and that constraint is the real collision guard.
+    // Generate, attempt, and regenerate on 409 — a check-then-insert has a race
+    // it cannot see.
+    function attempt(triesLeft) {
+      var id = newCredentialId(credential, issued);
+      return authFetch("/rest/v1/credentials", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Prefer: "return=minimal" },
+        body: JSON.stringify({
+          credential_id: id,
+          holder_name: name,
+          holder_email: form.elements.holder_email.value.trim() || null,
+          credential: credential,
+          issued_on: issued,
+          expires_on: expires,
+          platform_version: form.elements.platform_version.value.trim() || null,
+          cohort: form.elements.cohort.value.trim() || null
+        })
+      }).then(function (response) {
+        if (response.status === 409 && triesLeft > 0) return attempt(triesLeft - 1);
+        if (!response.ok) {
+          return response.text().then(function (body) {
+            throw new Error(body.slice(0, 200) || "That did not save (" + response.status + ").");
+          });
+        }
+        return id;
+      });
+    }
+
+    attempt(3).then(function (id) {
+      button.disabled = false;
+      button.textContent = label;
+      doneBox.textContent = "Issued " + id + " to " + name +
+        ". It is verifiable now at /verify/" + id;
+      doneBox.hidden = false;
+      form.reset();
+      form.elements.issued_on.value = new Date().toISOString().slice(0, 10);
+      form.elements.platform_version.value = "n8n 2.31.6";
+      describeExpiry();
+      return loadCredentials();
+    }).catch(function (err) {
+      button.disabled = false;
+      button.textContent = label;
+      errorBox.textContent = err.message;
+      errorBox.hidden = false;
+    });
+  });
+})();
+
+["cq", "f-cred", "f-cstatus"].forEach(function (id) {
+  var el = document.getElementById(id);
+  if (el) el.addEventListener("input", renderCredentials);
+});
+
+document.getElementById("cred-clear").addEventListener("click", function () {
+  document.getElementById("cq").value = "";
+  document.getElementById("f-cred").value = "";
+  document.getElementById("f-cstatus").value = "";
+  renderCredentials();
+});
+
+document.getElementById("cred-csv").addEventListener("click", function () {
+  var cols = ["credential_id", "holder_name", "holder_email", "credential", "issued_on",
+    "expires_on", "status", "publish_consent", "allow_name_lookup", "platform_version", "cohort"];
+
+  var cell = function (v) {
+    if (v == null) return "";
+    var s = String(v);
+    return /[",\n]/.test(s) ? '"' + s.split('"').join('""') + '"' : s;
+  };
+
+  var csv = [cols.join(",")].concat(visibleCredentials().map(function (r) {
+    return cols.map(function (c) { return cell(r[c]); }).join(",");
+  })).join("\n");
+
+  var url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  var link = document.createElement("a");
+  link.href = url;
+  link.download = "credentials-" + new Date().toISOString().slice(0, 10) + ".csv";
+  link.click();
+  URL.revokeObjectURL(url);
+});
+
+/* Verification enquiries -------------------------------------------------- */
+
+var ENQ_REASONS = {
+  hiring: "Hiring / verifying a candidate",
+  own_credential: "Checking their own credential",
+  considering_training: "Considering the training",
+  other: "Something else"
+};
+
+function loadEnquiries() {
+  var errorBox = document.getElementById("enq-error");
+  if (errorBox) errorBox.hidden = true;
+
+  return authFetch("/rest/v1/verification_lookups?select=*&order=created_at.desc")
+    .then(function (response) {
+      if (!response.ok) throw new Error("Could not load verification enquiries (" + response.status + ").");
+      return response.json();
+    })
+    .then(function (rows) {
+      credState.enquiries = rows;
+      var body = document.getElementById("enq-rows");
+      var empty = document.getElementById("enq-empty");
+      document.getElementById("enq-count").textContent = String(rows.length);
+
+      while (body.firstChild) body.removeChild(body.firstChild);
+
+      if (!rows.length) {
+        empty.textContent = "Nobody has used the lookup yet.";
+        empty.hidden = false;
+        return;
+      }
+      empty.hidden = true;
+
+      rows.forEach(function (row) {
+        var tr = document.createElement("tr");
+        [
+          shortDate(row.created_at),
+          row.full_name,
+          row.email,
+          ENQ_REASONS[row.reason] || row.reason,
+          row.marketing_opt_in ? "Opted in" : "No"
+        ].forEach(function (text) {
+          var td = document.createElement("td");
+          td.textContent = text;
+          tr.appendChild(td);
+        });
+        body.appendChild(tr);
+      });
+    })
+    .catch(function (err) {
+      if (!errorBox) return;
+      errorBox.textContent = err.message;
+      errorBox.hidden = false;
+    });
+}

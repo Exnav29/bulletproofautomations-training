@@ -1,0 +1,100 @@
+-- Bulletproof Automations Training — verification_lookups
+--
+-- ============================================================================
+-- THIS FILE IS DOCUMENTATION, NOT A MIGRATION. DO NOT RUN IT.
+-- ============================================================================
+--
+-- Same convention as supabase-enrollments.sql: the live database is the source
+-- of truth. If you change the table, update this file in the same change.
+--
+-- Project: the training Supabase project (ref in .env, gitignored).
+-- Created: 11 August 2026, alongside the /verify rebuild.
+
+
+-- ---------------------------------------------------------------------------
+-- What this table is for
+-- ---------------------------------------------------------------------------
+--
+-- /verify has two surfaces. The direct link — /verify/<credential-id>, the URL
+-- a holder puts in LinkedIn's Credential URL field — is PUBLIC and ungated,
+-- because gating it would break the "Show credential" button for every
+-- recruiter who clicks it.
+--
+-- The SEARCH BOX is gated. Before someone can look a person up by name or by
+-- ID they give their own name, email and reason for checking. Those rows land
+-- here. They are the most commercially interesting audience the site gets:
+-- employers checking a candidate, and people deciding whether to train.
+--
+-- The gate lasts 30 days per browser, so an employer checking five candidates
+-- identifies themselves once and this table gets one clean row per person
+-- rather than one per search.
+
+
+-- ---------------------------------------------------------------------------
+-- Columns as deployed
+-- ---------------------------------------------------------------------------
+--
+--  column            type          null?  default
+--  ----------------  ------------  -----  --------------------------------
+--  id                uuid          NO     gen_random_uuid()
+--  created_at        timestamptz   NO     now()
+--  full_name         text          NO     —
+--  email             text          NO     —         UNIQUE
+--  reason            text          NO     —         CHECK
+--  marketing_opt_in  boolean       NO     false     optional tick, not a gate
+--  source            text          NO     'verify'  CHECK
+--  notified          boolean       NO     false     mirrors foundations_interest
+--  notes             text          YES    —
+--
+--  reason CHECK: hiring | own_credential | considering_training | other
+--    'hiring' is the one that matters commercially — it separates employers
+--    consuming the credential from prospective students.
+--
+--  source CHECK: verify | website | showcase | whatsapp | referral
+--    Defaults to 'verify'. The wider vocabulary matches the other tables so a
+--    future form can write here without a schema change.
+--
+--  email is UNIQUE. A returning verifier whose 30 days lapsed re-submits the
+--  same address, so the write is an upsert-shaped no-op, not an error.
+
+
+-- ---------------------------------------------------------------------------
+-- Row-level security as deployed — NOT the same as the other public forms
+-- ---------------------------------------------------------------------------
+--
+--  policy                                cmd     roles
+--  ------------------------------------  ------  ----------------
+--  Allow service role full access        ALL     {service_role}
+--  Admins can read verification lookups  SELECT  {authenticated}
+--  Admins can update verification lookups UPDATE {authenticated}
+--
+-- Both authenticated policies are restricted to
+-- johnathan@bulletproofautomations.com, the same allowlist as everywhere else.
+--
+-- THERE IS NO ANON POLICY, and `revoke all ... from anon` is applied on top.
+-- This is a deliberate departure from enrollments and foundations_interest,
+-- which DO allow anon INSERT.
+--
+-- The reason: those two forms predate the Pages Functions, so the browser had
+-- to write directly and an anon INSERT policy was the only way. The gate does
+-- not. It posts to /api/gate on our own domain, which verifies a Turnstile
+-- token and writes with the service key. Nothing anonymous ever touches this
+-- table, so nothing anonymous is granted on it.
+--
+-- Practical consequence: if you ever point a plain client-side form at this
+-- table it will fail with 401, and that is correct. Route it through the Pages
+-- Function instead of adding an anon policy back.
+
+
+-- ---------------------------------------------------------------------------
+-- Deliberately not built: a log of who searched for whom
+-- ---------------------------------------------------------------------------
+--
+-- The obvious extra column is "what did they search for". It is not here.
+--
+-- A row joining one named person to another named person they enquired about
+-- is a materially more sensitive record than a marketing lead, it is not
+-- needed to answer any question this page exists to answer, and it would have
+-- to be disclosed in the privacy policy in terms that would make the gate
+-- look worse than it is. If a dispute ever needs it, Cloudflare's own logs
+-- cover the same ground without it living in the CRM.

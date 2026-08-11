@@ -177,7 +177,13 @@ loadDotEnv();
 
 const injected = {
   __SUPABASE_URL__: process.env.SUPABASE_URL || "",
-  __SUPABASE_ANON_KEY__: process.env.SUPABASE_ANON_KEY || ""
+  __SUPABASE_ANON_KEY__: process.env.SUPABASE_ANON_KEY || "",
+  // Turnstile's SITE key, which is public and belongs in the markup. Its
+  // partner secret is read by the Pages Functions from the environment and
+  // never passes through the build. Without this value /verify renders a form
+  // whose every submission is refused by /api/verify, which is why it is
+  // treated as required rather than optional.
+  __TURNSTILE_SITE_KEY__: process.env.TURNSTILE_SITE_KEY || ""
 };
 
 function injectEnv(text) {
@@ -234,7 +240,8 @@ for (const file of walkFiles(dist, [".html", ".js"], [])) {
 // Report the environment variable names, not the internal token names.
 const TOKEN_TO_ENV = {
   __SUPABASE_URL__: "SUPABASE_URL",
-  __SUPABASE_ANON_KEY__: "SUPABASE_ANON_KEY"
+  __SUPABASE_ANON_KEY__: "SUPABASE_ANON_KEY",
+  __TURNSTILE_SITE_KEY__: "TURNSTILE_SITE_KEY"
 };
 const missingEnv = Object.keys(injected)
   .filter((key) => !injected[key])

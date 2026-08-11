@@ -22,6 +22,7 @@ Certification standard: @docs/competency-framework.md
 |---|---|
 | Bulletproof Automation Builder Pathway | n8n Automation Builder Pathway, n8n Ghana Training Pathway |
 | Bulletproof Automation Foundations Certificate | Beginner Certificate (alone), n8n Foundations Certificate |
+| Bulletproof Automation Foundations programme (the Stage 1 course itself) | n8n Beginner Cohort, Beginner Cohort |
 | Bulletproof Certified Automation Builder (BCAB) | Intermediate Certificate, n8n Intermediate Certification |
 | Bulletproof Certified Automation Engineer (BCAE) | Advanced Certificate |
 | certificate (Stage 1 — records completion) | certification, for Stage 1 |

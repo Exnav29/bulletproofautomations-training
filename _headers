@@ -20,6 +20,37 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://n8n.bulletproofautomations.com; form-action 'self' https://n8n.bulletproofautomations.com; frame-ancestors 'none'
 
+# /verify loads the Turnstile widget and renders certificate previews out of
+# Supabase Storage, so it cannot hold the policy above. Scoped rather than
+# relaxed site-wide — the same containment already applied to /nfc.
+#
+# Note connect-src does NOT list Supabase here. On this page the browser talks
+# only to /api/verify and /api/gate on our own origin; the Supabase call is made
+# server-side by the Pages Function. img-src needs Storage for the certificate
+# preview image, and that is all it needs.
+/verify*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), interest-cohort=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.supabase.co; font-src 'self'; connect-src 'self'; form-action 'self'; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests
+
+# The short form the certificate QR code points at. Same page, same policy.
+/v/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), interest-cohort=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.supabase.co; font-src 'self'; connect-src 'self'; form-action 'self'; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests
+
+# The verification endpoints. Never cached, never framed, never crawled.
+/api/*
+  Cache-Control: no-store
+  X-Robots-Tag: noindex, nofollow
+  X-Content-Type-Options: nosniff
+
 # Fingerprinted-by-content assets. Long cache, and the font is immutable.
 /assets/fonts/*
   Cache-Control: public, max-age=31536000, immutable
