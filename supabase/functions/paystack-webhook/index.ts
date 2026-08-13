@@ -68,6 +68,12 @@ function referenceMode(reference: unknown): 'live' | 'test' | null {
   return null
 }
 
+/** First of these that is a non-empty string, else null. */
+function firstString(...values: unknown[]): string | null {
+  for (const v of values) if (typeof v === 'string' && v) return v
+  return null
+}
+
 const db = (path: string, init: RequestInit = {}) =>
   fetch(`${PROJECT_URL}/rest/v1/${path}`, {
     ...init,
@@ -150,6 +156,55 @@ serve(async (req) => {
   // Paystack sends minor units. GHS 750.00 arrives as 75000 pesewas.
   const amountGhs = typeof data?.amount === 'number' ? data.amount / 100 : null
 
+  /* --- refunds -------------------------------------------------------------
+   *
+   * Paystack sends refund.pending, refund.processing, refund.processed and
+   * refund.failed. Only `processed` moves anything on the roll. The other
+   * three are recorded by the log-first insert below and go no further, which
+   * is correct — a pending refund has not left the account yet, and acting on
+   * one would free a seat that is still paid for.
+   *
+   * THE PAYLOAD SHAPE IS NOT FULLY VERIFIED, AND THIS CODE SAYS SO. Paystack's
+   * documentation is not reachable from this environment, and integrations in
+   * the wild read `transaction_reference || transaction.reference`, which tells
+   * you the shape is inconsistent enough that people code around it. So every
+   * plausible path is tried in order, and if none of them yields a reference
+   * the event is recorded as unmatched rather than guessed at.
+   *
+   * An unmatched refund is a line in the ledger that somebody reconciles. A
+   * guessed one silently frees a seat that is still occupied, or fails to free
+   * one that is not — against a cap of 25, that is the number this whole
+   * system exists to keep honest. When a real refund webhook has been seen,
+   * check `raw` on its payment_events row and tighten this. */
+  const isRefund = body.event === 'refund.processed'
+  const isCharge = body.event === 'charge.success'
+
+  const txnReference: string | null = isRefund
+    ? firstString(data?.transaction_reference, data?.transaction?.reference, data?.reference)
+    : firstString(data?.reference)
+
+  /* The dedupe key is (provider, event, reference). For a charge that is the
+   * transaction reference and nothing more.
+   *
+   * For a refund it must ALSO tell two partial refunds of the same transaction
+   * apart from a replay of one of them. Sharing a key would make the second
+   * partial refund look like a duplicate and be ignored, leaving the roll
+   * claiming more money was kept than actually was.
+   *
+   * The stored value is only ever a dedupe key and something a human reads:
+   * the JOIN uses txnReference from the payload, exactly as the charge path
+   * already does, so a composite value here costs nothing. */
+  const refundIdent = isRefund
+    ? firstString(
+        data?.id != null ? String(data.id) : null,
+        data?.refund_reference,
+        typeof data?.reference === 'string' && data.reference !== txnReference ? data.reference : null,
+      )
+    : null
+
+  const storedReference: string | null =
+    isRefund && txnReference ? txnReference + ':refund' + (refundIdent ? ':' + refundIdent : '') : txnReference
+
   // Log first, always — including events that fail verification. An attacker
   // probing the endpoint is exactly the thing you want a record of, and an
   // event that cannot be matched must never be silently dropped.
@@ -159,7 +214,7 @@ serve(async (req) => {
     body: JSON.stringify({
       provider: 'paystack',
       event: body.event ?? null,
-      reference: data?.reference ?? null,
+      reference: storedReference,
       email,
       amount_ghs: amountGhs,
       status: data?.status ?? null,
@@ -217,7 +272,7 @@ serve(async (req) => {
     const prior = await db(
       `payment_events?select=id,matched&provider=eq.paystack` +
         `&event=eq.${encodeURIComponent(String(body.event ?? ''))}` +
-        `&reference=eq.${encodeURIComponent(String(data?.reference ?? ''))}&limit=1`,
+        `&reference=eq.${encodeURIComponent(String(storedReference ?? ''))}&limit=1`,
     )
     const priorRows = prior.ok ? await prior.json().catch(() => null) : null
 
@@ -245,9 +300,16 @@ serve(async (req) => {
     eventRow = inserted[0]
   }
 
-  // Everything below moves money, so it happens only for a verified successful
-  // charge. An unverified body is already recorded above and goes no further.
-  if (!valid || body.event !== 'charge.success' || !email) {
+  /* Everything below moves money, so it happens only for a verified successful
+   * charge or a verified processed refund. An unverified body is already
+   * recorded above and goes no further.
+   *
+   * Email is required for a CHARGE only, because it is that path's fallback
+   * join. A refund joins on the transaction reference or not at all — falling
+   * back to email there would let a refund on one transaction reverse money on
+   * whichever enrollment shares the address, which is exactly the kind of quiet
+   * wrong answer this file is written to avoid. */
+  if (!valid || (!isCharge && !isRefund) || (isCharge && !email)) {
     return new Response(JSON.stringify({ ok: true, applied: false, signature_valid: valid }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
@@ -263,7 +325,7 @@ serve(async (req) => {
    * for a real enrollment, or a configuration mistake, and there is no reading
    * of it under which crediting a seat is correct. */
   const domain: string | null = typeof data?.domain === 'string' ? data.domain : null
-  const refMode = referenceMode(data?.reference)
+  const refMode = referenceMode(txnReference)
 
   if (domain && signedBy && domain !== signedBy) {
     await db(`payment_events?id=eq.${eventRow.id}`, {
@@ -327,16 +389,16 @@ serve(async (req) => {
   let matchedOn = 'reference'
   let lookupFailed = false
 
-  if (typeof data?.reference === 'string' && data.reference) {
+  if (txnReference) {
     const byRef = await db(
       `enrollments?select=id,amount_ghs,amount_paid_ghs,payment_status` +
-        `&paystack_reference=eq.${encodeURIComponent(data.reference)}&limit=1`,
+        `&paystack_reference=eq.${encodeURIComponent(txnReference)}&limit=1`,
     )
     if (!byRef.ok) lookupFailed = true
     else rows = await byRef.json().catch(() => [])
   }
 
-  if (!lookupFailed && (!Array.isArray(rows) || rows.length === 0) && domain !== 'test') {
+  if (!lookupFailed && isCharge && (!Array.isArray(rows) || rows.length === 0) && domain !== 'test') {
     matchedOn = 'email'
     const found = await db(
       `enrollments?select=id,amount_ghs,amount_paid_ghs,payment_status` +
@@ -377,22 +439,57 @@ serve(async (req) => {
   }
 
   const enrollment = rows[0]
-  // Added, not overwritten: the instalment plan is GHS 400 then 350, and a
-  // second payment must accumulate rather than replace the first.
-  const paid = Number(enrollment.amount_paid_ghs || 0) + Number(amountGhs || 0)
+  const before = Number(enrollment.amount_paid_ghs || 0)
   const due = Number(enrollment.amount_ghs || 0)
-  const status = due > 0 && paid + 0.001 >= due ? 'paid' : paid > 0 ? 'partially_paid' : enrollment.payment_status
+  const movement = Number(amountGhs || 0)
+
+  /* THE REVERSAL IS CLAMPED, DELIBERATELY.
+   *
+   * amountGhs divides Paystack's minor units by 100. That conversion is
+   * verified for charges by a real transaction; it is NOT verified for refunds,
+   * because no refund webhook has been seen yet. If a refund ever arrives in
+   * major units, dividing again under-reverses a hundredfold.
+   *
+   * Clamping to what was actually paid bounds the damage in the direction that
+   * matters: a refund can never drive amount_paid_ghs below zero, and can never
+   * reverse more than the person paid. A clamp that fires is written into the
+   * match note, because it means the units assumption is wrong and wants a
+   * human before the next refund. */
+  const reversal = isRefund ? Math.min(movement, before) : 0
+  const clamped = isRefund && movement > before
+  const paid = isRefund ? before - reversal : before + movement
+
+  /* Added, not overwritten, for a charge: the instalment plan is GHS 400 then
+   * 350, and a second payment must accumulate rather than replace the first.
+   *
+   * For a refund, a full reversal means the seat is given up, and `cancelled`
+   * is both the honest word and the one /admin already excludes from seats
+   * taken. A partial reversal leaves them partially paid. A refund with nothing
+   * to reverse changes no status at all — it is not evidence of anything. */
+  let status = enrollment.payment_status
+  if (isRefund) {
+    if (reversal > 0) status = paid <= 0.001 ? 'cancelled' : 'partially_paid'
+  } else {
+    status = due > 0 && paid + 0.001 >= due ? 'paid' : paid > 0 ? 'partially_paid' : enrollment.payment_status
+  }
+
+  /* A refund must not overwrite paystack_reference or paystack_payment_date.
+     Those record which payment was taken and when, and that remains true after
+     it is given back — the refund's own record is its payment_events row. */
+  const patch: Record<string, unknown> = {
+    amount_paid_ghs: paid,
+    payment_status: status,
+    updated_at: new Date().toISOString(),
+  }
+  if (!isRefund) {
+    patch.paystack_reference = data?.reference ?? null
+    patch.paystack_payment_date = data?.paid_at ?? new Date().toISOString()
+  }
 
   const applied = await db(`enrollments?id=eq.${enrollment.id}`, {
     method: 'PATCH',
     headers: { Prefer: 'return=minimal' },
-    body: JSON.stringify({
-      amount_paid_ghs: paid,
-      payment_status: status,
-      paystack_reference: data?.reference ?? null,
-      paystack_payment_date: data?.paid_at ?? new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }),
+    body: JSON.stringify(patch),
   })
 
   /* The money write, and the worst of the three to misreport: the response said
@@ -414,7 +511,10 @@ serve(async (req) => {
     body: JSON.stringify({
       matched: true,
       enrollment_id: enrollment.id,
-      match_note: `Matched on ${matchedOn}${domain === 'test' ? ' (TEST)' : ''}; ${paid} of ${due} GHS paid`,
+      match_note: isRefund
+        ? `Refund on ${matchedOn}${domain === 'test' ? ' (TEST)' : ''}; reversed ${reversal} of ${before} GHS, now ${paid} of ${due}` +
+          (clamped ? ` — REFUND OF ${movement} EXCEEDED AMOUNT PAID AND WAS CLAMPED; check the units` : '')
+        : `Matched on ${matchedOn}${domain === 'test' ? ' (TEST)' : ''}; ${paid} of ${due} GHS paid`,
     }),
   })
 
