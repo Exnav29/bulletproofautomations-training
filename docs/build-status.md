@@ -770,10 +770,10 @@ Paystack change.
   them. If the live Paystack key was ever saved there, roll it.
 - **`BPA-PROBE-` rows in `payment_events`** from the activation checks, and the
   refunded GHS 150 enrollment row.
-- Whether the refund shows correctly on the roll — the webhook applies
-  `charge.success`; a refund event is not currently handled, so the row will
-  still read `paid`. Not urgent at one row, but it is a real gap once refunds
-  happen to other people.
+- ~~Whether the refund shows correctly on the roll~~ — **refund handling built
+  13 August 2026, see §6d.** The refunded row will not correct itself
+  retroactively, because the webhook that would have applied it had not been
+  written when Paystack sent it. Adjust that one row by hand.
 
 ---
 
@@ -823,3 +823,89 @@ Confirmed against production after merge: real reference →
 `"option":"path_b_readiness"`, bare probe unchanged, unknown reference → `null`,
 and the page shipping 4 neutral blocks visible with 5 cohort and 5 path_b
 hidden.
+
+---
+
+## 6d. Refunds — built 13 August 2026
+
+The webhook applied `charge.success` and nothing else, so a refunded learner
+still read `paid` and still occupied one of the 25 seats. Harmless for the one
+activation transaction, which was refunded knowingly; not harmless the first
+time it happens to somebody else, because `/admin` is what decides whether the
+cohort is full.
+
+`refund.processed` now reverses the amount. `refund.pending`,
+`refund.processing` and `refund.failed` are recorded and applied to nothing — a
+pending refund has not left the account, and acting on one frees a seat that is
+still paid for.
+
+| Reversal | Resulting status |
+|---|---|
+| Full | `cancelled` — the honest word, and the value `/admin` already excludes from seats taken, so the seat returns to the pool |
+| Partial | `partially_paid` |
+| Nothing to reverse | Unchanged. A refund against an unpaid row is not evidence of anything |
+
+### The payload shape is NOT verified, and the code says so
+
+Paystack's documentation is not reachable from this environment, and
+integrations in the wild read `transaction_reference || transaction.reference`
+— which tells you the shape is inconsistent enough that people code around it.
+
+So every plausible path is tried in order, and **if none yields a reference the
+event is recorded as unmatched rather than guessed at.** An unmatched refund is
+a line in the ledger somebody reconciles. A guessed one silently frees a seat
+that is still occupied, or fails to free one that is not.
+
+**When a real refund webhook has been seen, read `raw` on its `payment_events`
+row and tighten this.** That is the one outstanding task on this feature.
+
+### Two things the shape uncertainty forced
+
+**The reversal is clamped.** `amountGhs` divides by 100, which is verified for
+charges by a real transaction and unverified for refunds. If a refund ever
+arrives in major units, dividing again under-reverses a hundredfold. Clamping to
+what was actually paid bounds the damage: a refund can never drive
+`amount_paid_ghs` below zero, nor reverse more than the person paid. A clamp
+that fires writes `REFUND OF n EXCEEDED AMOUNT PAID AND WAS CLAMPED; check the
+units` into the match note, because it means the units assumption is wrong and
+wants a human before the next refund.
+
+**A refund never falls back to matching on email.** A charge does, because a
+hosted page or a dashboard-raised charge leaves only an address behind. A refund
+that did the same would reverse money on whichever enrollment shares the
+address, which is precisely the quiet wrong answer this file exists to avoid.
+
+### The dedupe key had to change
+
+`(provider, event, reference)` was the transaction reference. Two partial
+refunds of one transaction would have collided, and the second would have been
+silently ignored — the roll then claims more money was kept than actually was.
+
+Refunds are now logged under `<txnref>:refund:<refund id>`, so two partial
+refunds are distinct while a replay of either still dedupes. The stored value is
+only a dedupe key and something a human reads: the join uses the transaction
+reference from the payload, exactly as the charge path already does.
+
+**The §6a read-back had to move with it.** It looks up the prior event by the
+stored reference, so it now uses the same composite value it inserted under —
+otherwise a retried refund would find nothing, read as a duplicate, and be
+dropped.
+
+**A refund does not overwrite `paystack_reference` or `paystack_payment_date`.**
+Those record which payment was taken and when, and that stays true after it is
+given back. The refund's own record is its `payment_events` row.
+
+### Verification — 30/30
+
+`drive-webhook.mjs` now runs the original 10, the 6 failure-injection cases from
+§6a, and 14 refund checks: both reference spellings, pending and failed moving
+nothing, partial reversal, a second partial refund applying rather than deduping
+away, a replay not reversing twice, the clamp firing and being recorded, an
+unresolvable reference going unmatched, no email fallback, the original payment
+record surviving, and the mode invariant still refusing a test-signed live
+refund.
+
+**22/30 against `main` as it was**, the eight failures being exactly the cases
+that require the new behaviour. The six refund checks that pass against the old
+code are the "must not do anything" ones, which it satisfied by ignoring refunds
+entirely — worth stating rather than counting as evidence.
