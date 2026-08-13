@@ -380,7 +380,16 @@
           <li>A missed instalment pauses access until it is paid.</li>
         </ul>
         <p class="policy-link"><a href="/refund-policy">Read the Refund and Cancellation Policy</a> &mdash; cancellations, transfers, payment plans, and what happens if we cancel.</p>
-        <p class="callout"><strong>Card and mobile money checkout is not open yet.</strong> Register below and we will contact you within 24 hours to confirm your place and arrange the first payment directly &mdash; mobile money or bank transfer. Instalments after the first are arranged through our Slack community and paid via MoMo. Full payment must be received before the certification assessment on <time datetime="2026-11-01">1 November 2026</time>.</p>
+        <!-- Two versions of the same fact, switched by shell.js from what
+             /api/enroll reports about the Paystack account. The "off" version
+             is the one in the markup and the one anyone without JavaScript
+             sees, because under-promising is the safe direction: a page that
+             says nothing is charged and then charges is a dispute, while a
+             page that says checkout is closed and then opens one is a pleasant
+             surprise. Switching this from the server is what makes activation
+             a key swap rather than a copy edit somebody has to remember. -->
+        <p class="callout" data-pay="off"><strong>Card and mobile money checkout is not open yet.</strong> Register below and we will contact you within 24 hours to confirm your place and arrange the first payment directly &mdash; mobile money or bank transfer. Instalments after the first are arranged through our Slack community and paid via MoMo. Full payment must be received before the certification assessment on <time datetime="2026-11-01">1 November 2026</time>.</p>
+        <p class="callout" data-pay="live" hidden><strong>Pay by mobile money or card.</strong> Registering takes you straight to checkout, where mobile money is the first option. Instalments after the first are arranged through our Slack community and paid via MoMo. Full payment must be received before the certification assessment on <time datetime="2026-11-01">1 November 2026</time>.</p>
       </div>
     </div>
   </section>
@@ -392,8 +401,18 @@
         <div class="enroll__intro">
           <h2 class="section__title" id="enroll-title">Enroll in the founding cohort</h2>
           <p class="lede">25 seats. Enrollment closes <time datetime="2026-09-08">Tuesday 8 September 2026</time> and the cohort begins <time datetime="2026-09-12">Saturday 12 September</time>.</p>
-          <p>Register below and we will be in touch within 24 hours to confirm your place and arrange payment. Nothing is charged on this page. If you would rather ask something first, message us on WhatsApp &mdash; <a href="https://wa.me/233546527779">+233 54 652 7779</a>.</p>
+          <p data-pay="off">Register below and we will be in touch within 24 hours to confirm your place and arrange payment. Nothing is charged on this page. If you would rather ask something first, message us on WhatsApp &mdash; <a href="https://wa.me/233546527779">+233 54 652 7779</a>.</p>
+          <p data-pay="live" hidden>Register below and you will be taken to checkout to pay by mobile money or card. We confirm every place by hand on WhatsApp within 24 hours. If you would rather ask something first, message us on WhatsApp &mdash; <a href="https://wa.me/233546527779">+233 54 652 7779</a>.</p>
         </div>
+
+        <!-- Shown only when the page was opened with ?paystack=test AND the
+             server confirms the account is holding test keys. It cannot be
+             summoned from the address bar alone, and it cannot appear once the
+             live key is in. Dashed marigold on purpose: it is the same visual
+             language as .placeholder, which already means "this is not real". -->
+        <p class="callout callout--test" id="paystack-test-banner" hidden>
+          <strong>Test mode.</strong> This checkout is running on Paystack test keys. No money moves, no seat is really taken, and the row this creates is marked <code>[TEST]</code> for deletion. Use Paystack&rsquo;s test mobile money and card details &mdash; real ones will be declined.
+        </p>
 
         <form class="form" id="enroll-form" novalidate>
           <div class="form__row">
@@ -488,7 +507,10 @@
             </div>
           </fieldset>
 
-          <button class="btn btn--go form__submit" type="submit">Register for the cohort</button>
+          <!-- Buttons say what happens. Once checkout is live, what happens is
+               that you leave for a payment page, so the label changes with the
+               mode rather than staying honest only half the time. -->
+          <button class="btn btn--go form__submit" type="submit" data-pay-label-live="Register and pay">Register for the cohort</button>
 
           <p class="form__small">We use your details only to run this cohort. We will not pass them to anyone else.</p>
         </form>

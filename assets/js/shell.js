@@ -208,10 +208,31 @@
 })();
 
 /* Enrollment.
-   Writes a reservation to Supabase and swaps the form for a confirmed state.
-   No money moves here — payment is arranged out of band until Paystack is live.
-   When it is, only the block after a successful insert changes: the form, the
-   validation, and the record written are all already correct. */
+
+   Posts to /api/enroll, a Cloudflare Pages Function on our own origin, which
+   writes the row and — once Paystack is switched on — starts the transaction
+   and hands back a checkout URL.
+
+   The amount is deliberately NOT sent from here. It is decided server-side
+   from the table in functions/api/_paystack.js, because whatever amount
+   reaches Paystack is the amount charged, and a price the browser supplies is
+   a price the browser can edit.
+
+   Three outcomes, all of which end with the visitor knowing where they stand:
+
+     mode "checkout"  redirect to Paystack.
+     mode "reserve"   payment is not switched on, or the checkout could not be
+                      started. Show the confirmed state — this is exactly the
+                      flow that ran before Paystack existed.
+     endpoint absent  fall back to the direct Supabase insert this page used
+                      until now, then show the same confirmed state.
+
+   That last one is not defensive padding. Cloudflare Pages discovers
+   functions/ at deploy time and it has never yet been confirmed to pick this
+   directory up on a production build; if it does not, /api/enroll returns the
+   404 page and every enrollment on the site's only selling page would fail
+   silently. The fallback costs thirty lines and removes that from the list of
+   things that can go wrong before 8 September. */
 
 (function () {
   var form = document.getElementById("enroll-form");
@@ -219,18 +240,11 @@
   var errorBox = document.getElementById("form-error");
   if (!form || !done) return;
 
-  // Injected at build time from the environment (Cloudflare Pages variables in
-  // production, a local .env in development). The anon key is public by design
-  // — row-level security limits it to inserting into enrollments and nothing
-  // else — but it is not committed to the repository.
+  // Only used by the fallback path below. Injected at build time; the anon key
+  // is public by design — row-level security limits it to inserting into
+  // enrollments and nothing else — but it is not committed to the repository.
   var SUPABASE_URL = "__SUPABASE_URL__";
   var SUPABASE_ANON_KEY = "__SUPABASE_ANON_KEY__";
-
-  // If the build had no environment values the tokens survive verbatim. Say so
-  // and hand the visitor a route that works, rather than posting into the void.
-  // Unset values are substituted as empty strings, not left as tokens, so
-  // emptiness is what "not configured" actually looks like at runtime.
-  var configured = SUPABASE_URL.length > 0 && SUPABASE_ANON_KEY.length > 0;
 
   // Matches the live table's own default, so the cohort is explicit in the row
   // rather than implied by when it was created.
@@ -238,21 +252,42 @@
 
   // Which version of the policies was on screen when they agreed. Bump this in
   // the same change that publishes a new policy, or the record will claim
-  // people agreed to wording they never saw.
+  // people agreed to wording they never saw. Kept identical to POLICY_VERSION
+  // in functions/api/_paystack.js.
   var POLICY_VERSION = "2026-08-10";
 
-  // Keys are the values the table's chosen_option CHECK constraint allows.
+  // Fallback only. The authoritative table is server-side; these figures exist
+  // so a direct insert still records the right commitment if the Function is
+  // unreachable. Keep them in step with functions/api/_paystack.js.
   var PRICE = {
     cohort_only: 750,
     cohort_and_assessment: 1050,
     path_b_readiness: 150
   };
 
-  // First instalment due at enrollment. The remainder is arranged over Slack.
   var FIRST_INSTALMENT = {
     cohort_only: 400,
     cohort_and_assessment: 400,
     path_b_readiness: 150
+  };
+
+  /* Opting in to the test checkout.
+     While the Paystack account holds test keys, /api/enroll refuses to send
+     anyone to a checkout unless the request asks for it explicitly. Loading
+     the page as /certified-automation-builder?paystack=test is that ask. A
+     visitor who has not done so gets the reservation flow, so nobody can
+     stumble into a test payment and believe they have paid. */
+  var TEST_OPT_IN = /(^|[?&])paystack=test($|&)/.test(window.location.search);
+
+  var messages = {
+    already_paid:
+      "You already have a paid place on this cohort. Message us on WhatsApp if you need to change anything.",
+    instalment_outstanding:
+      "You already have a place on this cohort with an instalment outstanding. Remaining instalments are arranged through our Slack community via MoMo — message us on WhatsApp and we will sort it.",
+    cancelled:
+      "This enrollment was cancelled. Message us on WhatsApp and we will reinstate it rather than creating a second record.",
+    generic:
+      "We could not save that. Please try again, or message us on WhatsApp and we will reserve your place manually."
   };
 
   function show(message) {
@@ -286,17 +321,68 @@
     return !!(el && el.checked);
   }
 
+  function confirmReserved() {
+    form.hidden = true;
+    done.hidden = false;
+    done.setAttribute("tabindex", "-1");
+    done.focus();
+  }
+
+  /* The pre-Paystack path, kept as the fallback. Writes the row with the anon
+     key exactly as this page did before /api/enroll existed.
+
+     Prefer must stay "minimal": "representation" makes PostgREST return the
+     row, which needs SELECT rights anon deliberately does not have, and the
+     insert would be refused with 42501. */
+  function reserveDirect(fields) {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      return Promise.reject(new Error("not-configured"));
+    }
+
+    var payload = {
+      full_name: fields.full_name,
+      email: fields.email,
+      whatsapp: fields.whatsapp,
+      city: fields.city,
+      experience_level: fields.experience_level,
+      chosen_option: fields.chosen_option,
+      amount_ghs: PRICE[fields.chosen_option],
+      payment_plan: fields.payment_plan,
+      cohort: COHORT,
+      consent_given: fields.consent_given,
+      ack_refund: fields.ack_refund,
+      ack_certification: fields.ack_certification,
+      acks_policy_version: POLICY_VERSION,
+      source: "website"
+    };
+
+    if (fields.payment_plan) {
+      payload.first_instalment_ghs = FIRST_INSTALMENT[fields.chosen_option];
+    }
+
+    return fetch(SUPABASE_URL + "/rest/v1/enrollments", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: "Bearer " + SUPABASE_ANON_KEY,
+        Prefer: "return=minimal"
+      },
+      body: JSON.stringify(payload)
+    }).then(function (response) {
+      if (response.ok) return;
+      if (response.status === 409) {
+        var conflict = new Error(messages.already_paid);
+        conflict.shown = true;
+        throw conflict;
+      }
+      throw new Error("insert-" + response.status);
+    });
+  }
+
   form.addEventListener("submit", function (event) {
     event.preventDefault();
     clearError();
-
-    if (!configured) {
-      show(
-        "Online enrollment is not available right now. Please message us on " +
-          "WhatsApp and we will reserve your place."
-      );
-      return;
-    }
 
     // Native constraints first, so the browser's own messages and the
     // required/type rules in the markup stay the single source of truth.
@@ -312,92 +398,152 @@
       el.removeAttribute("aria-invalid");
     });
 
-    // Honeypot: a real person never sees this field, so anything in it means
-    // a bot. Pretend it worked — a bot that gets an error learns to retry.
+    // Honeypot: a real person never sees this field, so anything in it means a
+    // bot. Pretend it worked — a bot that gets an error learns to retry. The
+    // server checks the same field; this just saves the round trip.
     if (form.elements.company_website && form.elements.company_website.value) {
-      form.hidden = true;
-      done.hidden = false;
+      confirmReserved();
       return;
     }
 
-    var option = chosen("option");
-    var instalments = chosen("payment_plan") === "Instalments";
-
-    var payload = {
+    var fields = {
       full_name: value("full_name"),
       email: value("email"),
       whatsapp: value("whatsapp"),
       city: value("city"),
       experience_level: value("experience_level"),
-      chosen_option: option,
-      amount_ghs: PRICE[option],
+      chosen_option: chosen("option"),
       // payment_plan is a boolean in the table: true means instalments.
-      payment_plan: instalments,
-      cohort: COHORT,
+      payment_plan: chosen("payment_plan") === "Instalments",
       consent_given: ticked("consent_given"),
       // Both are required to submit, so these are always true on a real
-      // registration — the value is in the version below, which says WHICH
-      // wording they were shown. WHEN is created_at, set server-side, because
-      // a browser clock is not evidence of anything.
+      // registration — the value is in the version recorded alongside them,
+      // which says WHICH wording they were shown. WHEN is created_at, set
+      // server-side, because a browser clock is not evidence of anything.
       ack_refund: ticked("ack_refund"),
-      ack_certification: ticked("ack_certification"),
-      acks_policy_version: POLICY_VERSION,
-      // source is constrained to website | showcase | whatsapp | referral.
-      source: "website"
+      ack_certification: ticked("ack_certification")
     };
-
-    if (instalments) {
-      payload.first_instalment_ghs = FIRST_INSTALMENT[option];
-    }
 
     var submit = form.querySelector(".form__submit");
     var label = submit.textContent;
     submit.disabled = true;
     submit.textContent = "Reserving…";
 
-    fetch(SUPABASE_URL + "/rest/v1/enrollments", {
+    var request = {
+      full_name: fields.full_name,
+      email: fields.email,
+      whatsapp: fields.whatsapp,
+      city: fields.city,
+      experience_level: fields.experience_level,
+      chosen_option: fields.chosen_option,
+      payment_plan: fields.payment_plan,
+      consent_given: fields.consent_given,
+      ack_refund: fields.ack_refund,
+      ack_certification: fields.ack_certification,
+      testOptIn: TEST_OPT_IN,
+      company_website: form.elements.company_website ? form.elements.company_website.value : ""
+    };
+
+    fetch("/api/enroll", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: "Bearer " + SUPABASE_ANON_KEY,
-        // Must stay "minimal". "representation" makes PostgREST RETURN the row,
-        // which needs SELECT rights anon deliberately does not have — the insert
-        // would be refused with 42501.
-        Prefer: "return=minimal"
-      },
-      body: JSON.stringify(payload)
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request)
     })
       .then(function (response) {
-        if (response.ok) return null;
-
-        // A unique index on (cohort, email) and (cohort, whatsapp) means a
-        // second attempt is almost always someone who already reserved.
-        if (response.status === 409) {
-          throw new Error(
-            "You already have a place reserved for this cohort. Message us on WhatsApp if you need to change anything."
-          );
+        /* A 404 here does not mean "no such enrollment". It means the Function
+           is not deployed and Cloudflare served the site's 404 page, so the
+           right move is the old path rather than an error. Same for a 405,
+           which is what a static host returns for a POST to a missing route. */
+        if (response.status === 404 || response.status === 405) {
+          throw { fallback: true };
         }
-        return response.text().then(function (body) {
-          throw new Error(body || "That did not save.");
+
+        return response.json().then(function (data) {
+          if (response.ok && data && data.ok) return data;
+
+          // A deliberate, specific refusal from our own endpoint. These have
+          // wording written for them; anything else is generic.
+          if (data && data.code && messages[data.code]) {
+            var known = new Error(messages[data.code]);
+            known.shown = true;
+            throw known;
+          }
+          throw new Error("api-" + response.status);
         });
       })
-      .then(function () {
-        form.hidden = true;
-        done.hidden = false;
-        done.setAttribute("tabindex", "-1");
-        done.focus();
+      .then(function (data) {
+        if (data.mode === "checkout" && data.url) {
+          submit.textContent = "Opening payment…";
+          // A full navigation, not a fetch: this leaves our origin for
+          // Paystack's checkout, and comes back to /thank-you afterwards.
+          window.location.assign(data.url);
+          return;
+        }
+        confirmReserved();
+      })
+      .catch(function (err) {
+        if (err && err.fallback) {
+          return reserveDirect(fields).then(confirmReserved);
+        }
+        throw err;
       })
       .catch(function (err) {
         submit.disabled = false;
         submit.textContent = label;
-        show(
-          /already have a place/.test(err.message)
-            ? err.message
-            : "We could not save that. Please try again, or message us on WhatsApp and we will reserve your place manually."
-        );
+        show(err && err.shown ? err.message : messages.generic);
       });
   });
+
+  /* What the page says about payment, decided by the server rather than by
+     whoever last edited the copy.
+
+     Two sentences on this page are only true while checkout is closed —
+     "Card and mobile money checkout is not open yet" and "Nothing is charged
+     on this page". Leaving them as hand-maintained copy would mean activation
+     day requires a deploy to correct them, and the failure mode if it is
+     forgotten is the page promising nothing will be charged while charging
+     people. So both exist in the markup twice, and this picks one.
+
+     The "off" version is what the markup ships with and what anyone without
+     JavaScript sees. That is the safe direction: promising less than happens
+     is a pleasant surprise, promising more is a dispute.
+
+     GET /api/enroll reports off | test | live and nothing else. Asking it
+     rather than reading ?paystack=test means the test banner cannot be
+     summoned from the address bar, and cannot survive the live key going in. */
+  (function () {
+    var swappable = document.querySelectorAll("[data-pay]");
+    var banner = document.getElementById("paystack-test-banner");
+    if (!swappable.length && !banner) return;
+
+    fetch("/api/enroll")
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data) return;
+
+        // In test mode with the opt-in, a checkout genuinely does happen, so
+        // the copy should describe one — with the banner making very clear
+        // what kind.
+        var charging = data.paystack === "live" || (data.paystack === "test" && TEST_OPT_IN);
+        if (!charging) return;
+
+        Array.prototype.forEach.call(swappable, function (el) {
+          el.hidden = el.getAttribute("data-pay") !== "live";
+        });
+
+        var submit = form.querySelector(".form__submit");
+        var liveLabel = submit && submit.getAttribute("data-pay-label-live");
+        if (liveLabel) submit.textContent = liveLabel;
+
+        if (banner && data.paystack === "test") banner.hidden = false;
+      })
+      .catch(function () {
+        /* Leaving the "off" copy in place is the correct failure. If this
+           probe could not reach the endpoint, the submit almost certainly
+           cannot either, and it will fall back to the reservation flow that
+           copy already describes. */
+      });
+  })();
 })();
 
 /* Print the standard.
