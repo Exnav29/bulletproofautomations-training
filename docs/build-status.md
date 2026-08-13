@@ -477,7 +477,7 @@ Supabase and mock Paystack:
 |---|---|
 | Browser, real form over CDP (`drive-enroll.js`) | **12/12** — copy swap both ways, banner gating, button label, submit → confirmed state, submit → redirect to checkout, no uncaught errors |
 | Browser, `functions/` absent (`drive-fallback.js`) | **8/8** — `/api/enroll` 404s, the direct anon insert fires, confirmed state shown |
-| Webhook, real HMAC (`drive-webhook.mjs`) | **10/10** — see below |
+| Webhook, real HMAC (`drive-webhook.mjs`) | **16/16** — see below, and §6a |
 
 Webhook cases, each with a genuine SHA-512 signature: unsigned refused; wrong key refused;
 **test key signing a `live` charge refused**; **test charge cannot settle a real seat by email**;
@@ -653,3 +653,56 @@ decision in `docs/project-brief.md` §9 and still is.
 7. No fabricated dates, prices, testimonials or statistics — placeholders visible instead.
 
 **Merging to `main` deploys immediately.**
+
+---
+
+## 6a. Three database failures reported as normal results — fixed 13 August 2026
+
+Found while writing the go-live checks, not by a test. All three are the same
+fault the `/verify` work already learned once: **a service failure must never be
+reported as a normal negative result.** There it made a real credential read as
+missing. Here it loses money.
+
+Paystack retries only on a non-2xx response. Every one of these answered **200**,
+so Paystack marked the event delivered and never came back.
+
+| Where | Was reported as | Consequence |
+|---|---|---|
+| `payment_events` insert fails | `{"ok":true,"duplicate":true}` | Payment never applied, never retried |
+| Enrollment lookup fails | `matched:false`, "No enrollment matched this reference or email" | Real payment stranded as unmatched for ever |
+| Enrollment PATCH fails — the money write | `{"ok":true,"applied":true}` | Response claimed the seat was paid when nothing was written |
+
+All three now return **503** so the retry happens.
+
+**The 503s alone would have been theatre.** On retry the event is already in
+`payment_events`, so `on_conflict=ignore-duplicates` returns nothing and the
+duplicate guard would have dropped the payment on the second pass instead of the
+first. So a duplicate now reads the prior row back and branches on `matched`:
+already applied stops, logged-but-never-applied is driven through. That branch is
+what makes the retry worth anything.
+
+**One deliberate exception.** If the enrollment write succeeds and only the
+`payment_events` note fails, the function still answers **200**. The money has
+already moved, and a retry would find the event unmatched and add the amount a
+second time. Losing the ledger note is recoverable by hand from `/admin`; losing
+the money is not.
+
+### Residual risk, stated rather than papered over
+
+`amount_paid_ghs` is written by **increment**, not derived, so retry safety rests
+on `matched` being an accurate record of whether the money moved. One window
+remains: if the enrollment PATCH is sent and the response is lost, the function
+reads it as failed and returns 503, and the retry adds the amount twice. Closing
+it properly means deriving `amount_paid_ghs` from the sum of matched
+`payment_events` rows rather than incrementing — worth doing, not worth blocking
+activation on, and the ledger makes it visible if it ever happens.
+
+### Verification
+
+`drive-webhook.mjs` gained failure injection — the stand-in PostgREST can now
+503 on demand, which is why these branches had never been reached.
+
+**16/16 against the fix. 11/16 against the code as it was**, with the five
+failures being exactly the new cases, including
+`Paystack's retry then applies it exactly once — paid 0`. The tests were
+confirmed to fail before they were confirmed to pass.
