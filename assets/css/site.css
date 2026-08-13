@@ -2621,6 +2621,23 @@ a.rail__link:hover .rail__name {
   font-variation-settings: "wdth" var(--normal), "wght" 600;
 }
 
+/* The Paystack test-mode banner. Deliberately the same dashed language as
+   .placeholder, because it means the same thing: what you are looking at is
+   not real yet. It sits on the ink enrollment ground, where --marigold fails
+   contrast, so it takes --signal there for the same reason .placeholder does. */
+.callout--test {
+  margin-bottom: var(--s5);
+  background: transparent;
+  border: 1px dashed var(--signal);
+  border-radius: var(--r-sm);
+  color: var(--text-on-ink);
+}
+
+.callout--test code {
+  font-variation-settings: "wdth" var(--narrow), "wght" 600;
+  color: var(--signal);
+}
+
 /* --- Enrollment ---------------------------------------------------------- */
 
 .section--enroll {

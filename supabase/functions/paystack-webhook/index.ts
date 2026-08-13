@@ -19,16 +19,54 @@
  * platform's own auth gate must be off. This function's auth is the signature.
  *
  * Secrets (Supabase dashboard -> Edge Functions -> Secrets, never in the repo):
- *   PAYSTACK_SECRET_KEY   sk_live_… / sk_test_…
- *   PROJECT_URL           https://<ref>.supabase.co
- *   SERVICE_ROLE_KEY      bypasses RLS; required to write the roll
+ *   PAYSTACK_SECRET_KEY        sk_live_… — the live key
+ *   PAYSTACK_TEST_SECRET_KEY   sk_test_… — optional, see below
+ *   PROJECT_URL                https://<ref>.supabase.co
+ *   SERVICE_ROLE_KEY           bypasses RLS; required to write the roll
+ *
+ * ---------------------------------------------------------------------------
+ * WHY TWO KEYS
+ * ---------------------------------------------------------------------------
+ *
+ * Paystack keeps test and live entirely separate: separate keys, separate
+ * webhook URLs, separate dashboards. Both webhook URLs can be pointed at THIS
+ * function, which is what lets the whole payment path be exercised while the
+ * business activation request is still pending — a test charge signs with the
+ * test key, a live one with the live key, and each is verified against its own.
+ *
+ * Setting PAYSTACK_TEST_SECRET_KEY is therefore how you turn testing on, and
+ * removing it is how you turn it off. Neither affects live payments.
+ *
+ * ---------------------------------------------------------------------------
+ * THE MODE INVARIANT — the thing that makes testing safe
+ * ---------------------------------------------------------------------------
+ *
+ * A verified signature proves Paystack sent the event. It does NOT prove money
+ * moved: a test charge is signed just as properly as a live one. Crediting a
+ * real seat with a test payment would be indistinguishable, on the roll, from
+ * being paid.
+ *
+ * So references carry their mode in the prefix — BPA-CAB- for live, BPA-TEST-
+ * for test, minted in functions/api/_paystack.js — and an event is applied only
+ * when the reference's mode matches data.domain. A test charge can only ever
+ * settle a test enrollment. Both are still recorded either way.
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 
 const PAYSTACK_SECRET_KEY = Deno.env.get('PAYSTACK_SECRET_KEY')
+const PAYSTACK_TEST_SECRET_KEY = Deno.env.get('PAYSTACK_TEST_SECRET_KEY')
 const PROJECT_URL = Deno.env.get('PROJECT_URL')
 const SERVICE_ROLE_KEY = Deno.env.get('SERVICE_ROLE_KEY')
+
+/** live | test, from the prefix we minted the reference with. */
+function referenceMode(reference: unknown): 'live' | 'test' | null {
+  if (typeof reference !== 'string') return null
+  if (reference.startsWith('BPA-CAB-')) return 'live'
+  if (reference.startsWith('BPA-TEST-')) return 'test'
+  // Not ours: a hosted payment page, or a charge raised from the dashboard.
+  return null
+}
 
 const db = (path: string, init: RequestInit = {}) =>
   fetch(`${PROJECT_URL}/rest/v1/${path}`, {
@@ -41,11 +79,11 @@ const db = (path: string, init: RequestInit = {}) =>
     },
   })
 
-/** HMAC-SHA512 of the raw body, hex encoded. */
-async function sign(raw: string): Promise<string> {
+/** HMAC-SHA512 of the raw body, hex encoded, under one specific key. */
+async function sign(raw: string, secret: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     'raw',
-    new TextEncoder().encode(PAYSTACK_SECRET_KEY),
+    new TextEncoder().encode(secret),
     { name: 'HMAC', hash: 'SHA-512' },
     false,
     ['sign'],
@@ -71,12 +109,33 @@ serve(async (req) => {
   // key order and whitespace, and the signature is over the exact bytes sent.
   const raw = await req.text()
 
+  /* Try each configured key and remember which one matched.
+   *
+   * Both are tried in full rather than short-circuiting on the live key,
+   * because which key verified is the answer to "was this real money" and the
+   * cost is one extra HMAC over a body of a few hundred bytes. Every key is
+   * attempted even after a match for the same reason the comparison is
+   * length-independent: the work should not depend on the secret. */
   let valid = false
+  let signedBy: 'live' | 'test' | null = null
   try {
     const header = req.headers.get('x-paystack-signature') || ''
-    valid = header.length > 0 && sameSecret(await sign(raw), header)
+    if (header.length > 0) {
+      const candidates: Array<['live' | 'test', string | undefined]> = [
+        ['live', PAYSTACK_SECRET_KEY],
+        ['test', PAYSTACK_TEST_SECRET_KEY],
+      ]
+      for (const [mode, secret] of candidates) {
+        if (!secret) continue
+        if (sameSecret(await sign(raw, secret), header) && !valid) {
+          valid = true
+          signedBy = mode
+        }
+      }
+    }
   } catch (_) {
     valid = false
+    signedBy = null
   }
 
   let body: Record<string, unknown> = {}
@@ -132,14 +191,95 @@ serve(async (req) => {
     })
   }
 
-  // Hosted Payment Pages mint their own reference, so it cannot be pre-assigned
-  // at enrollment. Email is the join key both systems genuinely share.
-  const found = await db(
-    `enrollments?select=id,amount_ghs,amount_paid_ghs,payment_status` +
-      `&email=eq.${encodeURIComponent(email)}` +
-      `&payment_status=neq.cancelled&order=created_at.desc&limit=1`,
-  )
-  const rows = found.ok ? await found.json() : []
+  /* THE MODE INVARIANT. See the header.
+   *
+   * data.domain is Paystack's own statement of which environment the charge
+   * happened in, and the reference prefix is ours. They must agree, and both
+   * must agree with the key that verified the signature. Any disagreement is
+   * recorded and applied to nothing — it means either a test charge reaching
+   * for a real enrollment, or a configuration mistake, and there is no reading
+   * of it under which crediting a seat is correct. */
+  const domain: string | null = typeof data?.domain === 'string' ? data.domain : null
+  const refMode = referenceMode(data?.reference)
+
+  if (domain && signedBy && domain !== signedBy) {
+    await db(`payment_events?id=eq.${eventRow.id}`, {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        matched: false,
+        match_note: `Refused: domain ${domain} but signed with the ${signedBy} key`,
+      }),
+    })
+    return new Response(JSON.stringify({ ok: true, applied: false, matched: false }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  if (refMode && domain && refMode !== domain) {
+    await db(`payment_events?id=eq.${eventRow.id}`, {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        matched: false,
+        match_note: `Refused: ${refMode} reference on a ${domain} charge`,
+      }),
+    })
+    return new Response(JSON.stringify({ ok: true, applied: false, matched: false }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  /* A test charge with no BPA-TEST- reference did not come from this site's
+     enrollment form — it was raised from the dashboard, or by an old hosted
+     page. Log it and stop. Falling through to the email join would let a test
+     charge settle a real person's seat, which is the exact failure the
+     invariant exists to prevent. */
+  if (domain === 'test' && refMode !== 'test') {
+    await db(`payment_events?id=eq.${eventRow.id}`, {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        matched: false,
+        match_note: 'Test-mode charge with no test reference; not applied',
+      }),
+    })
+    return new Response(JSON.stringify({ ok: true, applied: false, matched: false }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  /* Match on OUR reference first.
+   *
+   * /api/enroll mints the reference before handing the browser to Paystack and
+   * stores it on the row, so this join is exact. Email is kept as a fallback
+   * for live charges only, because it is what a Paystack-hosted page or a
+   * dashboard-raised charge leaves behind — but it is genuinely worse: it
+   * fails on a typo, and it picks the wrong row when one person enrolls from
+   * two addresses. */
+  let rows: any[] = []
+  let matchedOn = 'reference'
+
+  if (typeof data?.reference === 'string' && data.reference) {
+    const byRef = await db(
+      `enrollments?select=id,amount_ghs,amount_paid_ghs,payment_status` +
+        `&paystack_reference=eq.${encodeURIComponent(data.reference)}&limit=1`,
+    )
+    rows = byRef.ok ? await byRef.json() : []
+  }
+
+  if ((!Array.isArray(rows) || rows.length === 0) && domain !== 'test') {
+    matchedOn = 'email'
+    const found = await db(
+      `enrollments?select=id,amount_ghs,amount_paid_ghs,payment_status` +
+        `&email=eq.${encodeURIComponent(email)}` +
+        `&payment_status=neq.cancelled&order=created_at.desc&limit=1`,
+    )
+    rows = found.ok ? await found.json() : []
+  }
 
   if (!Array.isArray(rows) || rows.length === 0) {
     // Unmatched, not lost. It sits in payment_events for reconciliation, which
@@ -147,7 +287,10 @@ serve(async (req) => {
     await db(`payment_events?id=eq.${eventRow.id}`, {
       method: 'PATCH',
       headers: { Prefer: 'return=minimal' },
-      body: JSON.stringify({ matched: false, match_note: 'No live enrollment with this email' }),
+      body: JSON.stringify({
+        matched: false,
+        match_note: 'No enrollment matched this reference or email',
+      }),
     })
     return new Response(JSON.stringify({ ok: true, applied: false, matched: false }), {
       status: 200,
@@ -180,7 +323,7 @@ serve(async (req) => {
     body: JSON.stringify({
       matched: true,
       enrollment_id: enrollment.id,
-      match_note: `Matched on email; ${paid} of ${due} GHS paid`,
+      match_note: `Matched on ${matchedOn}${domain === 'test' ? ' (TEST)' : ''}; ${paid} of ${due} GHS paid`,
     }),
   })
 

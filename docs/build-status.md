@@ -1,6 +1,6 @@
 # Build status — site rebuild
 
-**Updated:** 11 August 2026 · **Branch:** `site-rebuild` · **Nothing merged to `main` yet.**
+**Updated:** 13 August 2026 · **Branch:** `site-rebuild` · **Nothing merged to `main` yet.**
 
 Read this with `CLAUDE.md`, `docs/project-brief.md` (confirmed decisions in §12) and
 `docs/competency-framework.md`. This file records where the build actually is, so a new
@@ -14,7 +14,7 @@ session can continue without re-deriving it.
 |---|---|
 | Global shell — header, pathway rail, footer | **Built, approved** |
 | `/` homepage | **Built, approved** ("okay with the design for now") |
-| `/certified-automation-builder` | **Built**, not yet reviewed. Enrollment form blocked — see §4 |
+| `/certified-automation-builder` | **Built**, not yet reviewed. Enrollment form works end to end; Paystack checkout built and switched off pending business activation — see §6 |
 | `/standard` | **Built**, not yet reviewed. No placeholders — the first page in the rebuild that ships clean |
 | `/thank-you` | **Rebuilt 10 August 2026** as the Paystack return page: confirmation, the dated sequence to Week 1, the training/certification separation, instalments, and a route for payment problems |
 | `/foundations` | **Built 10 August 2026** in State 2. Notify-me capture tested end to end against the live table |
@@ -237,9 +237,11 @@ promised WhatsApp contact.
 `whatsapp_number`; `chosen_option` not `option`; `amount_ghs` not `amount_due`; `cohort` not
 `cohort_slug`; `payment_plan` is a **boolean**; `consent_given` needed a real checkbox.
 
-**Paystack** is in review, expected live around 16 August. Until then the form writes a
-reservation and shows the confirmed state. When it goes live only the block after a successful
-insert changes — the form, validation and stored record are already correct.
+~~**Paystack** is in review~~ — **the integration is built and switched off, 13 August 2026.**
+The account is still awaiting business activation and holds test keys. The whole checkout path is
+in place behind `PAYSTACK_SECRET_KEY`: unset gives the reservation flow that runs today, a
+`sk_test_` key gives an opt-in-only test checkout, and pasting the `sk_live_` key is the entire
+activation step. Full detail, including the go-live list, in §6.
 
 ---
 
@@ -402,24 +404,123 @@ Every one renders in conspicuous dashed marigold. **Nothing ships with one still
   the Foundations page and the homepage borrowed it first. Decide whether the homepage keeps the
   full text or drops to a pull quote; do not rewrite either, per rule 7.
 
-- **Payment capture is built but not deployed.** `payment_events` (append-only ledger, documented
-  in `supabase-payment-events.sql`) exists on the current project, and
-  `supabase/functions/paystack-webhook/index.ts` is written. **Nothing is deployed and no Paystack
-  webhook is configured yet.** To finish, once Paystack is out of review:
+- **Paystack checkout is built and switched off — 13 August 2026.** The account is in test mode
+  while the business activation request is pending, so the whole path was built now and gated on
+  one variable. **Activation is a single key swap; no code, copy, or price change.**
 
-  1. `supabase functions deploy paystack-webhook --project-ref <ref> --no-verify-jwt`
-     (`--no-verify-jwt` is required — Paystack sends no Supabase JWT; the HMAC signature is the auth)
-  2. Set `PAYSTACK_SECRET_KEY`, `PROJECT_URL`, `SERVICE_ROLE_KEY` as Edge Function secrets
-  3. Point the Paystack webhook at `https://<ref>.supabase.co/functions/v1/paystack-webhook`
+  **The key is the mode switch.** There is no `PAYSTACK_MODE` variable, deliberately — Paystack
+  keys are prefixed `sk_test_` / `sk_live_`, so a separate flag could only ever disagree with the
+  key. `functions/api/_paystack.js` reads the prefix:
 
-  Until step 2, every event verifies as `signature_valid = false` and nothing is applied to the
-  roll — safe by default, and still logged. **The browser is never in the payment path:**
-  `/thank-you` displays the reference from the return URL and writes nothing, because a query
-  string is typed by whoever holds the browser.
+  | `PAYSTACK_SECRET_KEY` | Behaviour |
+  |---|---|
+  | unset | The reservation flow, exactly as production runs today. This is the current state |
+  | `sk_test_…` | Checkout **only** for a request carrying `testOptIn`, which the page sends only when loaded as `?paystack=test` |
+  | `sk_live_…` | Checkout for everyone |
 
-- **`/admin` has no payments view yet.** `payment_events` is readable by the admin allowlist but
-  nothing surfaces it. That is the piece that answers "show me the status of payments for
-  troubleshooting and disputes", and it should land before Paystack goes live.
+  **Test mode is opt-in because the alternative is a dispute.** A visitor sent to a test checkout
+  sees a real-looking Paystack page, completes it, and believes they have paid. Nothing arrives.
+  So a test key alone charges nobody: `/certified-automation-builder?paystack=test` is the ask,
+  and a conspicuous dashed banner appears once the *server* confirms the keys are test keys —
+  it cannot be summoned from the address bar and cannot survive the live key going in.
+
+  **The integration shape changed from the brief.** `docs/project-brief.md` §6 specified hosted
+  Paystack Payment Pages, chosen when there was no server. `functions/` now exists. Two facts
+  settled it: **payment pages created in test mode do not exist in live mode** (Paystack keeps the
+  environments fully separate), so hosted pages would mean building every page twice and swapping
+  every URL at activation; and a hosted page mints its own reference, which left the webhook
+  joining on email. Now `/api/enroll` calls Transaction Initialize server-side.
+
+  **What that bought, and why each part matters:**
+  - **The amount is decided server-side**, from the table in `_paystack.js`. It used to live in
+    `assets/js/shell.js`, which was survivable when the browser only wrote a row and a hosted page
+    carried its own price. It is not survivable when the posted amount is the charged amount —
+    the devtools console would be a discount code. Verified: a request with `"amount_ghs": 1`
+    injected still records and charges 1,050.
+  - **We mint the reference**, so the webhook joins exactly instead of on email.
+  - **The mode is encoded in the reference prefix** — `BPA-CAB-` live, `BPA-TEST-` test. This is
+    what makes testing safe: the webhook applies an event only when the reference's mode matches
+    `data.domain`, so a test charge can only ever settle a test enrollment.
+
+  **`/api/enroll` must never lose an enrollment**, because the cap is 25 and enrollment closes
+  8 September. Every failure ends with the row written and the visitor told they are on the list:
+  Paystack unconfigured → `reserve`; Paystack refuses or times out → row written, status rolled
+  back to `reserved`, reason recorded in `notes`, `reserve` returned; **the Function not deployed
+  at all → the page falls back to the old direct anon insert.** That last one is deliberate:
+  Cloudflare's discovery of `functions/` has still never been confirmed on a real deploy (see the
+  open item below), and without the fallback a missed directory would silently break every
+  enrollment on the site's only selling page.
+
+  **The page's copy switches with the mode.** "Card and mobile money checkout is not open yet" and
+  "Nothing is charged on this page" are only true while checkout is closed. Both sentences exist
+  twice in the markup as `data-pay="off"` / `data-pay="live"`, and `shell.js` picks one from
+  `GET /api/enroll`. The "off" version is what ships and what a visitor without JavaScript sees —
+  under-promising is the safe direction. Without this, activation day needs a deploy to fix copy,
+  and the failure mode if forgotten is a page promising nothing will be charged while charging.
+
+  **Test rows are real rows.** A test checkout writes to `enrollments` with `notes` starting
+  `[TEST]`. `/admin` excludes them from every figure on the board — seats taken, expected,
+  collected, queues, mix — because a test row counted against a cap of 25 is the one number on
+  that page nobody can afford to be wrong. They still appear in the roll, flagged
+  "TEST — delete before launch". **Delete them before the live key goes in.**
+
+  **`PAYSTACK_API_BASE`** overrides the API host **only under a test key**; a live key always talks
+  to `api.paystack.co`. It exists so the checkout path could be driven against a stand-in rather
+  than shipped on the strength of having read it.
+
+### What was measured, not assumed (13 August 2026)
+
+Three harnesses, all in the session scratchpad, against `wrangler pages dev dist` with mock
+Supabase and mock Paystack:
+
+| Suite | Result |
+|---|---|
+| Browser, real form over CDP (`drive-enroll.js`) | **12/12** — copy swap both ways, banner gating, button label, submit → confirmed state, submit → redirect to checkout, no uncaught errors |
+| Browser, `functions/` absent (`drive-fallback.js`) | **8/8** — `/api/enroll` 404s, the direct anon insert fires, confirmed state shown |
+| Webhook, real HMAC (`drive-webhook.mjs`) | **10/10** — see below |
+
+Webhook cases, each with a genuine SHA-512 signature: unsigned refused; wrong key refused;
+**test key signing a `live` charge refused**; **test charge cannot settle a real seat by email**;
+**live charge with a test reference refused**; live charge applied and matched on reference;
+replay does not double-count; test charge *does* settle a test enrollment; a second instalment
+accumulates rather than replaces; reaching the full amount flips to `paid`.
+
+Also verified by curl against the endpoint: client-injected `amount_ghs` ignored; honeypot returns
+success without inserting; missing acknowledgements refused; unknown `chosen_option` refused; 409
+resumes an abandoned checkout instead of telling a paying customer they already have a place; a
+paid person gets `already_paid`; amounts reach Paystack in minor units (105000 / 40000 / 15000
+pesewas for bundle / first instalment / Path B) with `channels: ["mobile_money", "card"]`.
+
+`npm run build` clean, `html-validate` clean, no `sk_test_`/`sk_live_` string anywhere in `dist/`.
+
+### To go live — the whole list
+
+1. **Cloudflare Pages → the training project → Settings → Environment variables.** Set
+   `PAYSTACK_SECRET_KEY` for **Production and Preview separately** (Cloudflare scopes them apart).
+   Test key now, live key on activation. Nothing else changes.
+2. **Supabase → Edge Functions → Secrets:** `PAYSTACK_SECRET_KEY` (live), `PAYSTACK_TEST_SECRET_KEY`
+   (test — setting it is how test webhooks are switched on), `PROJECT_URL`, `SERVICE_ROLE_KEY`.
+3. `supabase functions deploy paystack-webhook --project-ref <ref> --no-verify-jwt`
+   (`--no-verify-jwt` is required — Paystack sends no Supabase JWT; the HMAC signature is the auth).
+4. **Paystack dashboard → API Keys & Webhooks.** Test and live webhook URLs are set separately and
+   both can point at the same function:
+   `https://<ref>.supabase.co/functions/v1/paystack-webhook`. Set the test one now.
+5. **Paystack dashboard → Preferences → channels:** confirm mobile money is enabled for MTN,
+   Telecel/Vodafone Cash and AirtelTigo. `channels` in the initialize call narrows what is offered;
+   it cannot enable a channel the account does not have.
+6. **Run one test transaction** at `/certified-automation-builder?paystack=test` with Paystack's
+   test MoMo details, and confirm the row reaches `paid` in `/admin`.
+7. **On activation:** delete every `[TEST]` row from `enrollments`, swap the Cloudflare variable to
+   the live key, and confirm `GET /api/enroll` reports `live` and the page copy has switched.
+
+**Still open, and outside this repo:** whether GHS test transactions are permitted before business
+activation completes — worth checking first, since it is the one thing that could block step 6.
+The Paystack account's own state (live/test, MoMo channels, callback URL) was already an open
+decision in `docs/project-brief.md` §9 and still is.
+
+- ~~`/admin` has no payments view yet~~ — **it does.** `assets/js/admin.js` renders the
+  `payment_events` ledger and exports it. Since 13 August 2026 it also excludes `[TEST]`-marked
+  enrollments from every board figure, so a test transaction cannot report a seat as taken.
 
 - **The catch-all 404 is only half fixed.** `404.html` now ships at the root of `dist/`, which is
   where Cloudflare Pages looks. But production currently answers **200 with the old homepage for
