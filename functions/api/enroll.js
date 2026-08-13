@@ -89,7 +89,66 @@ export async function onRequest({ request, env }) {
    * exploit "this site is not switched on", and hiding it wastes an
    * afternoon. */
   if (request.method === "GET") {
-    return json({ ok: true, paystack: paystackMode(env) });
+    const url = new URL(request.url);
+    const reference = url.searchParams.get("reference") || url.searchParams.get("trxref") || "";
+
+    /* Without a reference this is the mode probe described above, unchanged.
+     *
+     * WITH one, it also reports which offering that reference was minted for,
+     * so /thank-you can tell somebody who booked a readiness review what
+     * happens next instead of the cohort's dates. Before this, every visitor
+     * read the cohort sequence — a Path B candidate was told they had bought a
+     * five-week programme they had not bought.
+     *
+     * The page could have carried the offering in the callback URL instead,
+     * which would have been three lines and no endpoint. This is the version
+     * that is still right in six months: it survives the link being shared or
+     * bookmarked, and it does not ask the page to trust a query string, which
+     * is the one thing /thank-you has always refused to do.
+     *
+     * ONE FIELD, AND NOT A SENSITIVE ONE. `chosen_option` is which of three
+     * published prices somebody picked. No name, no email, no amount, no
+     * payment status — payment status in particular stays out, because this
+     * response is reachable by anyone holding the reference and the
+     * authoritative record is the webhook's. The reference itself is ten
+     * random Crockford characters, so it is not enumerable. */
+    let option = null;
+
+    if (
+      reference &&
+      /^[A-Za-z0-9._-]{6,64}$/.test(reference) &&
+      env.SUPABASE_URL &&
+      env.SUPABASE_SERVICE_ROLE_KEY
+    ) {
+      try {
+        const res = await db(
+          env,
+          "enrollments?select=chosen_option&paystack_reference=eq." +
+            encodeURIComponent(reference) +
+            "&limit=1"
+        );
+        if (res.ok) {
+          const rows = await res.json();
+          /* Checked against the price table rather than returned as stored, so
+             a value that somehow got into the column cannot be echoed back to
+             a browser. */
+          if (Array.isArray(rows) && rows.length && OPTIONS[rows[0].chosen_option]) {
+            option = rows[0].chosen_option;
+          }
+        }
+      } catch (err) {
+        /* A lookup that fails leaves option null, and the page keeps showing
+           the neutral copy. Losing the tailored wording is a worse page; it is
+           not a wrong one. */
+      }
+    }
+
+    /* `option` appears only when one was asked for. Without a reference this
+       response is byte-for-byte the mode probe it has always been, which keeps
+       the contract in the comment above true rather than nearly true. */
+    const payload = { ok: true, paystack: paystackMode(env) };
+    if (reference) payload.option = option;
+    return json(payload);
   }
 
   if (request.method !== "POST") {

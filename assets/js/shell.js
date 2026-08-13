@@ -602,6 +602,33 @@
 
   slot.textContent = ref;
   box.hidden = false;
+
+  /* Reveal the copy that matches what was actually bought.
+   *
+   * The blocks marked data-offering="neutral" are what ships and what somebody
+   * without JavaScript reads: true for every purchase, specific about none. We
+   * only make the specific claim once the SERVER has told us which offering
+   * this reference belongs to — the same rule the enrollment page's data-pay
+   * copy follows, and for the same reason. The reference in the URL is used to
+   * ASK the question here; it never answers it.
+   *
+   * Any failure leaves the neutral copy in place. */
+  var offerings = document.querySelectorAll("[data-offering]");
+  if (!offerings.length) return;
+
+  fetch("/api/enroll?reference=" + encodeURIComponent(ref), {
+    method: "GET",
+    headers: { Accept: "application/json" }
+  })
+    .then(function (res) { return res.ok ? res.json() : null; })
+    .then(function (data) {
+      if (!data || !data.option) return;
+      var group = data.option === "path_b_readiness" ? "path_b" : "cohort";
+      for (var i = 0; i < offerings.length; i++) {
+        offerings[i].hidden = offerings[i].getAttribute("data-offering") !== group;
+      }
+    })
+    .catch(function () {});
 })();
 
 /* Foundations notify-me.
