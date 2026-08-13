@@ -219,7 +219,19 @@ function shortDate(v) {
   if (!v) return "—";
   return new Date(v).toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
 }
-function isLive(row) { return row.payment_status !== "cancelled"; }
+/* A test row is a real row in the real table — that is the point, it exercises
+   the real path — so it has to announce itself somewhere. /api/enroll stamps
+   the marker into notes when a Paystack TEST-mode checkout is started.
+
+   Excluded from isLive, and therefore from every figure on the board: seats
+   taken, expected, collected, the queues and the mix. A test enrollment that
+   counted as a seat would report the cohort fuller than it is against a cap of
+   25, which is the one number on this page nobody can afford to be wrong. It
+   still appears in the roll below, flagged, because you cannot delete what you
+   cannot see. */
+var TEST_MARKER = "[TEST]";
+function isTest(row) { return String(row.notes || "").indexOf(TEST_MARKER) === 0; }
+function isLive(row) { return row.payment_status !== "cancelled" && !isTest(row); }
 function outstanding(row) { return Math.max(0, Number(row.amount_ghs || 0) - Number(row.amount_paid_ghs || 0)); }
 
 /* --- Render ------------------------------------------------------------- */
@@ -378,6 +390,8 @@ function renderRoll() {
 
   document.getElementById("rows").innerHTML = rows.map(function (r) {
     var flags = [];
+    // First, so it reads before anything that might be taken at face value.
+    if (isTest(r)) flags.push("TEST — delete before launch");
     if (!r.consent_given) flags.push("no consent");
     if (r.payment_plan) flags.push("instalments");
     if (!r.whatsapp_contacted) flags.push("no WhatsApp");
