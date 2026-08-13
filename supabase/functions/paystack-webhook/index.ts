@@ -169,18 +169,81 @@ serve(async (req) => {
     }),
   })
 
-  const inserted = insert.ok ? await insert.json() : []
-
-  // Paystack retries on non-2xx. A replay of an event already applied must not
-  // add the money twice, so a duplicate ends here — logged once, applied once.
-  if (!Array.isArray(inserted) || inserted.length === 0) {
-    return new Response(JSON.stringify({ ok: true, duplicate: true }), {
-      status: 200,
+  /* A write that FAILED and an event we have ALREADY SEEN are opposite claims,
+   * and they used to leave by the same door: both produced an empty `inserted`,
+   * and both answered 200.
+   *
+   * Paystack retries only on a non-2xx. So a Supabase outage during a real
+   * charge.success was answered "thank you, duplicate", Paystack marked the
+   * event delivered and stopped trying, and the payment was never applied and
+   * never retried — money taken, seat not recorded, no second chance.
+   *
+   * Same shape as the /verify bug where a service failure rendered as "no
+   * credential matches": a failure must never be reported as a normal negative
+   * result. There it cost credibility; here it costs a seat. */
+  if (!insert.ok) {
+    const detail = await insert.text().catch(() => '')
+    console.error('payment_events insert failed', insert.status, detail.slice(0, 300))
+    return new Response(JSON.stringify({ ok: false, error: 'log-write-failed' }), {
+      status: 503,
       headers: { 'Content-Type': 'application/json' },
     })
   }
 
-  const eventRow = inserted[0]
+  let inserted: any[] = []
+  try {
+    const parsed = await insert.json()
+    inserted = Array.isArray(parsed) ? parsed : []
+  } catch (_err) {
+    console.error('payment_events insert returned an unreadable body')
+    return new Response(JSON.stringify({ ok: false, error: 'log-write-unreadable' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  let eventRow: Record<string, any>
+
+  if (inserted.length === 0) {
+    /* on_conflict=ignore-duplicates returns nothing for an event already in the
+     * table. Usually that is a replay of one we finished applying — but it is
+     * also exactly what a RETRY looks like after an earlier attempt logged the
+     * event and then died before the money moved. Those need opposite handling,
+     * and `matched` is the evidence for which one happened.
+     *
+     * Without this branch the 503s added above would be theatre: Paystack would
+     * retry, the retry would hit the duplicate guard, and the payment would be
+     * dropped on the second pass instead of the first. */
+    const prior = await db(
+      `payment_events?select=id,matched&provider=eq.paystack` +
+        `&event=eq.${encodeURIComponent(String(body.event ?? ''))}` +
+        `&reference=eq.${encodeURIComponent(String(data?.reference ?? ''))}&limit=1`,
+    )
+    const priorRows = prior.ok ? await prior.json().catch(() => null) : null
+
+    if (priorRows === null) {
+      console.error('could not read back the duplicate event')
+      return new Response(JSON.stringify({ ok: false, error: 'log-read-failed' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    /* Already applied, or not ours to apply. Stop here — applying a second time
+     * would add the money twice, which is the failure the dedupe key exists to
+     * prevent. */
+    if (!Array.isArray(priorRows) || priorRows.length === 0 || priorRows[0].matched === true) {
+      return new Response(JSON.stringify({ ok: true, duplicate: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    // Logged, never applied. Carry on and apply it now.
+    eventRow = priorRows[0]
+  } else {
+    eventRow = inserted[0]
+  }
 
   // Everything below moves money, so it happens only for a verified successful
   // charge. An unverified body is already recorded above and goes no further.
@@ -262,23 +325,38 @@ serve(async (req) => {
    * two addresses. */
   let rows: any[] = []
   let matchedOn = 'reference'
+  let lookupFailed = false
 
   if (typeof data?.reference === 'string' && data.reference) {
     const byRef = await db(
       `enrollments?select=id,amount_ghs,amount_paid_ghs,payment_status` +
         `&paystack_reference=eq.${encodeURIComponent(data.reference)}&limit=1`,
     )
-    rows = byRef.ok ? await byRef.json() : []
+    if (!byRef.ok) lookupFailed = true
+    else rows = await byRef.json().catch(() => [])
   }
 
-  if ((!Array.isArray(rows) || rows.length === 0) && domain !== 'test') {
+  if (!lookupFailed && (!Array.isArray(rows) || rows.length === 0) && domain !== 'test') {
     matchedOn = 'email'
     const found = await db(
       `enrollments?select=id,amount_ghs,amount_paid_ghs,payment_status` +
         `&email=eq.${encodeURIComponent(email)}` +
         `&payment_status=neq.cancelled&order=created_at.desc&limit=1`,
     )
-    rows = found.ok ? await found.json() : []
+    if (!found.ok) lookupFailed = true
+    else rows = await found.json().catch(() => [])
+  }
+
+  /* A query that could not run and a query that found nothing are, again, not
+   * the same claim. Writing "No enrollment matched this reference or email"
+   * because the database was unreachable would strand a real payment as
+   * unmatched for ever, with no retry coming to correct it. */
+  if (lookupFailed) {
+    console.error('enrollment lookup failed for reference', data?.reference)
+    return new Response(JSON.stringify({ ok: false, error: 'enrollment-lookup-failed' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 
   if (!Array.isArray(rows) || rows.length === 0) {
@@ -305,7 +383,7 @@ serve(async (req) => {
   const due = Number(enrollment.amount_ghs || 0)
   const status = due > 0 && paid + 0.001 >= due ? 'paid' : paid > 0 ? 'partially_paid' : enrollment.payment_status
 
-  await db(`enrollments?id=eq.${enrollment.id}`, {
+  const applied = await db(`enrollments?id=eq.${enrollment.id}`, {
     method: 'PATCH',
     headers: { Prefer: 'return=minimal' },
     body: JSON.stringify({
@@ -317,7 +395,20 @@ serve(async (req) => {
     }),
   })
 
-  await db(`payment_events?id=eq.${eventRow.id}`, {
+  /* The money write, and the worst of the three to misreport: the response said
+   * applied:true and Paystack never came back. Nothing has been applied if this
+   * failed, so a 503 is safe — the retry finds the event logged-but-unmatched
+   * and drives it again. */
+  if (!applied.ok) {
+    const detail = await applied.text().catch(() => '')
+    console.error('enrollment update failed', applied.status, detail.slice(0, 300))
+    return new Response(JSON.stringify({ ok: false, error: 'enrollment-update-failed' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  const noted = await db(`payment_events?id=eq.${eventRow.id}`, {
     method: 'PATCH',
     headers: { Prefer: 'return=minimal' },
     body: JSON.stringify({
@@ -326,6 +417,15 @@ serve(async (req) => {
       match_note: `Matched on ${matchedOn}${domain === 'test' ? ' (TEST)' : ''}; ${paid} of ${due} GHS paid`,
     }),
   })
+
+  /* Deliberately NOT fatal, and the one place in this function where a failed
+   * write still answers 200. The money is already applied; a retry would find
+   * the event still unmatched and add the amount a second time. Losing the
+   * ledger note is recoverable by hand from the /admin payments view. Losing
+   * the money is not. */
+  if (!noted.ok) {
+    console.error('applied payment but could not mark event', eventRow.id, 'as matched')
+  }
 
   return new Response(JSON.stringify({ ok: true, applied: true, payment_status: status }), {
     status: 200,
