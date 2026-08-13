@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- include: head.html title="Your place is held — Bulletproof Automations Training" description="What happens next after enrolling in the founding Intermediate cohort: confirmation, the setup clinic, the proof-of-setup task, and the first session on 12 September 2026." canonical="https://training.bulletproofautomations.com/thank-you" -->
+<!-- include: head.html title="That's confirmed — Bulletproof Automations Training" description="What happens next after paying: confirmation on WhatsApp, and the dated sequence for the founding Intermediate cohort or for a Path B readiness review." canonical="https://training.bulletproofautomations.com/thank-you" -->
 </head>
 <body>
 <!-- include: header.html -->
@@ -9,13 +9,37 @@
 
 <main id="main">
 
-  <!-- 1 · Confirmation. Worded to be true both now, when this records a
-       reservation, and later, when Paystack has taken a first payment. -->
+  <!-- 1 · Confirmation.
+       Worded to be true in all three cases this page serves: a reservation
+       with no payment taken, a cohort enrollment, and a Path B readiness
+       review.
+
+       WHY THE PAGE VARIES AT ALL. Until 13 August 2026 every visitor read the
+       cohort's sequence — enrollment closing, the proof-of-setup task, Week 1
+       on 12 September. Someone who had just paid GHS 150 for a readiness
+       review was told they had bought a five-week cohort they had not bought,
+       on a page that also asked them to prepare for a session they were not
+       attending.
+
+       WHAT SHIPS IS THE NEUTRAL VERSION. The offering-specific blocks start
+       hidden and are revealed by shell.js once /api/enroll confirms which
+       offering the reference belongs to. Same reasoning as the data-pay copy
+       on the enrollment page: the version that ships is the one that cannot be
+       wrong, and the specific claim is made only once the server has confirmed
+       it. A visitor with no JavaScript, or a reference we cannot resolve, gets
+       a confirmation that is true and a WhatsApp message that fills in the
+       rest — never a confident description of a purchase they did not make. -->
   <section class="section section--sand" aria-labelledby="held-title">
     <div class="shell">
-      <p class="masthead__eyebrow">Founding cohort &middot; Intermediate</p>
-      <h1 class="held__title" id="held-title">That&rsquo;s your place held.</h1>
-      <p class="lede held__lede">You are on the list for the founding Intermediate cohort. We check every enrollment by hand and confirm it with you on WhatsApp within 24 hours &mdash; if anything is wrong, that is when we catch it.</p>
+      <p class="masthead__eyebrow" data-offering="neutral">Bulletproof Automations Training</p>
+      <p class="masthead__eyebrow" data-offering="cohort" hidden>Founding cohort &middot; Intermediate</p>
+      <p class="masthead__eyebrow" data-offering="path_b" hidden>Path B &middot; Readiness review</p>
+
+      <h1 class="held__title" id="held-title">That&rsquo;s confirmed.</h1>
+
+      <p class="lede held__lede" data-offering="neutral">We check every enrollment by hand and confirm it with you on WhatsApp within 24 hours &mdash; if anything is wrong, that is when we catch it.</p>
+      <p class="lede held__lede" data-offering="cohort" hidden>You are on the list for the founding Intermediate cohort. We check every enrollment by hand and confirm it with you on WhatsApp within 24 hours &mdash; if anything is wrong, that is when we catch it.</p>
+      <p class="lede held__lede" data-offering="path_b" hidden>Your readiness review is booked. We check every booking by hand and confirm it with you on WhatsApp within 24 hours &mdash; if anything is wrong, that is when we catch it.</p>
 
       <!-- Filled by shell.js from the payment provider's return URL. Display
            only: nothing on this page writes payment status, because a query
@@ -28,12 +52,18 @@
     </div>
   </section>
 
-  <!-- 2 · The sequence. The page's real job. -->
+  <!-- 2 · The sequence. The page's real job, and the part that is wrong for
+       the wrong audience. -->
   <section class="section" aria-labelledby="next-title">
     <div class="shell">
       <h2 class="section__title" id="next-title">What happens next</h2>
 
-      <ol class="next">
+      <div data-offering="neutral">
+        <p class="lede">We confirm on WhatsApp within 24 hours, and that message sets out the dates that apply to what you booked.</p>
+        <p>If you would rather not wait, reach us on the numbers at the foot of this page and quote your payment reference.</p>
+      </div>
+
+      <ol class="next" data-offering="cohort" hidden>
         <li class="next__step">
           <p class="next__when">Within 24 hours</p>
           <h3 class="next__what">We confirm on WhatsApp</h3>
@@ -76,23 +106,59 @@
           <p>Separate from the cohort, and sat when you are ready. See <a href="/standard">the standard</a> for what it measures.</p>
         </li>
       </ol>
+
+      <ol class="next" data-offering="path_b" hidden>
+        <li class="next__step">
+          <p class="next__when">Within 24 hours</p>
+          <h3 class="next__what">We confirm on WhatsApp</h3>
+          <p>We confirm your booking and arrange a time for the review that works around your job.</p>
+        </li>
+
+        <li class="next__step next__step--mark">
+          <p class="next__when">At the time we agree</p>
+          <h3 class="next__what">The readiness review</h3>
+          <p>A conversation about the automation work you already do, against the seven domains in <a href="/standard">the standard</a>. You will be told plainly whether an attempt looks realistic now, and where the gaps are if it does not.</p>
+        </li>
+
+        <li class="next__step">
+          <p class="next__when">If you decide to proceed</p>
+          <h3 class="next__what">GHS 300 to sit the assessment</h3>
+          <p>The GHS 150 you have just paid is credited against the GHS 450 assessment fee, so the balance is GHS 300. If you decide not to proceed, nothing further is owed.</p>
+        </li>
+
+        <li class="next__step">
+          <p class="next__when"><time datetime="2026-11-01">1 November</time> <span class="next__count" data-countdown="2026-11-01"></span></p>
+          <h3 class="next__what">The assessment window opens</h3>
+          <p>Sat when you are ready. Four components across two sittings, with the practical and troubleshooting parts carrying minimums that theory cannot offset.</p>
+        </li>
+      </ol>
     </div>
   </section>
 
-  <!-- 3 · What was and was not bought -->
+  <!-- 3 · What was and was not bought. The legal callout is shared, and shows
+       in every case: the training/certification separation is the one claim
+       this page must never leave out. -->
   <section class="section section--ink" aria-labelledby="bought-title">
     <div class="shell prose">
       <h2 class="section__title" id="bought-title">What you have paid for</h2>
-      <p class="lede">The five-week Intermediate cohort, and &mdash; if you chose the bundle &mdash; one attempt at the BCAB assessment.</p>
+
+      <p class="lede" data-offering="neutral">Your confirmation on WhatsApp will itemise it against what you chose at checkout.</p>
+      <p class="lede" data-offering="cohort" hidden>The five-week Intermediate cohort, and &mdash; if you chose the bundle &mdash; one attempt at the BCAB assessment.</p>
+      <p class="lede" data-offering="path_b" hidden>A readiness review: an advisory judgment on whether a BCAB attempt is realistic for you now. It is not a gate and cannot stop you sitting the assessment.</p>
+
       <div class="callout callout--legal">
         <p>Training and certification are separate products. Completing the cohort <strong>qualifies you to attempt the assessment</strong>. It does not award the credential, and no payment can. The credential is earned by passing.</p>
       </div>
+
+      <p data-offering="path_b" hidden>Path B exists so the credential does not depend on having bought our training, and you have not bought any. Nothing about the assessment is easier or harder for having come this way.</p>
+
       <p>If you do not reach the standard first time you receive written feedback and an outcome of Assessment Not Yet Passed or Remediation Required, and you may reattempt. Every attempt uses a different scenario.</p>
     </div>
   </section>
 
-  <!-- 4 · Instalments -->
-  <section class="section" aria-labelledby="instalments-title">
+  <!-- 4 · Instalments. Cohort only — a readiness review is GHS 150 paid in one
+       go, and there is no instalment plan on it. -->
+  <section class="section" data-offering="cohort" hidden aria-labelledby="instalments-title">
     <div class="shell prose">
       <h2 class="section__title" id="instalments-title">If you are paying in instalments</h2>
       <p class="lede">First payment via Paystack. Remaining instalments arranged through our Slack community via MoMo.</p>
