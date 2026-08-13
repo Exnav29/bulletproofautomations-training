@@ -237,7 +237,7 @@ promised WhatsApp contact.
 `whatsapp_number`; `chosen_option` not `option`; `amount_ghs` not `amount_due`; `cohort` not
 `cohort_slug`; `payment_plan` is a **boolean**; `consent_given` needed a real checkbox.
 
-~~**Paystack** is in review~~ — **the integration is built and switched off, 13 August 2026.**
+~~**Paystack** is in review~~ ~~the integration is built and switched off~~ — **LIVE since 13 August 2026.** The business was approved, the whole go-live list was worked through, and one real GHS 150 transaction was paid and refunded end to end. See §6b.
 The account is still awaiting business activation and holds test keys. The whole checkout path is
 in place behind `PAYSTACK_SECRET_KEY`: unset gives the reservation flow that runs today, a
 `sk_test_` key gives an opt-in-only test checkout, and pasting the `sk_live_` key is the entire
@@ -404,7 +404,7 @@ Every one renders in conspicuous dashed marigold. **Nothing ships with one still
   the Foundations page and the homepage borrowed it first. Decide whether the homepage keeps the
   full text or drops to a pull quote; do not rewrite either, per rule 7.
 
-- **Paystack checkout is built and switched off — 13 August 2026.** The account is in test mode
+- **Paystack checkout — built 13 August 2026, and live the same day. See §6b for activation.** Written while the account was in test mode
   while the business activation request is pending, so the whole path was built now and gated on
   one variable. **Activation is a single key swap; no code, copy, or price change.**
 
@@ -706,3 +706,120 @@ activation on, and the ledger makes it visible if it ever happens.
 failures being exactly the new cases, including
 `Paystack's retry then applies it exactly once — paid 0`. The tests were
 confirmed to fail before they were confirmed to pass.
+
+---
+
+## 6b. Live payments switched on — 13 August 2026
+
+Paystack approved the business for live payments. The whole list in §6 was worked
+through in order, and **one real GHS 150 transaction was paid on the live site
+and refunded**, which is the only thing that proves the chain end to end.
+
+### The order mattered, and it was not the obvious one
+
+The instinct is to configure the dashboards before merging. That is backwards
+here. `PAYSTACK_SECRET_KEY` unset gives the reservation flow, so **merging
+changes nothing a visitor sees** — whereas setting the Cloudflare key first
+leaves it inert until the merge, at which point live checkout opens with no
+verification window at all. Merge first, verify each piece against a
+deployed-but-off system, and put the key in last.
+
+Underneath that: **the webhook must be deployed and registered with Paystack
+before the live key goes in.** It is the only thing allowed to mark someone
+paid. Without it a customer pays, Paystack keeps the money, and the database
+never hears.
+
+### What was verified, and how
+
+| Step | Verified by |
+|---|---|
+| Merge deployed, `functions/` discovered | `GET /api/enroll` → `{"ok":true,"paystack":"off"}` |
+| Supabase secrets correct, on the RIGHT project | Unsigned probe → `signature_valid:false`. The function logs before it verifies, so a successful write proves `PROJECT_URL` and `SERVICE_ROLE_KEY` without spending anything |
+| No function on the old project | `POST` to `ftqcex…` → `404 NOT_FOUND` |
+| Live mode active | `GET /api/enroll` → `"paystack":"live"`, and the reference minted `BPA-CAB-` |
+| The whole payment chain | One real GHS 150 Path B transaction reaching `paid` in `/admin` and in `enrollments`, then refunded |
+
+**The unsigned probe is worth keeping.** It costs nothing, needs no Paystack
+involvement, and it distinguishes a wrong-project misconfiguration from a
+correct one — which is exactly the mistake that was made and caught during
+activation.
+
+**Deploying the same event twice distinguishes the code versions**, too:
+pre-§6a answers `duplicate:true` on the second delivery, post-§6a answers
+`signature_valid:false` because the read-back branch runs. That is how the
+deployed function was confirmed to carry the fix while `main` still did not.
+
+### Cloudflare Pages variables need a redeploy
+
+A Pages environment variable only reaches deployments made **after** it was
+saved. Setting `PAYSTACK_SECRET_KEY` and stopping there does nothing at all. Set
+it for **Production and Preview separately**, then redeploy.
+
+### Rollback
+
+Delete `PAYSTACK_SECRET_KEY` from the Pages project and redeploy. The page
+returns to the reservation flow, enrollments still record, nobody is charged,
+and the honest copy comes back on its own. No revert, no Supabase change, no
+Paystack change.
+
+### Still open
+
+- **The old project's Edge Function secrets.** Secrets are project-scoped and
+  live independently of functions, so values saved against `ftqcex…` during the
+  mix-up are still there even though no function was deployed to it. Delete
+  them. If the live Paystack key was ever saved there, roll it.
+- **`BPA-PROBE-` rows in `payment_events`** from the activation checks, and the
+  refunded GHS 150 enrollment row.
+- Whether the refund shows correctly on the roll — the webhook applies
+  `charge.success`; a refund event is not currently handled, so the row will
+  still read `paid`. Not urgent at one row, but it is a real gap once refunds
+  happen to other people.
+
+---
+
+## 6c. /thank-you told people they had bought the cohort — fixed 13 August 2026
+
+Found by the live GHS 150 transaction above. A Path B readiness-review buyer was
+shown the founding Intermediate cohort's confirmation page: enrollment closing
+8 September, the proof-of-setup task, the setup clinic, Week 1 on 12 September,
+and webhooks reachable by Week 2. "What you have paid for" read **"the five-week
+Intermediate cohort"** — precisely what it was not — and the instalments section
+does not apply to GHS 150 paid in one go.
+
+**What ships is the neutral version.** Every offering-specific block starts
+`hidden`; `shell.js` reveals one only after `GET /api/enroll?reference=…`
+confirms which offering the reference belongs to. Same rule as the `data-pay`
+copy on the enrollment page: the version that ships is the one that cannot be
+wrong. No JavaScript, or an unresolvable reference, leaves a confirmation that is
+true for any purchase.
+
+**The reference is used to ask the question, never to answer it.** Carrying the
+offering in the callback URL would have been three lines and no endpoint, but it
+would have meant `/thank-you` trusting a query string — the one thing that page
+has always refused to do — and it would not survive the link being shared.
+
+**One field, and not a sensitive one.** The endpoint returns `chosen_option` and
+nothing else: which of three published prices somebody picked. No name, no
+email, no amount, and deliberately no payment status, because the response is
+reachable by anyone holding the reference. The value is checked against the
+price table rather than returned as stored. Without a reference the endpoint is
+byte-for-byte the mode probe it always was.
+
+Path B copy is drawn from the framework, not written fresh: advisory and not a
+gate (§4.12), GHS 150 credited against the GHS 450 fee leaving GHS 300, no
+training purchase required. The training/certification separation callout stays
+visible in **every** variant.
+
+**Verification — `drive-offering.mjs`, 20/20.** Functions concatenated with
+imports stripped and loaded from a `data:` URL, so the code under test is the
+deployed code. Covers both `reference` and `trxref`, all three options, an
+unknown reference, a junk column value refused rather than echoed, a malformed
+reference never reaching the database, and the lookup failing, throwing or being
+absent all falling back to neutral. The page's swap is driven against a stand-in
+DOM **built from the real markup's own attributes**, which proves the shipped
+hidden state rather than asserting it.
+
+Confirmed against production after merge: real reference →
+`"option":"path_b_readiness"`, bare probe unchanged, unknown reference → `null`,
+and the page shipping 4 neutral blocks visible with 5 cohort and 5 path_b
+hidden.
