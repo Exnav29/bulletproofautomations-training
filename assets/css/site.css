@@ -4334,3 +4334,179 @@ a.rail__link:hover .rail__name {
 .copy:hover {
   background: var(--field);
 }
+
+/* ---------------------------------------------------------------------------
+   Regional pricing — the country selector.
+
+   DELIBERATELY UNDERSTATED. This exists to correct a wrong reading of where
+   somebody is - travel, VPNs, living in one country and earning in another -
+   not to invite price comparison. So it is a quiet line of text beside the
+   prices rather than a panel: no border, no fill, no heading, small type.
+
+   It is a real <form method="get">, so it works with no JavaScript. shell.js
+   only submits on change and hides the button.
+
+   The one exception is the unresolved state, where no country could be
+   established at all. There it becomes the only thing on the block, because
+   nothing else can be shown until it is answered.
+   --------------------------------------------------------------------------- */
+
+.region {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s2);
+  margin: calc(var(--s3) * -1) 0 var(--s5);
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.region__label {
+  font-stretch: 84%;
+  letter-spacing: 0.02em;
+}
+
+.region__select {
+  /* Sized to its content rather than stretched, so it reads as part of the
+     sentence instead of as a form control demanding attention. */
+  max-width: 100%;
+  min-height: 2.75rem; /* 24px touch-target floor, per the mobile audit */
+  padding: var(--s1) var(--s2);
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.region__select:hover {
+  border-bottom-color: var(--ink);
+}
+
+.region__select:focus-visible {
+  outline: 2px solid var(--verified);
+  outline-offset: 2px;
+}
+
+.region__go {
+  min-height: 2.75rem;
+  padding: var(--s1) var(--s3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.region__go:focus-visible {
+  outline: 2px solid var(--verified);
+  outline-offset: 2px;
+}
+
+/* Hidden until no country can be established, when it becomes the whole
+   message: calm and matter-of-fact, never an apology for the site's own
+   machinery. */
+.region__prompt {
+  display: none;
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+[data-pricing-tier="unresolved"] .region {
+  padding: var(--s4);
+  border-left: 3px solid var(--marigold);
+  background: rgba(154, 78, 18, 0.06);
+}
+
+[data-pricing-tier="unresolved"] .region__prompt {
+  display: block;
+}
+
+/* Instalments are a Ghana-only mechanism: the remainder is arranged over Slack
+   and paid by MoMo, and there is no automated billing. Hidden rather than
+   removed server-side so that a middleware failure leaves the markup intact —
+   the API refuses an out-of-region instalment anyway, which is a visible
+   refusal rather than a wrong charge. */
+[data-pricing-instalments="no"] [data-region-instalments] {
+  display: none;
+}
+
+/* No country could be established — Cloudflare returned XX or T1, or there was
+   no signal at all. Every price is suppressed rather than guessed, and the
+   selector carries the whole message. Assuming the top tier overcharges a
+   Ghanaian on an odd network; assuming Ghana hands the subsidised rate to
+   anyone behind a VPN. */
+[data-pricing-tier="unresolved"] [data-price] {
+  display: none;
+}
+
+[data-pricing-tier="unresolved"] .region {
+  border-color: var(--marigold);
+  border-width: 2px;
+}
+
+.region__prompt {
+  display: none;
+  margin: 0 0 var(--s3);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+[data-pricing-tier="unresolved"] .region__prompt {
+  display: block;
+}
+
+@media (max-width: 26rem) {
+  .region__row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .region__go {
+    width: 100%;
+  }
+}
+
+/* The held-for-rate-review message inside the reservation confirmation. Uses
+   --marigold, which the design reserves for anything time-sensitive or needing
+   attention, and appears nowhere else on this page. */
+.reserved__held {
+  margin: var(--s4) 0;
+  padding: var(--s4);
+  border-left: 3px solid var(--marigold);
+  background: rgba(154, 78, 18, 0.06);
+}
+
+/* ---------------------------------------------------------------------------
+   NOTHING REGIONAL IS VISIBLE UNTIL THE MIDDLEWARE ACTUALLY RUNS.
+
+   data-pricing-tier is stamped on <html> only when PRICING_REGIONS is set AND
+   the middleware succeeded. Its absence means one of two things, and both want
+   the same answer: the feature is switched off, or it failed. Either way these
+   controls do nothing, and a control that does nothing is worse than no
+   control - a visitor picks a country on the enrollment page, the price does
+   not move, and the page looks broken at the exact moment it is asking for
+   money.
+
+   This is the CSS half of the same rule enforced in enroll.js: no marker means
+   no regional behaviour, anywhere.
+   --------------------------------------------------------------------------- */
+
+html:not([data-pricing-tier]) .region {
+  display: none;
+}
+
+/* The alumni claim only means anything while regional pricing is live. With
+   the switch off there is one price for everybody, so the question would be
+   noise on the form. */
+html:not([data-pricing-tier]) [data-region-alumni] {
+  display: none;
+}

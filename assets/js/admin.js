@@ -232,6 +232,44 @@ function shortDate(v) {
 var TEST_MARKER = "[TEST]";
 function isTest(row) { return String(row.notes || "").indexOf(TEST_MARKER) === 0; }
 function isLive(row) { return row.payment_status !== "cancelled" && !isTest(row); }
+/* ---------------------------------------------------------------------------
+   Regional pricing, as it appears on the roll.
+
+   Two things matter here and nothing else does: which tier decided this
+   person's amount, and whether the enrollment is waiting on a human to confirm
+   that tier before any money is taken.
+   --------------------------------------------------------------------------- */
+
+var TIER_LABEL = {
+  ghana: "Ghana",
+  africa: "Regional Africa",
+  emerging: "Emerging",
+  international: "International"
+};
+
+/* Held enrollments are marked in notes by functions/api/enroll.js. Read from
+   notes rather than inferred by comparing the two country columns, because the
+   endpoint holds for three different reasons and only it knows which applied. */
+function isHeld(r) {
+  return /HELD FOR RATE REVIEW/.test(r.notes || "");
+}
+
+/* Blank for rows written before regional pricing existed, rather than a
+   guessed "Ghana" — those rows genuinely have no tier, and inventing one would
+   make the audit trail lie about what the server decided. */
+function regionCell(r) {
+  if (!r.region_tier) return '<span class="roll__sub">&mdash;</span>';
+  var label = TIER_LABEL[r.region_tier] || r.region_tier;
+  var detected = r.detected_country || "?";
+  var declared = r.declared_country;
+  /* Both countries, shown together, only when they differ. Together they are
+     the entire evidence for the hold: "we saw US, they said GH". */
+  var sub = declared && declared !== detected
+    ? "detected " + esc(detected) + " · declared " + esc(declared)
+    : esc(detected);
+  return esc(label) + '<span class="roll__sub">' + sub + "</span>";
+}
+
 function outstanding(row) { return Math.max(0, Number(row.amount_ghs || 0) - Number(row.amount_paid_ghs || 0)); }
 
 /* --- Render ------------------------------------------------------------- */
@@ -392,6 +430,11 @@ function renderRoll() {
     var flags = [];
     // First, so it reads before anything that might be taken at face value.
     if (isTest(r)) flags.push("TEST — delete before launch");
+    /* Held for a regional-rate check. Nothing was charged and nothing will be
+       until somebody here decides, so this outranks every other flag except
+       the test marker. The reason and both countries are in notes. */
+    if (isHeld(r)) flags.push("HELD — confirm regional rate");
+    if (r.foundations_cohort_1) flags.push("claims Foundations cohort 1");
     if (!r.consent_given) flags.push("no consent");
     if (r.payment_plan) flags.push("instalments");
     if (!r.whatsapp_contacted) flags.push("no WhatsApp");
@@ -407,6 +450,7 @@ function renderRoll() {
         (flags.length ? '<span class="flag">' + flags.join(" · ") + "</span>" : "") + "</td>" +
       "<td>" + esc((OPTIONS[r.chosen_option] || {}).label || r.chosen_option) +
         '<span class="roll__sub">' + esc(EXPERIENCE[r.experience_level] || r.experience_level || "") + "</span></td>" +
+      "<td>" + regionCell(r) + "</td>" +
       '<td class="num">' + ghs(r.amount_ghs) + "</td>" +
       '<td class="num">' + ghs(r.amount_paid_ghs) +
         (outstanding(r) > 0 && isLive(r) ? '<span class="roll__sub">' + ghs(outstanding(r)) + " due</span>" : "") + "</td>" +
@@ -525,7 +569,8 @@ document.getElementById("csv").addEventListener("click", function () {
   var cols = ["full_name", "email", "whatsapp", "city", "experience_level", "chosen_option",
     "amount_ghs", "amount_paid_ghs", "payment_status", "payment_plan", "first_instalment_ghs",
     "paystack_reference", "paystack_payment_date", "seat_number", "slack_invited",
-    "whatsapp_contacted", "contact_date", "consent_given", "source", "cohort", "created_at", "notes"];
+    "whatsapp_contacted", "contact_date", "consent_given", "source", "cohort", "created_at",
+    "region_tier", "detected_country", "declared_country", "foundations_cohort_1", "notes"];
 
   var cell = function (v) {
     if (v == null) return "";
