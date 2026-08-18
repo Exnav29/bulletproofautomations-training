@@ -110,3 +110,64 @@
 --
 -- End-to-end insert verified 10 August 2026: HTTP 201, and a subsequent anon
 -- SELECT returned [] with a row present — RLS protects the roll.
+
+
+-- ---------------------------------------------------------------------------
+-- REGIONAL PRICING — four columns, NOT YET ON THE LIVE TABLE
+-- ---------------------------------------------------------------------------
+--
+-- Added for regional pricing (docs/pricing-policy.md). Additive, nullable and
+-- reversible: nothing existing reads them and dropping them returns the table
+-- to its current shape.
+--
+--  column                type      null?  default  meaning
+--  --------------------  --------  -----  -------  ------------------------
+--  region_tier           text      YES    —        CHECK: ghana | africa |
+--                                                  emerging | international
+--  detected_country      text      YES    —        ISO-3166-1 alpha-2, from
+--                                                  Cloudflare
+--  declared_country      text      YES    —        ISO-3166-1 alpha-2, what
+--                                                  the visitor selected
+--  foundations_cohort_1  boolean   NO     false    claimed the cohort 1
+--                                                  alumni rate
+--
+-- WHY detected AND declared ARE SEPARATE COLUMNS. Together they are the whole
+-- evidence for a held enrollment: "Cloudflare said US, they selected GH" is
+-- what /admin shows the person deciding whether the Ghana rate applies. A
+-- single resolved column would record the answer and throw away the question.
+--
+-- DEPLOY ORDER MATTERS, AND THE CODE ENFORCES IT.
+-- functions/api/enroll.js sends these four columns ONLY when PRICING_REGIONS
+-- is set. Until then the insert payload is byte-for-byte what it is today, so
+-- merging before this migration cannot break enrollment — PostgREST answers
+-- 400 for an unknown column, and on the site's only selling page that would be
+-- a dead button rather than a visible error.
+--
+-- So the order is: run this, THEN set PRICING_REGIONS, THEN redeploy.
+--
+-- Run once, by hand, as the table itself was:
+--
+--   alter table public.enrollments
+--     add column if not exists region_tier text,
+--     add column if not exists detected_country text,
+--     add column if not exists declared_country text,
+--     add column if not exists foundations_cohort_1 boolean not null default false;
+--
+--   alter table public.enrollments
+--     add constraint enrollments_region_tier_check
+--     check (region_tier is null or region_tier in
+--            ('ghana', 'africa', 'emerging', 'international'));
+--
+-- The CHECK mirrors TIERS in functions/api/_regions.js. Keep the two in step:
+-- a tier added in code and not here fails at 23514 while a real person is
+-- trying to enroll, which is exactly how the four original column mismatches
+-- were found on 10 August 2026.
+--
+-- Rollback, if regional pricing is abandoned:
+--
+--   alter table public.enrollments
+--     drop constraint if exists enrollments_region_tier_check,
+--     drop column if exists region_tier,
+--     drop column if exists detected_country,
+--     drop column if exists declared_country,
+--     drop column if exists foundations_cohort_1;

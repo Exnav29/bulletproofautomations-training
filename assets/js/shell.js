@@ -321,9 +321,15 @@
     return !!(el && el.checked);
   }
 
-  function confirmReserved() {
+  function confirmReserved(heldForRateReview) {
     form.hidden = true;
     done.hidden = false;
+    /* Revealed only when the server says the enrollment is held pending a
+       regional-rate check, so the ordinary reservation wording is untouched
+       for everybody else. Absent from the page means nothing to reveal — this
+       must never throw and leave a paying customer looking at a dead form. */
+    var held = document.getElementById("enroll-held");
+    if (held) held.hidden = !heldForRateReview;
     done.setAttribute("tabindex", "-1");
     done.focus();
   }
@@ -441,7 +447,30 @@
       ack_refund: fields.ack_refund,
       ack_certification: fields.ack_certification,
       testOptIn: TEST_OPT_IN,
-      company_website: form.elements.company_website ? form.elements.company_website.value : ""
+      company_website: form.elements.company_website ? form.elements.company_website.value : "",
+
+      /* WHICH PRICE THIS PAGE ACTUALLY SHOWED.
+       *
+       * Read off the attribute the pricing middleware stamps on <html>, not
+       * from anything this script decides. If the middleware did not run the
+       * attribute is simply absent and this is null, and /api/enroll then
+       * reserves the place instead of charging.
+       *
+       * That is the point: the safety does not depend on comparing two values
+       * correctly, only on whether a marker is present. A stale cached page or
+       * a failed middleware becomes a held enrollment, never a wrong charge.
+       *
+       * The SERVER decides the tier regardless. This is only ever used to
+       * detect disagreement — it can never select a cheaper price, because
+       * enroll.js re-resolves the region from Cloudflare's own header. */
+      displayed_tier: document.documentElement.getAttribute("data-pricing-tier") || null,
+
+      /* The country the visitor selected, if they corrected our detection.
+         Sent as a country, never as a tier or a price. Correcting upward goes
+         straight through; correcting downward reserves for review. */
+      declared_country: document.documentElement.getAttribute("data-pricing-country") || null,
+
+      foundations_cohort_1: ticked("foundations_cohort_1")
     };
 
     fetch("/api/enroll", {
@@ -479,7 +508,11 @@
           window.location.assign(data.url);
           return;
         }
-        confirmReserved();
+        /* A held enrollment is still a reservation — the place is recorded and
+           nothing was charged — but it must not promise a payment link that is
+           not coming. "We will contact you to arrange payment" and "we need to
+           confirm your regional rate first" are different promises. */
+        confirmReserved(data.hold === "rate_review");
       })
       .catch(function (err) {
         if (err && err.fallback) {
@@ -1256,4 +1289,51 @@
       }).catch(function () { /* clipboard refused; the text is on screen anyway */ });
     });
   }
+})();
+
+/* ---------------------------------------------------------------------------
+   Regional pricing — the country selector.
+
+   The selector is a real <form method="get"> and it already works without any
+   of this: choose a country, press the button, the page reloads with
+   ?country=XX and the middleware prices it server-side. That matters on this
+   site, where the audience is mobile-first and some visitors are on slow or
+   unreliable connections.
+
+   So this script only ENHANCES it. It submits on change and hides the button,
+   which removes one tap. If the script never loads, the button is still there
+   and the form still works — which is why the button ships visible and is
+   hidden here rather than shipping hidden and being revealed.
+   --------------------------------------------------------------------------- */
+(function () {
+  var forms = document.querySelectorAll("[data-region-form]");
+  if (!forms.length) return;
+
+  Array.prototype.forEach.call(forms, function (form) {
+    var select = form.querySelector(".region__select");
+    var button = form.querySelector(".region__go");
+    if (!select) return;
+
+    /* Reflect the country the server actually priced for, so the control shows
+       the truth rather than whatever the markup was authored with. Read from
+       the attribute the middleware stamps, not from the query string — the
+       query string is what was ASKED for, the attribute is what was DECIDED,
+       and an unrecognised country resolves to something different from what
+       was typed. */
+    var priced = document.documentElement.getAttribute("data-pricing-country");
+    if (priced) {
+      var match = select.querySelector('option[value="' + priced.replace(/[^A-Za-z]/g, "") + '"]');
+      if (match) select.value = priced;
+    }
+
+    if (button) button.hidden = true;
+
+    select.addEventListener("change", function () {
+      if (!select.value) return;
+      /* Submitting the form rather than building a URL keeps one code path:
+         the no-JS path and this one produce byte-identical requests. */
+      if (typeof form.requestSubmit === "function") form.requestSubmit();
+      else form.submit();
+    });
+  });
 })();

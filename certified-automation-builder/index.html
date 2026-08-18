@@ -85,7 +85,7 @@
             <div><dt>Assessment</dt><dd>Four components &mdash; written, practical, live troubleshooting, and an architecture walkthrough</dd></div>
             <div><dt>Provisional pass</dt><dd>75% overall, with minimums on two components</dd></div>
             <div><dt>Window opens</dt><dd><time datetime="2026-11-01">1 November 2026</time></dd></div>
-            <div><dt>Assessment fee</dt><dd>GHS 450</dd></div>
+            <div><dt>Assessment fee</dt><dd data-price="assessment.fee">GHS 450</dd></div>
             <div><dt>Valid for</dt><dd>24 months</dd></div>
           </dl>
         </div>
@@ -97,7 +97,7 @@
             <div><dt>Runs</dt><dd>Five Saturdays, 11:30&ndash;14:00 GMT, 2.5 hours with a real break</dd></div>
             <div><dt>Seats</dt><dd>25</dd></div>
             <div><dt>Enrollment closes</dt><dd><time datetime="2026-09-08">Tuesday 8 September 2026</time></dd></div>
-            <div><dt>Founding Cohort Rate</dt><dd>GHS 750, or GHS 1,050 with the BCAB assessment</dd></div>
+            <div><dt>Founding Cohort Rate</dt><dd><span data-price="cohort.total">GHS 750</span>, or <span data-price="bundle.total">GHS 1,050</span> with the BCAB assessment</dd></div>
           </dl>
           <a class="event__action" href="#enroll">Enroll
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
@@ -235,8 +235,8 @@
       <div class="prose">
         <h3 class="sub">Retakes</h3>
         <ul class="bullets">
-          <li>First reattempt: minimum 7-day wait &mdash; GHS 300</li>
-          <li>Second reattempt: minimum 30-day wait &mdash; GHS 400</li>
+          <li>First reattempt: minimum 7-day wait &mdash; <span data-price="retake.first">GHS 300</span></li>
+          <li>Second reattempt: minimum 30-day wait &mdash; <span data-price="retake.subsequent">GHS 400</span></li>
           <li>Third and subsequent: at assessor discretion, following a remediation plan</li>
           <li>Every attempt uses a different practical scenario and a different seeded troubleshooting workflow</li>
         </ul>
@@ -263,7 +263,7 @@
           <p class="route__tag">Path B &middot; Experience route</p>
           <h3 class="route__name">Readiness review &rarr; assessment</h3>
           <p><strong>You are not required to buy the training.</strong> A working practitioner can take a readiness review, which establishes that an attempt is realistic. It is advisory, not a gate, and its fee is credited against the assessment fee.</p>
-          <a class="event__action" href="#enroll">Book a readiness review &mdash; GHS 150
+          <a class="event__action" href="#enroll">Book a readiness review &mdash; <span data-price="readiness.total">GHS 150</span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
           </a>
         </article>
@@ -341,44 +341,48 @@
       <h2 class="section__title" id="pricing-title">Pricing</h2>
       <p class="lede">These are <strong>Founding Cohort Rates</strong>. Future cohorts are priced at the standard programme rate.</p>
 
+      <!-- include: region-select.html action="/certified-automation-builder#pricing-title" -->
+
       <div class="price-cards">
         <article class="price">
           <h3 class="price__name">Intermediate cohort</h3>
-          <p class="price__v">GHS 750</p>
-          <p class="price__std">Standard rate GHS 1,000&ndash;1,200</p>
+          <p class="price__v" data-price="cohort.total">GHS 750</p>
+          <p class="price__std">Standard rate <span data-price="standard.cohort">GHS 1,000&ndash;1,200</span></p>
           <p class="price__note">The five-week training only.</p>
         </article>
 
         <article class="price price--pick">
           <p class="price__flag">Most complete</p>
           <h3 class="price__name">Intermediate cohort + BCAB assessment</h3>
-          <p class="price__v">GHS 1,050</p>
-          <p class="price__std">Standard rate GHS 1,500&ndash;1,750</p>
+          <p class="price__v" data-price="bundle.total">GHS 1,050</p>
+          <p class="price__std">Standard rate <span data-price="standard.bundle">GHS 1,500&ndash;1,750</span></p>
           <dl class="price__lines">
-            <div><dt>Intermediate cohort training</dt><dd>GHS 750</dd></div>
-            <div><dt>BCAB certification assessment</dt><dd>GHS 450</dd></div>
-            <div><dt>Pathway bundle</dt><dd>&minus; GHS 150</dd></div>
-            <div class="price__total"><dt>Total</dt><dd>GHS 1,050</dd></div>
+            <div><dt>Intermediate cohort training</dt><dd data-price="cohort.total">GHS 750</dd></div>
+            <div><dt>BCAB certification assessment</dt><dd data-price="assessment.fee">GHS 450</dd></div>
+            <div><dt>Pathway bundle</dt><dd>&minus; <span data-price="bundle.discount">GHS 150</span></dd></div>
+            <div class="price__total"><dt>Total</dt><dd data-price="bundle.total">GHS 1,050</dd></div>
           </dl>
           <p class="price__note">Training and the assessment opportunity are line-itemed separately, because they are separate things.</p>
         </article>
 
         <article class="price">
           <h3 class="price__name">Path B readiness review</h3>
-          <p class="price__v">GHS 150</p>
-          <p class="price__std">Standard rate GHS 200</p>
+          <p class="price__v" data-price="readiness.total">GHS 150</p>
+          <p class="price__std">Standard rate <span data-price="standard.readiness">GHS 200</span></p>
           <p class="price__note">Credited against the assessment fee if you proceed.</p>
         </article>
       </div>
 
       <div class="prose">
-        <h3 class="sub">Payment plans</h3>
-        <ul class="bullets">
-          <li>Intermediate only &mdash; GHS 400 at enrollment, GHS 350 before Week 3.</li>
-          <li>Cohort and assessment &mdash; GHS 400, then GHS 350, then GHS 300.</li>
-          <li>Payments do not extend beyond the five-week programme.</li>
-          <li>A missed instalment pauses access until it is paid.</li>
-        </ul>
+        <div data-region-instalments>
+          <h3 class="sub">Payment plans</h3>
+          <ul class="bullets">
+            <li>Intermediate only &mdash; GHS 400 at enrollment, GHS 350 before Week 3.</li>
+            <li>Cohort and assessment &mdash; GHS 400, then GHS 350, then GHS 300.</li>
+            <li>Payments do not extend beyond the five-week programme.</li>
+            <li>A missed instalment pauses access until it is paid.</li>
+          </ul>
+        </div>
         <p class="policy-link"><a href="/refund-policy">Read the Refund and Cancellation Policy</a> &mdash; cancellations, transfers, payment plans, and what happens if we cancel.</p>
         <!-- Two versions of the same fact, switched by shell.js from what
              /api/enroll reports about the Paystack account. The "off" version
@@ -450,19 +454,19 @@
             <legend class="form__label">What you are enrolling in</legend>
             <label class="choice">
               <input type="radio" name="option" value="cohort_and_assessment" checked>
-              <span class="choice__body"><span class="choice__name">Intermediate cohort + BCAB assessment</span><span class="choice__price">GHS 1,050</span></span>
+              <span class="choice__body"><span class="choice__name">Intermediate cohort + BCAB assessment</span><span class="choice__price" data-price="bundle.total">GHS 1,050</span></span>
             </label>
             <label class="choice">
               <input type="radio" name="option" value="cohort_only">
-              <span class="choice__body"><span class="choice__name">Intermediate cohort only</span><span class="choice__price">GHS 750</span></span>
+              <span class="choice__body"><span class="choice__name">Intermediate cohort only</span><span class="choice__price" data-price="cohort.total">GHS 750</span></span>
             </label>
             <label class="choice">
               <input type="radio" name="option" value="path_b_readiness">
-              <span class="choice__body"><span class="choice__name">Path B readiness review &mdash; no training</span><span class="choice__price">GHS 150</span></span>
+              <span class="choice__body"><span class="choice__name">Path B readiness review &mdash; no training</span><span class="choice__price" data-price="readiness.total">GHS 150</span></span>
             </label>
           </fieldset>
 
-          <fieldset class="form__row form__fieldset">
+          <fieldset class="form__row form__fieldset" data-region-instalments>
             <legend class="form__label">How you would like to pay</legend>
             <label class="choice">
               <input type="radio" name="payment_plan" value="Full" checked>
@@ -507,6 +511,18 @@
             </div>
           </fieldset>
 
+          <!-- The cohort 1 alumni rate. Optional and self-declared, so it is
+               deliberately outside the required acknowledgements above. A claim
+               from outside Ghana reserves the place and is checked against the
+               cohort roll by a person before any payment - it is not
+               self-service, and it cannot buy a cheaper price on its own. -->
+          <div class="form__row" data-region-alumni>
+            <div class="ack">
+              <input type="checkbox" id="foundations_cohort_1" name="foundations_cohort_1">
+              <label for="foundations_cohort_1">I completed the Bulletproof Automation Foundations programme, cohort 1 (11 July &ndash; 29 August 2026). Graduates keep the Ghana rate wherever they now live; we will confirm this against the cohort roll.</label>
+            </div>
+          </div>
+
           <!-- Buttons say what happens. Once checkout is live, what happens is
                that you leave for a payment page, so the label changes with the
                mode rather than staying honest only half the time. -->
@@ -521,6 +537,7 @@
           <p class="reserved__head">Thank you &mdash; you&rsquo;re registered.</p>
           <p>Your place is held on the founding cohort. <strong>Someone will contact you within 24 hours</strong>, on WhatsApp or by email, to confirm your place and arrange payment.</p>
           <p>Nothing has been charged. Your place is confirmed once that first payment is arranged &mdash; there are 25 seats and we work through registrations in the order they arrive.</p>
+          <p class="reserved__held" id="enroll-held" hidden><strong>We need to confirm your regional rate before payment.</strong> You told us you live or work somewhere with a lower rate than we detected, so a person will check that with you first rather than charging the wrong amount. Nothing has been taken.</p>
           <p class="reserved__aside">Not heard from us after 24 hours? Message <a href="https://wa.me/233546527779">+233 54 652 7779</a> or email <a href="mailto:info@bulletproofautomations.com">info@bulletproofautomations.com</a> rather than registering again.</p>
         </div>
       </div>

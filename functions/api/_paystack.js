@@ -39,16 +39,28 @@
  * test keys.
  */
 
-/* The price table is authoritative HERE and nowhere else.
+/* Region decides the amount and the payment channels. Imported rather than
+   duplicated: two price tables that can disagree is the exact failure this
+   change exists to prevent. */
+import { chargeOptions, channelsFor } from "./_regions.js";
+
+/* The price table WAS authoritative here. It now lives in _regions.js, because
+ * price varies by region and a region is resolved per request.
  *
- * It used to live in assets/js/shell.js, which meant the browser decided what
- * it owed. With a hosted payment page that was survivable, because the page
- * carried its own fixed price. Initializing a transaction server-side does not
- * survive it: whatever amount is posted is the amount charged, so a devtools
- * console would be a discount code.
+ * WHAT THIS OBJECT IS NOW: the set of valid option keys, their labels, and the
+ * GHANA figures. Nothing charges from it. chargeOptions(tier) in _regions.js
+ * is authoritative for every amount, and with PRICING_REGIONS unset it returns
+ * exactly the numbers below — which is why they are kept here rather than
+ * deleted, and why they must be changed in step with _regions.js if the Ghana
+ * tier ever moves.
+ *
+ * The reasoning that moved the table off the browser is unchanged and now
+ * applies to the region too: whatever amount is posted is the amount charged,
+ * so neither the price NOR the region may come from the request body.
  *
  * The figures on the BCAB page are display copy of these. Change both, and
- * change docs/project-brief.md section 6 with them. */
+ * change docs/project-brief.md section 6 and docs/pricing-policy.md with
+ * them. */
 export const OPTIONS = {
   cohort_only: {
     total: 750,
@@ -122,11 +134,29 @@ export function referenceMode(reference) {
 
 /* What this person owes right now: the whole thing, or the first instalment.
    The remainder is arranged over Slack and paid by MoMo, per the brief — there
-   is no automated instalment billing, so nothing here schedules anything. */
-export function amountDue(option, instalments) {
-  const price = OPTIONS[option];
+   is no automated instalment billing, so nothing here schedules anything.
+
+   `tier` is optional and defaults to Ghana, so every existing caller keeps its
+   previous behaviour exactly. Instalments exist only on the Ghana tier, so a
+   request for them anywhere else returns null rather than a number — enroll.js
+   refuses that case before reaching here, and returning null keeps this
+   function from inventing an amount if it ever does not. */
+export function amountDue(option, instalments, tier) {
+  const table = chargeOptions(tier || "ghana");
+  const price = table && table[option];
   if (!price) return null;
-  return instalments ? price.firstInstalment : price.total;
+  const amount = instalments ? price.firstInstalment : price.total;
+  return typeof amount === "number" ? amount : null;
+}
+
+/* The full commitment for this option at this tier, which is what goes in the
+   row's amount_ghs even when only a first instalment is being taken now. The
+   webhook and /admin derive every figure they show from that column, so it has
+   to carry the tier's total rather than the Ghana one. */
+export function totalFor(option, tier) {
+  const table = chargeOptions(tier || "ghana");
+  const price = table && table[option];
+  return price ? price.total : null;
 }
 
 /* Initialize a transaction and hand back the URL to send the browser to.
@@ -162,12 +192,17 @@ export async function initializeTransaction(env, options) {
     // reference from this URL and writes nothing, because a query string is
     // typed by whoever holds the browser.
     callback_url: options.callbackUrl,
-    // MoMo first. The brief makes mobile money a hard requirement rather than a
-    // fallback, and naming the channels also stops the checkout offering ones
-    // this account cannot settle. Note that the definitive control over what
-    // appears is the Paystack dashboard's channel settings; this narrows that
-    // set, it does not widen it.
-    channels: ["mobile_money", "card"],
+    // MoMo first for Ghana. The brief makes mobile money a hard requirement
+    // rather than a fallback, and naming the channels also stops the checkout
+    // offering ones this account cannot settle. Note that the definitive
+    // control over what appears is the Paystack dashboard's channel settings;
+    // this narrows that set, it does not widen it.
+    //
+    // Outside Ghana the list is card only — Paystack's mobile money channel is
+    // Ghanaian MoMo, so offering it to somebody in Germany is a dead option on
+    // the checkout page rather than a choice. Defaults to the Ghana list when
+    // no tier is passed, so existing callers are unaffected.
+    channels: channelsFor(options.tier || "ghana"),
     metadata: {
       enrollment_id: options.enrollmentId,
       chosen_option: options.option,
