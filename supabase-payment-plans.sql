@@ -68,3 +68,35 @@ create table if not exists public.installment_scheduler_config (
 alter table public.installment_scheduler_config enable row level security;
 revoke all on public.installment_scheduler_config from anon, authenticated;
 grant all on public.installment_scheduler_config to service_role;
+-- Keep the installment ledger in sync with verified Paystack evidence. The
+-- existing webhook marks payment_events.matched only after the enrollment
+-- balance has been updated successfully; this trigger then advances the exact
+-- installment whose Paystack reference produced that event.
+create or replace function public.mark_installment_paid_from_event()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.provider = 'paystack'
+     and new.event = 'charge.success'
+     and new.signature_valid is true
+     and new.matched is true
+     and coalesce(old.matched, false) is false then
+    update public.payment_plan_installments
+       set status = 'paid',
+           paid_at = coalesce(new.paid_at, now()),
+           updated_at = now()
+     where paystack_reference = new.reference
+       and status <> 'paid';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists payment_events_mark_installment_paid on public.payment_events;
+create trigger payment_events_mark_installment_paid
+after update of matched on public.payment_events
+for each row
+when (new.matched is true)
+execute function public.mark_installment_paid_from_event();
