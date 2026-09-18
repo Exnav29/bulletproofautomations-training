@@ -204,6 +204,28 @@
 .issue__confirm { display: block; margin-top: var(--s5); max-width: 26rem; }
 .issue .btn { margin-top: var(--s4); }
 .roll td .mini { margin: 0 .25rem .25rem 0; }
+
+  /* --- Installment plans ------------------------------------------------ */
+  .planbox { margin-top:var(--s5); padding:var(--s4); border:1px solid var(--rule);
+    border-radius:var(--r-sm); background:var(--paper); }
+  .planbox__head { display:flex; gap:var(--s3); align-items:center; justify-content:space-between; }
+  .planbox__head h3 { font-size:.8rem; letter-spacing:.12em; text-transform:uppercase;
+    font-variation-settings:"wdth" var(--narrow),"wght" 650; }
+  .plan-list { display:grid; gap:var(--s2); margin-top:var(--s3); }
+  .plan-row { background:var(--field); border:1px solid var(--rule); border-radius:var(--r-sm);
+    padding:var(--s3); display:grid; gap:.35rem; }
+  .plan-row__top { display:flex; gap:var(--s3); justify-content:space-between; align-items:baseline; }
+  .plan-row__amount { font-variation-settings:"wght" 700; font-variant-numeric:tabular-nums; }
+  .plan-row__meta { color:var(--muted); font-size:.78rem; line-height:1.4; }
+  .plan-row__actions { display:flex; flex-wrap:wrap; gap:var(--s2); margin-top:.25rem; }
+  .plan-edit { margin-top:var(--s4); border-top:1px solid var(--rule); padding-top:var(--s4); }
+  .plan-fields { display:grid; gap:var(--s3); }
+  .plan-field { border:1px solid var(--rule); border-radius:var(--r-sm); padding:var(--s3); background:var(--field); }
+  .plan-field__grid { display:grid; gap:var(--s3); grid-template-columns:1fr 1fr; }
+  .plan-field__grid .fld { margin-top:0; }
+  .plan-field__wide { grid-column:1 / -1; }
+  @media (max-width:28rem) { .plan-field__grid { grid-template-columns:1fr; } .plan-field__wide { grid-column:auto; } }
+
 </style>
 </head>
 <body>
@@ -497,6 +519,22 @@
 
     <dl class="drawer__meta" id="drawer-meta"></dl>
 
+    <section class="planbox" aria-labelledby="plan-title">
+      <div class="planbox__head">
+        <h3 id="plan-title">Payment plan</h3>
+        <button class="mini" type="button" id="plan-edit">Set / edit plan</button>
+      </div>
+      <div class="plan-list" id="plan-list"></div>
+      <p class="msg msg--empty" id="plan-empty">No installment schedule has been staged yet.</p>
+      <p class="msg msg--bad" id="plan-error" role="alert" hidden></p>
+      <form class="plan-edit" id="plan-form" hidden>
+        <p class="board__sub">Amounts must add up to the learner's committed total. Leave a row blank if it is not part of the plan. “Send on” controls the automatic email; dates may remain blank until the cohort calendar is confirmed.</p>
+        <div class="plan-fields" id="plan-fields"></div>
+        <button class="btn btn--go" type="submit" id="plan-save" style="margin-top:var(--s4)">Save payment plan</button>
+      </form>
+    </section>
+
+
     <form id="drawer-form">
       <div class="fld">
         <label for="e-payment">Payment status</label>
@@ -560,5 +598,6 @@
   </div>
 </div>
 <script src="/assets/js/admin.js" defer></script>
+<script src="/assets/js/admin-payments.js" defer></script>
 </body>
 </html>

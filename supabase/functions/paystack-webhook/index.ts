@@ -388,8 +388,30 @@ serve(async (req) => {
   let rows: any[] = []
   let matchedOn = 'reference'
   let lookupFailed = false
+  let installmentMatch: any | null = null
 
   if (txnReference) {
+    const installment = await db(
+      `payment_plan_installments?select=id,enrollment_id,amount_ghs,status` +
+        `&paystack_reference=eq.${encodeURIComponent(txnReference)}&limit=1`,
+    )
+    if (!installment.ok) lookupFailed = true
+    else {
+      const installmentRows = await installment.json().catch(() => [])
+      if (Array.isArray(installmentRows) && installmentRows.length) {
+        installmentMatch = installmentRows[0]
+        matchedOn = 'installment reference'
+        const owner = await db(
+          `enrollments?select=id,amount_ghs,amount_paid_ghs,payment_status` +
+            `&id=eq.${encodeURIComponent(installmentMatch.enrollment_id)}&limit=1`,
+        )
+        if (!owner.ok) lookupFailed = true
+        else rows = await owner.json().catch(() => [])
+      }
+    }
+  }
+
+  if (!lookupFailed && txnReference && (!Array.isArray(rows) || rows.length === 0)) {
     const byRef = await db(
       `enrollments?select=id,amount_ghs,amount_paid_ghs,payment_status` +
         `&paystack_reference=eq.${encodeURIComponent(txnReference)}&limit=1`,
@@ -503,6 +525,26 @@ serve(async (req) => {
       status: 503,
       headers: { 'Content-Type': 'application/json' },
     })
+  }
+
+  /* An installment charge has two records to advance: the enrollment balance
+   * above, and the individual scheduled payment. This write is deliberately
+   * non-fatal after the money has moved on the enrollment; retrying the webhook
+   * at this point could add the same charge twice. The payment event remains the
+   * recovery evidence if this secondary status write ever fails. */
+  if (isCharge && installmentMatch) {
+    const installmentApplied = await db(`payment_plan_installments?id=eq.${installmentMatch.id}`, {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        status: 'paid',
+        paid_at: data?.paid_at ?? new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }),
+    })
+    if (!installmentApplied.ok) {
+      console.error('payment applied but installment status update failed', installmentMatch.id)
+    }
   }
 
   const noted = await db(`payment_events?id=eq.${eventRow.id}`, {

@@ -40,6 +40,7 @@ const publicPaths = [
 
   // Carried, outside the rebuild's scope
   "admin",
+  "pay",
   "nfc",
 
   // Legacy routes were retired on 11 August 2026, once /foundations and

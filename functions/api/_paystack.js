@@ -208,6 +208,8 @@ export async function initializeTransaction(env, options) {
       chosen_option: options.option,
       cohort: COHORT,
       payment_plan: options.instalments ? "instalments" : "full",
+      installment_id: options.installmentId || undefined,
+      installment_number: options.installmentNumber || undefined,
       // Shown against the transaction in the Paystack dashboard, which is where
       // reconciliation actually happens when somebody calls about a payment.
       // Worth the four lines.
