@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Your payment — Bulletproof Automations</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="/assets/fonts/archivo-latin-variable.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/css/site.css">
+<style>
+body { margin:0; background:var(--paper); color:var(--text); }
+.pay-shell { min-height:100vh; display:grid; grid-template-rows:auto 1fr auto; }
+.pay-head, .pay-foot { width:min(44rem,calc(100% - 2rem)); margin:0 auto; }
+.pay-head { padding:1.35rem 0; display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+.pay-brand { font-size:.78rem; letter-spacing:.14em; text-transform:uppercase; font-variation-settings:"wdth" 84,"wght" 700; }
+.pay-secure { font-size:.75rem; color:var(--muted); }
+.pay-main { width:min(44rem,calc(100% - 2rem)); margin:auto; padding:2rem 0 4rem; }
+.pay-card { background:var(--field); border:1px solid var(--rule); border-radius:1.1rem; overflow:hidden; box-shadow:0 18px 60px rgba(14,26,21,.08); }
+.pay-card__top { padding:clamp(1.5rem,5vw,2.6rem); border-bottom:1px solid var(--rule); }
+.pay-kicker { margin:0; color:var(--verified); font-size:.72rem; letter-spacing:.14em; text-transform:uppercase; font-variation-settings:"wdth" 84,"wght" 700; }
+.pay-title { margin:.6rem 0 0; font-size:clamp(1.55rem,6vw,2.35rem); line-height:1.08; font-variation-settings:"wdth" 112,"wght" 750; }
+.pay-hello { margin:0 0 .45rem; font-size:1.05rem; color:var(--muted); }
+</style>
+</head><style>
+.pay-body { padding:clamp(1.5rem,5vw,2.6rem); }
+.pay-label { margin:0; font-size:.72rem; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); font-variation-settings:"wdth" 84,"wght" 650; }
+.pay-amount { margin:.3rem 0 0; font-size:clamp(2.8rem,12vw,4.8rem); line-height:1; font-variation-settings:"wdth" 110,"wght" 800; font-variant-numeric:tabular-nums; }
+.pay-due { margin:.7rem 0 0; color:var(--muted); line-height:1.45; }
+.pay-progress { display:flex; gap:.5rem; margin:1.8rem 0 0; }
+.pay-step { height:.42rem; flex:1; border-radius:99px; background:var(--rule); }
+.pay-step--done { background:var(--verified); }
+.pay-step--now { background:var(--marigold); }
+.pay-summary { margin:1.6rem 0 0; padding:1rem 0 0; border-top:1px solid var(--rule); display:grid; grid-template-columns:1fr auto; gap:.55rem 1rem; font-size:.9rem; }
+.pay-summary dt { color:var(--muted); }
+.pay-summary dd { margin:0; text-align:right; font-variant-numeric:tabular-nums; }
+.pay-action { width:100%; margin-top:1.7rem; border:0; border-radius:.7rem; padding:1rem 1.15rem; background:var(--verified); color:#fff; font:inherit; font-variation-settings:"wght" 720; cursor:pointer; }
+.pay-action:hover { filter:brightness(.92); }
+.pay-action:disabled { opacity:.55; cursor:not-allowed; }
+.pay-note { margin:1rem 0 0; font-size:.83rem; line-height:1.5; color:var(--muted); }
+.pay-status { padding:1rem; border-radius:.65rem; background:var(--paper); font-size:.92rem; line-height:1.5; }
+.pay-status--good { border:1px solid var(--verified); }
+.pay-status--bad { border:1px solid var(--marigold); }
+.pay-foot { padding:1.2rem 0 2rem; border-top:1px solid var(--rule); font-size:.75rem; line-height:1.5; color:var(--muted); }
+.spin { display:inline-block;width:.85em;height:.85em;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .7s linear infinite;margin-right:.45rem;vertical-align:-.08em; }
+@keyframes spin { to { transform:rotate(360deg); } }
+@media (prefers-reduced-motion:reduce) { .spin { animation-duration:2s; } }
+</style>
+<body>
+<div class="pay-shell">
+<header class="pay-head"><span class="pay-brand">Bulletproof Automations</span><span class="pay-secure">Secure installment payment</span></header><main class="pay-main">
+  <div class="pay-card">
+    <div class="pay-card__top">
+      <p class="pay-hello" id="hello">Loading your payment…</p>
+      <p class="pay-kicker" id="kicker">Payment</p>
+      <h1 class="pay-title" id="programme">Bulletproof Automations training</h1>
+    </div>
+    <div class="pay-body">
+      <div id="loading" class="pay-status"><span class="spin"></span>Checking your payment details securely.</div>
+      <div id="invoice" hidden>
+        <p class="pay-label" id="payment-label">Payment</p>
+        <p class="pay-amount" id="amount">GHS —</p>
+        <p class="pay-due" id="due"></p>
+        <div class="pay-progress" id="progress" aria-label="Payment plan progress"></div>
+        <dl class="pay-summary">
+          <dt>Programme total</dt><dd id="total">—</dd>
+          <dt>Already received</dt><dd id="paid">—</dd>
+          <dt>Remaining after this payment</dt><dd id="remaining">—</dd>
+        </dl>
+        <div id="return-status" hidden></div>
+        <button class="pay-action" type="button" id="pay">Pay securely with Paystack</button>
+        <p class="pay-note">Your enrollment is already in place. You do not need to register again. Paystack handles the secure checkout; available payment methods are shown there.</p>
+      </div>
+      <div id="error" class="pay-status pay-status--bad" role="alert" hidden></div>
+    </div>
+  </div>
+</main>
+<footer class="pay-foot">Bulletproof Automations is a United States company based in Jacksonville, Florida. Training is delivered online. Payments are processed securely by Paystack.</footer>
+</div>
+<script src="/assets/js/pay.js" defer></script>
+</body>
+</html>
