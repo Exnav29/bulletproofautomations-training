@@ -1,6 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<!--
+  PAGE PURPOSE
+  This page opens when someone taps Johnathan's NFC card. It introduces him,
+  collects a small amount of contact/context information, and submits the form
+  directly to an n8n webhook with a normal browser POST.
+
+  The page is deliberately self-contained: its page-specific CSS and JavaScript
+  live here, with no framework dependency.
+-->
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Akwaaba — Johnathan Lightfoot</title>
@@ -14,6 +23,8 @@
 <meta name="twitter:card" content="summary" />
 <meta name="twitter:title" content="Akwaaba — Johnathan Lightfoot" />
 <meta name="twitter:description" content="You tapped the card. Tell me what you're building and I'll point you to the right resources." />
+<!-- Font loading: preconnect first so the browser can establish the Google
+     Fonts connections before requesting the NFC page's three typefaces. -->
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Albert+Sans:wght@400;500;600&family=Space+Grotesk:wght@400;500&display=swap" rel="stylesheet" />
@@ -45,6 +56,8 @@
       var(--emerald) 60px 82px, var(--ink) 82px 88px);
   }
 
+  /* Global reset: removes browser default spacing and makes element widths
+     include their padding/borders so the layout remains predictable. */
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   html { scroll-behavior: smooth; }
@@ -68,6 +81,8 @@
   .kente { height: 8px; background: var(--kente); }
   .kente--thick { height: 12px; }
 
+  /* Main content wrapper: centers the experience and caps its width while
+     retaining horizontal breathing room on small screens. */
   .wrap {
     max-width: 1080px;
     margin: 0 auto;
@@ -103,6 +118,8 @@
     pointer-events: none;
   }
 
+  /* Identity column: the introduction and role list. z-index keeps this
+     readable above the low-opacity decorative web watermark. */
   .identity { position: relative; z-index: 1; }
 
   .eyebrow {
@@ -190,6 +207,8 @@
     margin-bottom: 26px;
   }
 
+  /* Shared form-field spacing. The label/input rules immediately below
+     define the normal text fields used for name, email, and phone. */
   .field { margin-bottom: 18px; }
   label {
     display: block;
@@ -249,6 +268,8 @@
     outline-offset: 2px;
   }
 
+  /* Optional email-consent row. It is visually separate from required lead
+     data so submitting the form does not imply marketing consent. */
   .checkbox-field {
     display: flex;
     gap: 10px;
@@ -264,6 +285,8 @@
     accent-color: var(--gold);
   }
 
+  /* Primary form action. This remains a native HTML submit button; JavaScript
+     does not intercept or rebuild the form payload. */
   .submit {
     width: 100%;
     margin-top: 26px;
@@ -294,6 +317,9 @@
   }
   .micro b { color: var(--gold); font-weight: 600; }
 
+  /* Inline error-message styling. The element is present in the markup and
+     becomes visible only if a .show class is applied; browser validation currently
+     handles the required name/email checks. */
   .err {
     display: none;
     margin-top: 14px;
@@ -373,6 +399,9 @@
     transform: translateX(-101%);
     animation: weave 1100ms cubic-bezier(0.65, 0, 0.35, 1) 800ms forwards;
   }
+  /* Loader animation roles:
+     draw reveals the web strokes; dot-in reveals the center point; word-in fades
+     AKWAABA in; weave slides the kente bar in; loader-out clears the overlay. */
   @keyframes draw     { to { stroke-dashoffset: 0; } }
   @keyframes dot-in   { to { transform: scale(1); } }
   @keyframes word-in  { to { opacity: 1; } }
@@ -401,10 +430,15 @@
 <script>
   /* Decide before first paint whether the intro plays:
      skip for repeat visits this session and for reduced-motion users. */
+  /* Startup IIFE (Immediately Invoked Function Expression): runs before the
+     first paint and decides whether the once-per-session intro animation is allowed. */
   (function () {
     try {
+      // True after this browser session has already shown the NFC intro.
       var seen = sessionStorage.getItem("nfc-intro");
+      // Mirrors the visitor's reduced-motion accessibility preference.
       var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      // The CSS loader only activates when the root <html> element has .intro.
       if (!seen && !reduced) document.documentElement.classList.add("intro");
     } catch (e) { /* private mode etc. — just show the page */ }
   })();
@@ -429,8 +463,10 @@
   </div>
 </div>
 
+<!-- Decorative opening kente band; aria-hidden keeps it out of the accessibility tree. -->
 <div class="kente kente--thick" aria-hidden="true"></div>
 
+<!-- Main layout: identity/intro content on the left and lead-capture form on the right. -->
 <main class="wrap">
   <div class="stage">
 
@@ -469,27 +505,40 @@
         <p class="sub">Twenty seconds, four questions — so I can send you exactly what you need.</p>
 
         <!--
+          FORM INTEGRATION CONTRACT
+          The action URL, field names, and hidden values below are consumed by an
+          external n8n workflow. They are integration keys, not presentation text,
+          so changing them requires a matching change in that workflow.
+        -->
+        <!--
           Backend is handled by a normal browser POST to n8n.
         -->
         <form id="nfc-form" action="https://n8n.bulletproofautomations.com/webhook/nfc-lead-capture" method="POST">
+          <!-- Hidden attribution fields travel with every submission so n8n
+               can identify the source, campaign, and entry page. -->
           <input type="hidden" name="source" value="nfc-card" />
           <input type="hidden" name="campaign" value="n8n-ambassador" />
           <input type="hidden" name="entry_page" value="/nfc" />
+          <!-- Required identity field used to address the visitor in follow-up. -->
           <div class="field">
             <label for="name">Your name</label>
             <input type="text" id="name" name="name" placeholder="Kofi Mensah" autocomplete="name" required />
           </div>
 
+          <!-- Required reply address; type=email gives us browser-level format validation. -->
           <div class="field">
             <label for="email">Email</label>
             <input type="email" id="email" name="email" placeholder="you@example.com" autocomplete="email" required />
           </div>
 
+          <!-- Optional phone/WhatsApp contact; autocomplete is helpful on mobile. -->
           <div class="field">
             <label for="phone">Phone / WhatsApp <span class="opt">(optional)</span></label>
             <input type="tel" id="phone" name="phone" placeholder="+233 · +1 ·  anywhere" autocomplete="tel" />
           </div>
 
+          <!-- Required intent choice. Its radio value tells the downstream n8n
+               workflow which resource/follow-up path best matches the visitor. -->
           <div class="field">
             <label id="looking-label">What are you looking for?</label>
             <div class="chips" role="radiogroup" aria-labelledby="looking-label">
@@ -501,13 +550,17 @@
             </div>
           </div>
 
+          <!-- Accessible inline error container reserved for custom validation. -->
           <p class="err" id="form-err" role="alert">Add your name and a valid email so I know where to send things.</p>
 
+          <!-- Explicit, optional marketing opt-in. The lead request still submits
+               when this box is left unchecked. -->
           <label class="checkbox-field">
             <input type="checkbox" name="email_opt_in" value="yes" />
             <span>Yes, send me automation resources, training updates, and follow-up from Bulletproof Automations.</span>
           </label>
 
+          <!-- Native submit: the browser posts the exact form fields above to n8n. -->
           <button type="submit" class="submit">Show Me the Resources →</button>
           <p class="micro">This just helps me point you to the <b>right</b> resources. No spam, no mailing-list ambush — updates only come if you check the box.</p>
         </form>
@@ -517,17 +570,25 @@
   </div>
 </main>
 
+<!-- Decorative closing band mirrors the opening kente strip. -->
 <div class="kente" aria-hidden="true"></div>
 <footer>Woven in Ghana spirit · Bulletproof Automations</footer>
 
 <script>
   // Intro plays once per session; remove the overlay after it exits.
+  /* Intro cleanup: only runs when the startup IIFE enabled the animation.
+     It records that the intro has played and later removes the loader from the DOM. */
   if (document.documentElement.classList.contains("intro")) {
+    // Storage failure is harmless; the only consequence is that the intro may replay.
     try { sessionStorage.setItem("nfc-intro", "1"); } catch (e) {}
+    // Delayed callback runs after the CSS exit animation and removes the fixed overlay.
     setTimeout(() => { const l = document.querySelector(".loader"); if (l) l.remove(); }, 3000);
   }
 
+  /* Campaign override: a URL such as /nfc?campaign=conference-name replaces
+     the default hidden campaign value. With no query parameter, n8n-ambassador stays in place. */
   const campaign = new URLSearchParams(window.location.search).get("campaign");
+  // Only overwrite the hidden field when a non-empty campaign parameter exists.
   if (campaign) document.querySelector('input[name="campaign"]').value = campaign;
 </script>
 
