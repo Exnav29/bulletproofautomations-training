@@ -1,0 +1,187 @@
+name: Annotate NFC page
+
+on:
+  push:
+    branches:
+      - docs/nfc-code-comments
+
+permissions:
+  contents: write
+
+jobs:
+  annotate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: docs/nfc-code-comments
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Add explanatory comments only
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("nfc/index.html")
+          text = path.read_text()
+
+          replacements = [
+              (
+                  "<head>\n<meta charset=\"UTF-8\" />",
+                  "<head>\n<!--\n  PAGE PURPOSE\n  This is the landing page opened when someone taps Johnathan's NFC card.\n  It introduces Johnathan, collects a small amount of contact/context data,\n  and submits that data directly to an n8n webhook using a normal HTML POST.\n\n  The page is intentionally self-contained: page-specific CSS and JavaScript\n  live in this file so the NFC experience has no framework dependency.\n-->\n<meta charset=\"UTF-8\" />",
+              ),
+              (
+                  "<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\" />",
+                  "<!-- External typefaces used by the NFC-specific visual design. The two\n     preconnects reduce connection setup time before the stylesheet is fetched. -->\n<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\" />",
+              ),
+              (
+                  "  * { margin: 0; padding: 0; box-sizing: border-box; }",
+                  "  /* Global reset: remove browser default spacing and make declared widths\n     include borders/padding, which keeps the two-column layout predictable. */\n  * { margin: 0; padding: 0; box-sizing: border-box; }",
+              ),
+              (
+                  "  .wrap {\n    max-width: 1080px;",
+                  "  /* Centers the page content and prevents it from becoming too wide on\n     large screens while retaining comfortable side padding on phones. */\n  .wrap {\n    max-width: 1080px;",
+              ),
+              (
+                  "  .identity { position: relative; z-index: 1; }",
+                  "  /* Identity column: sits above the decorative web watermark and contains\n     the introduction, short description, and Johnathan's roles. */\n  .identity { position: relative; z-index: 1; }",
+              ),
+              (
+                  "  .field { margin-bottom: 18px; }",
+                  "  /* Shared spacing and label treatment for the form's contact fields. */\n  .field { margin-bottom: 18px; }",
+              ),
+              (
+                  "  .checkbox-field {\n    display: flex;",
+                  "  /* Optional marketing consent row. It is separate from the required lead\n     fields so submitting the form does not imply newsletter consent. */\n  .checkbox-field {\n    display: flex;",
+              ),
+              (
+                  "  .submit {\n    width: 100%;",
+                  "  /* Primary form action. Visual hover/active states provide feedback, but\n     the button remains a normal HTML submit button with no custom submission JS. */\n  .submit {\n    width: 100%;",
+              ),
+              (
+                  "  .micro {\n    margin-top: 16px;",
+                  "  /* Small trust/privacy note directly under the submit button. */\n  .micro {\n    margin-top: 16px;",
+              ),
+              (
+                  "  .err {\n    display: none;",
+                  "  /* Reserved inline error message style. Browser-native required/email\n     validation currently handles invalid submissions; this file does not toggle\n     .err.show itself, but the style is available if validation is expanded later. */\n  .err {\n    display: none;",
+              ),
+              (
+                  "  footer {\n    padding: 22px 0 30px;",
+                  "  /* Small closing brand line below the second kente strip. */\n  footer {\n    padding: 22px 0 30px;",
+              ),
+              (
+                  "<script>\n  /* Decide before first paint whether the intro plays:\n     skip for repeat visits this session and for reduced-motion users. */\n  (function () {\n    try {\n      var seen = sessionStorage.getItem(\"nfc-intro\");\n      var reduced = window.matchMedia(\"(prefers-reduced-motion: reduce)\").matches;\n      if (!seen && !reduced) document.documentElement.classList.add(\"intro\");\n    } catch (e) { /* private mode etc. — just show the page */ }\n  })();\n</script>",
+                  "<script>\n  /*\n    INTRO STARTUP IIFE (Immediately Invoked Function Expression)\n    Runs as soon as the browser reaches the <head>, before the page is painted.\n    Its only job is to decide whether the animated intro should be enabled.\n  */\n  (function () {\n    try {\n      // Remember whether this browser tab/session has already shown the intro.\n      var seen = sessionStorage.getItem(\"nfc-intro\");\n\n      // Respect the visitor's operating-system/browser reduced-motion setting.\n      var reduced = window.matchMedia(\"(prefers-reduced-motion: reduce)\").matches;\n\n      // Adding the class activates the loader CSS; otherwise the page renders normally.\n      if (!seen && !reduced) document.documentElement.classList.add(\"intro\");\n    } catch (e) {\n      // Some privacy modes can block sessionStorage. Failure is harmless: skip the intro.\n    }\n  })();\n</script>",
+              ),
+              (
+                  "<div class=\"kente kente--thick\" aria-hidden=\"true\"></div>",
+                  "<!-- Decorative kente band that visually opens the main NFC experience. -->\n<div class=\"kente kente--thick\" aria-hidden=\"true\"></div>",
+              ),
+              (
+                  "<main class=\"wrap\">\n  <div class=\"stage\">",
+                  "<!-- Main two-column layout: identity/intro on the left, lead form on the right. -->\n<main class=\"wrap\">\n  <div class=\"stage\">",
+              ),
+              (
+                  "        <!--\n          Backend is handled by a normal browser POST to n8n.\n        -->\n        <form id=\"nfc-form\" action=\"https://n8n.bulletproofautomations.com/webhook/nfc-lead-capture\" method=\"POST\">",
+                  "        <!--\n          FORM / INTEGRATION CONTRACT\n          The browser submits this form directly to n8n with a standard POST.\n          The webhook and the field names are consumed by an external workflow.\n          Do not rename the form fields, change the hidden values, or change the\n          action URL without coordinating the matching n8n workflow first.\n        -->\n        <form id=\"nfc-form\" action=\"https://n8n.bulletproofautomations.com/webhook/nfc-lead-capture\" method=\"POST\">",
+              ),
+              (
+                  "          <input type=\"hidden\" name=\"source\" value=\"nfc-card\" />",
+                  "          <!-- Tracking context sent with every lead. These hidden values tell\n               n8n where the submission originated and which campaign owns it. -->\n          <input type=\"hidden\" name=\"source\" value=\"nfc-card\" />",
+              ),
+              (
+                  "          <div class=\"field\">\n            <label for=\"name\">Your name</label>",
+                  "          <!-- Required identity field used to address/follow up with the visitor. -->\n          <div class=\"field\">\n            <label for=\"name\">Your name</label>",
+              ),
+              (
+                  "          <div class=\"field\">\n            <label for=\"email\">Email</label>",
+                  "          <!-- Required reply address. type=email enables browser format validation. -->\n          <div class=\"field\">\n            <label for=\"email\">Email</label>",
+              ),
+              (
+                  "          <div class=\"field\">\n            <label for=\"phone\">Phone / WhatsApp <span class=\"opt\">(optional)</span></label>",
+                  "          <!-- Optional phone/WhatsApp contact. autocomplete helps mobile visitors. -->\n          <div class=\"field\">\n            <label for=\"phone\">Phone / WhatsApp <span class=\"opt\">(optional)</span></label>",
+              ),
+              (
+                  "          <div class=\"field\">\n            <label id=\"looking-label\">What are you looking for?</label>",
+                  "          <!-- Required intent choice. The radio values let the downstream n8n\n               workflow route the lead to the most relevant resources/follow-up. -->\n          <div class=\"field\">\n            <label id=\"looking-label\">What are you looking for?</label>",
+              ),
+              (
+                  "          <p class=\"err\" id=\"form-err\" role=\"alert\">Add your name and a valid email so I know where to send things.</p>",
+                  "          <!-- Accessible inline error container retained for custom validation.\n               It is hidden unless the .show class is added. -->\n          <p class=\"err\" id=\"form-err\" role=\"alert\">Add your name and a valid email so I know where to send things.</p>",
+              ),
+              (
+                  "          <label class=\"checkbox-field\">\n            <input type=\"checkbox\" name=\"email_opt_in\" value=\"yes\" />",
+                  "          <!-- Optional and explicit email-marketing consent. Leaving this unchecked\n               still allows the lead/resource request itself to be submitted. -->\n          <label class=\"checkbox-field\">\n            <input type=\"checkbox\" name=\"email_opt_in\" value=\"yes\" />",
+              ),
+              (
+                  "          <button type=\"submit\" class=\"submit\">Show Me the Resources →</button>",
+                  "          <!-- Normal form submit: no JavaScript intercepts or rewrites the payload. -->\n          <button type=\"submit\" class=\"submit\">Show Me the Resources →</button>",
+              ),
+              (
+                  "<div class=\"kente\" aria-hidden=\"true\"></div>\n<footer>",
+                  "<!-- Decorative closing band mirrors the kente strip at the top of the page. -->\n<div class=\"kente\" aria-hidden=\"true\"></div>\n<footer>",
+              ),
+              (
+                  "<script>\n  // Intro plays once per session; remove the overlay after it exits.\n  if (document.documentElement.classList.contains(\"intro\")) {\n    try { sessionStorage.setItem(\"nfc-intro\", \"1\"); } catch (e) {}\n    setTimeout(() => { const l = document.querySelector(\".loader\"); if (l) l.remove(); }, 3000);\n  }\n\n  const campaign = new URLSearchParams(window.location.search).get(\"campaign\");\n  if (campaign) document.querySelector('input[name=\"campaign\"]').value = campaign;\n</script>",
+                  "<script>\n  /*\n    INTRO CLEANUP\n    If the startup IIFE enabled the intro, mark it as seen for this session and\n    physically remove the loader after its exit animation. Removing it keeps an\n    invisible fixed element out of the DOM after the animation is finished.\n  */\n  if (document.documentElement.classList.contains(\"intro\")) {\n    // Persist the once-per-session flag. Storage failure is non-fatal.\n    try { sessionStorage.setItem(\"nfc-intro\", \"1\"); } catch (e) {}\n\n    // Delayed callback runs after the CSS animation and removes the loader node.\n    setTimeout(() => { const l = document.querySelector(\".loader\"); if (l) l.remove(); }, 3000);\n  }\n\n  /*\n    CAMPAIGN QUERY-PARAMETER OVERRIDE\n    Allows links such as /nfc?campaign=event-name to replace the default campaign\n    hidden value before form submission. If no parameter is present, the hard-coded\n    n8n-ambassador campaign value remains unchanged.\n  */\n  const campaign = new URLSearchParams(window.location.search).get(\"campaign\");\n  if (campaign) document.querySelector('input[name=\"campaign\"]').value = campaign;\n</script>",
+              ),
+          ]
+
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f"Expected NFC source marker not found:\n{old[:180]}")
+              text = text.replace(old, new, 1)
+
+          path.write_text(text)
+
+      - name: Prove form contract is unchanged
+        shell: python
+        run: |
+          from pathlib import Path
+          text = Path("nfc/index.html").read_text()
+          required = [
+              'action="https://n8n.bulletproofautomations.com/webhook/nfc-lead-capture"',
+              'name="name"',
+              'name="email"',
+              'name="phone"',
+              'name="looking_for"',
+              'name="email_opt_in"',
+              'name="source" value="nfc-card"',
+              'name="campaign" value="n8n-ambassador"',
+              'name="entry_page" value="/nfc"',
+          ]
+          missing = [item for item in required if item not in text]
+          if missing:
+              raise SystemExit(f"Protected NFC form contract changed: {missing}")
+
+          # This task is comments-only. Any removed source line means behavior or
+          # markup was altered instead of merely documented.
+          import subprocess
+          diff = subprocess.check_output(
+              ["git", "diff", "--unified=0", "HEAD", "--", "nfc/index.html"],
+              text=True,
+          )
+          removed = [
+              line for line in diff.splitlines()
+              if line.startswith("-") and not line.startswith("---")
+          ]
+          if removed:
+              raise SystemExit("Comments-only invariant failed; source lines were removed:\n" + "\n".join(removed[:20]))
+
+      - name: Build and validate deployed output
+        run: |
+          npm run build
+          npx --yes html-validate "dist/**/*.html"
+
+      - name: Commit annotated NFC page and remove helper workflow
+        run: |
+          git config user.name "Johnathan Lightfoot"
+          git config user.email "6110821+Exnav29@users.noreply.github.com"
+          git rm .github/workflows/annotate-nfc.yml
+          git add nfc/index.html
+          git commit -m "Document NFC page code"
+          git push origin HEAD:docs/nfc-code-comments
