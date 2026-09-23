@@ -987,15 +987,34 @@ a.rail__link:hover .rail__name {
   transform: translateY(-2px);
 }
 
+/* Default is light-ground: this is the button's most common context
+   (paper and sand sections). --rule-strong is the token reserved for
+   control borders across white/paper/sand (see the :root comment) —
+   using it here instead of a bespoke value keeps this in the same system
+   as inputs and other outlined controls. */
 .btn--ghost {
-  border: 1px solid rgba(246, 247, 245, 0.35);
-  color: var(--text-on-ink);
+  border: 1px solid var(--rule-strong);
+  color: var(--text);
 }
 
 .btn--ghost:hover {
+  border-color: var(--verified);
+  color: var(--verified);
+  transform: translateY(-2px);
+}
+
+/* The one dark-ground usage: the hero frame's ink viewport. Restores the
+   original on-ink treatment there instead of the near-invisible
+   text-on-ink-on-sand/paper combination the unscoped rule used to produce
+   everywhere else it's used. */
+.floor__frame .btn--ghost {
+  border-color: rgba(246, 247, 245, 0.35);
+  color: var(--text-on-ink);
+}
+
+.floor__frame .btn--ghost:hover {
   border-color: var(--signal);
   color: var(--signal);
-  transform: translateY(-2px);
 }
 
 /* The circular companion to a filled primary action. Decorative on its own —
@@ -2096,6 +2115,13 @@ a.rail__link:hover .rail__name {
   border-color: transparent;
   border-radius: var(--r-sm);
   color: var(--text-on-ink);
+}
+
+/* Same "this is the one to weigh" signal as .price--pick, for a facts
+   column carrying price/decision information rather than logistics. */
+.facts__col--pick {
+  border-color: var(--verified);
+  border-width: 2px;
 }
 
 .facts__head {
