@@ -22,6 +22,7 @@ const publicPaths = [
 
   // Rebuild routes - Tier 1
   "certified-automation-builder",
+  "intermediate-cohort",
   "standard",
   "thank-you",
 
