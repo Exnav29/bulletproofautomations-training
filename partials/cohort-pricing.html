@@ -1,0 +1,46 @@
+<!-- Shared cohort and pathway pricing. Keep the values here authoritative; region-specific display values are filled by shell.js from /api/enroll. -->
+<!-- include: region-select.html action="{{action}}" -->
+
+<div class="price-cards">
+  <article class="price">
+    <h3 class="price__name">Intermediate cohort</h3>
+    <p class="price__v" data-price="cohort.total">GHS 750</p>
+    <p class="price__std">Standard rate <span data-price="standard.cohort">GHS 1,000&ndash;1,200</span></p>
+    <p class="price__note">The five-week training only.</p>
+  </article>
+
+  <article class="price price--pick">
+    <p class="price__flag">Most complete</p>
+    <h3 class="price__name">Intermediate cohort + BCAB assessment</h3>
+    <p class="price__v" data-price="bundle.total">GHS 1,050</p>
+    <p class="price__std">Standard rate <span data-price="standard.bundle">GHS 1,500&ndash;1,750</span></p>
+    <dl class="price__lines">
+      <div><dt>Intermediate cohort training</dt><dd data-price="cohort.total">GHS 750</dd></div>
+      <div><dt>BCAB certification assessment</dt><dd data-price="assessment.fee">GHS 450</dd></div>
+      <div><dt>Pathway bundle</dt><dd>&minus; <span data-price="bundle.discount">GHS 150</span></dd></div>
+      <div class="price__total"><dt>Total</dt><dd data-price="bundle.total">GHS 1,050</dd></div>
+    </dl>
+    <p class="price__note">Training and the assessment opportunity are line-itemed separately, because they are separate things.</p>
+  </article>
+
+  <article class="price">
+    <h3 class="price__name">Path B readiness review</h3>
+    <p class="price__v" data-price="readiness.total">GHS 150</p>
+    <p class="price__std">Standard rate <span data-price="standard.readiness">GHS 200</span></p>
+    <p class="price__note">Credited against the assessment fee if you proceed.</p>
+  </article>
+</div>
+
+<div class="prose">
+  <div data-region-instalments>
+    <h3 class="sub">Payment plans</h3>
+    <ul class="bullets">
+      <li>Intermediate only &mdash; GHS 400 at enrollment, GHS 350 before Week 3.</li>
+      <li>Cohort and assessment &mdash; GHS 400, then GHS 350, then GHS 300.</li>
+      <li>Payments do not extend beyond the five-week programme.</li>
+      <li>A missed instalment pauses access until it is paid.</li>
+    </ul>
+  </div>
+  <p class="note"><strong>Foundations Cohort 1 graduates keep the Ghana rate wherever they now live.</strong> We confirm that against the cohort roll before payment.</p>
+  <p class="policy-link"><a href="/refund-policy">Read the Refund and Cancellation Policy</a> &mdash; cancellations, transfers, payment plans, and what happens if we cancel.</p>
+</div>
