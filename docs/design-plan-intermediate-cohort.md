@@ -51,7 +51,7 @@ These four changes are approved for the implementation PR:
 1. **Fix `.btn--ghost` contrast by context.** Its current rule was authored for the dark hero but is reused on light paper/sand sections, producing effectively invisible text. Make the default light-ground treatment readable and scope the existing near-white treatment to `.floor__frame`, where it is correct.
 2. **Emphasise the decision-bearing facts column using an existing pattern.** Add `.facts__col--pick` with the same verified-green border signal used by `.price--pick`, rather than inventing a new surface or shadow.
 3. **Rename the facts-column heading to `Price and dates`.** This matches the terse, reader-facing style of the other `.facts__head` labels and names the contents directly.
-4. **Use the existing `.placeholder` treatment for the unconfirmed start date.** An unconfirmed fact should render as an explicit placeholder state rather than plain factual text.
+4. **Use the confirmed cohort start date.** The Intermediate cohort starts Saturday, 3 October 2026. Render it as a factual `<time>` value rather than a placeholder state.
 
 These are contained fixes. They do not change information architecture, prices, seat count, assessment values, enrollment form markup, build configuration, routes, or motion behaviour.
 

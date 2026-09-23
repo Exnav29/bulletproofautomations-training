@@ -16,7 +16,7 @@ var CONFIGURED = SUPABASE_URL.length > 0 && SUPABASE_ANON_KEY.length > 0;
 var SEAT_CAP = 25;
 var COHORTS = [{ id: "intermediate_2026_09", label: "Intermediate — current cohort" }];
 var ENROLLMENT_CLOSES = "2026-09-08";
-var COHORT_STARTS = null;
+var COHORT_STARTS = "2026-10-03";
 
 /* The CHECK vocabularies, verified against the live table. Every control is
    built from these, so the dashboard cannot write a value the table rejects. */
@@ -310,7 +310,7 @@ function renderBoard() {
     '<div class="board__cell">' +
       '<p class="board__k">Cohort starts</p>' +
       '<p class="board__v">' + (toStart == null ? "TBC" : (toStart > 0 ? toStart + "d" : "started")) + "</p>" +
-      '<p class="board__sub">Final date set after the 23 September webinar</p>' +
+      '<p class="board__sub">Saturday 3 October 2026</p>' +
     "</div>";
 }
 
