@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- include: head.html title="Bulletproof Certified Automation Builder (BCAB) — certification and cohort" description="A professional certification in automation engineering, assessed against a published standard. The founding Intermediate cohort begins 12 September 2026, 25 seats, live online." canonical="https://training.bulletproofautomations.com/certified-automation-builder" -->
+<!-- include: head.html title="Bulletproof Certified Automation Builder (BCAB) — certification and cohort" description="A professional certification in automation engineering, assessed against a published standard. The founding Intermediate cohort has been postponed and its revised start date is being confirmed, 25 seats, live online." canonical="https://training.bulletproofautomations.com/certified-automation-builder" -->
 </head>
 <body>
 <!-- include: header.html nav="bcab" -->
@@ -93,10 +93,10 @@
         <div class="facts__col">
           <h3 class="facts__head">The cohort</h3>
           <dl class="facts__list">
-            <div><dt>Starts</dt><dd><time datetime="2026-09-12">Saturday 12 September 2026</time></dd></div>
-            <div><dt>Runs</dt><dd>Five Saturdays, 11:30&ndash;14:00 GMT, 2.5 hours with a real break</dd></div>
+            <div><dt>Starts</dt><dd>Revised date being confirmed</dd></div>
+            <div><dt>Runs</dt><dd>Five Saturdays, 11:30&ndash;13:30 GMT, two hours</dd></div>
             <div><dt>Seats</dt><dd>25</dd></div>
-            <div><dt>Enrollment closes</dt><dd><time datetime="2026-09-08">Tuesday 8 September 2026</time></dd></div>
+            <div><dt>Enrollment closes</dt><dd>To be confirmed with the revised start date</dd></div>
             <div><dt>Founding Cohort Rate</dt><dd><span data-price="cohort.total">GHS 750</span>, or <span data-price="bundle.total">GHS 1,050</span> with the BCAB assessment</dd></div>
           </dl>
           <a class="event__action" href="#enroll">Enroll
@@ -278,38 +278,61 @@
     <div class="shell">
       <h2 class="section__title" id="weeks-title">The cohort &mdash; five weeks</h2>
       <p class="lede">One competency per week, and one project that grows across all five. There is no final-week capstone crunch. The structure shifts from &ldquo;follow me&rdquo; to &ldquo;here is the requirement, you decide&rdquo; &mdash; you will not all be building identical workflows.</p>
+      <p class="note">The live session is two hours. Substantial building is deliberately moved into paired homework between sessions, so the weekly commitment is not reduced.</p>
 
       <ol class="weeks">
         <li class="week">
           <p class="week__n">Week 1</p>
           <h3 class="week__name">Complex data</h3>
           <p>Nested objects, arrays, multi-item data, and missing fields. Split, Aggregate and Merge. When the Code node earns its place, and pinned data as a testing tool.</p>
+          <p><strong>Business:</strong> Positioning, and where client work actually comes from.</p>
         </li>
         <li class="week">
           <p class="week__n">Week 2</p>
           <h3 class="week__name">Real API integration</h3>
           <p>POST, PATCH and DELETE. Auth patterns, pagination, rate limits, and status-code literacy. You get an unfamiliar API and its documentation, with no walkthrough.</p>
+          <p><strong>Business:</strong> Discovery and scoping &mdash; interviewing a client, and writing down what is not included.</p>
         </li>
         <li class="week">
           <p class="week__n">Week 3</p>
           <h3 class="week__name">Workflow architecture</h3>
           <p>Sub-workflows, reusable components, naming, and configuration instead of hard-coded values. State and persistence, deduplication, and idempotency.</p>
+          <p><strong>Business:</strong> Pricing models and the one-page proposal.</p>
         </li>
         <li class="week">
           <p class="week__n">Week 4</p>
           <h3 class="week__name">Troubleshooting &amp; reliability</h3>
           <p>The centrepiece. Silent, partial, and wrong-but-valid failures. Observability, run IDs, dead-letter patterns, and recovery workflows. Includes a diagnostic lab on a broken workflow you did not build.</p>
+          <p><strong>Business:</strong> Customer service and incident communication &mdash; telling a client something broke before they notice.</p>
         </li>
         <li class="week">
           <p class="week__n">Week 5</p>
           <h3 class="week__name">Production AI &amp; automation design</h3>
           <p>Where AI should and should not decide. Structured output, validation, confidence and fallback, human-in-the-loop, and judging agent against workflow.</p>
+          <p><strong>Business:</strong> The monthly maintenance retainer &mdash; what is included, what is excluded, and what to charge.</p>
         </li>
       </ol>
     </div>
   </section>
 
-  <!-- 13 · Before week 1 -->
+  <!-- 13 · Business content -->
+  <section class="section" aria-labelledby="business-title">
+    <div class="shell prose">
+      <h2 class="section__title" id="business-title">The business side of the cohort</h2>
+      <p class="lede">Every week pairs the technical subject with one part of doing client work. The aim is not to turn the BCAB assessment into a business exam. It does not.</p>
+      <p>The BCAB assessment still measures technical competence against the seven published competency domains. Positioning, discovery, scoping, pricing, proposals, customer service and retainers are taught alongside that work, but they are <strong>not assessed or credentialled</strong>.</p>
+      <p>A builder still has to know what happens before a workflow is built and after it is handed over. That means finding the right work, defining what is and is not included, pricing it clearly, and communicating when something breaks. Most builders can ship a workflow and walk away. The maintenance retainer is the practical alternative: one build can become recurring support when the client knows what is covered, what is not, and what it costs.</p>
+      <ul class="bullets">
+        <li><strong>Week 1:</strong> Positioning, and where client work actually comes from.</li>
+        <li><strong>Week 2:</strong> Discovery and scoping: interviewing a client, and writing down what is not included.</li>
+        <li><strong>Week 3:</strong> Pricing models and the one-page proposal.</li>
+        <li><strong>Week 4:</strong> Customer service and incident communication: telling a client something broke before they notice.</li>
+        <li><strong>Week 5:</strong> The monthly maintenance retainer: what is included, what is excluded, and what to charge.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 14 · Before week 1 -->
   <section class="section" aria-labelledby="setup-title">
     <div class="shell prose">
       <h2 class="section__title" id="setup-title">Before Week 1</h2>
@@ -322,20 +345,21 @@
     </div>
   </section>
 
-  <!-- 14 · Who this is not for -->
+  <!-- 15 · Who this is not for -->
   <section class="section section--ink" aria-labelledby="notfor-title">
     <div class="shell prose">
       <h2 class="section__title" id="notfor-title">Who this is not for</h2>
       <ul class="bullets bullets--no">
         <li>People who have never built a workflow. Start with <a href="/foundations">Foundations</a> &mdash; it is free.</li>
         <li>Anyone who wants a certificate without sitting an assessment. This one can be not-yet-passed.</li>
-        <li>Anyone who cannot commit 2.5 hours a week plus midweek homework for five weeks.</li>
+        <li>Anyone who cannot commit two live hours a week plus paired midweek homework for five weeks.</li>
+        <li>Anyone who wants only the technical training and has no interest in client work. Client positioning, scoping, pricing and support are part of this cohort.</li>
         <li>Anyone expecting the credential to produce a job. It does not.</li>
       </ul>
     </div>
   </section>
 
-  <!-- 15 · Pricing -->
+  <!-- 16 · Pricing -->
   <section class="section section--sand" aria-labelledby="pricing-title">
     <div class="shell">
       <h2 class="section__title" id="pricing-title">Pricing</h2>
@@ -398,13 +422,13 @@
     </div>
   </section>
 
-  <!-- 16 · Enrollment -->
+  <!-- 17 · Enrollment -->
   <section class="section section--enroll" id="enroll" aria-labelledby="enroll-title">
     <div class="shell">
       <div class="enroll">
         <div class="enroll__intro">
           <h2 class="section__title" id="enroll-title">Enroll in the founding cohort</h2>
-          <p class="lede">25 seats. Enrollment closes <time datetime="2026-09-08">Tuesday 8 September 2026</time> and the cohort begins <time datetime="2026-09-12">Saturday 12 September</time>.</p>
+          <p class="lede">25 seats. Enrollment remains open while the revised start date and enrollment close are confirmed.</p>
           <p data-pay="off">Register below and we will be in touch within 24 hours to confirm your place and arrange payment. Nothing is charged on this page. If you would rather ask something first, message us on WhatsApp &mdash; <a href="https://wa.me/233546527779">+233 54 652 7779</a>.</p>
           <p data-pay="live" hidden>Register below and you will be taken to checkout to pay by mobile money or card. We confirm every place by hand on WhatsApp within 24 hours. If you would rather ask something first, message us on WhatsApp &mdash; <a href="https://wa.me/233546527779">+233 54 652 7779</a>.</p>
         </div>
@@ -417,6 +441,8 @@
         <p class="callout callout--test" id="paystack-test-banner" hidden>
           <strong>Test mode.</strong> This checkout is running on Paystack test keys. No money moves, no seat is really taken, and the row this creates is marked <code>[TEST]</code> for deletion. Use Paystack&rsquo;s test mobile money and card details &mdash; real ones will be declined.
         </p>
+
+        <p class="note">The cohort was due to begin on 12 September. I was unwell, and I postponed it rather than run a programme I could not deliver properly. Anyone already registered keeps their place and the rate they registered at.</p>
 
         <form class="form" id="enroll-form" novalidate>
           <div class="form__row">
@@ -544,7 +570,7 @@
     </div>
   </section>
 
-  <!-- 17 · Who assesses you -->
+  <!-- 18 · Who assesses you -->
   <section class="section" aria-labelledby="assessor-title">
     <div class="shell prose">
       <h2 class="section__title" id="assessor-title">Who sets this standard</h2>
@@ -564,7 +590,7 @@
     </div>
   </section>
 
-  <!-- 18 · Where this sits -->
+  <!-- 19 · Where this sits -->
   <section class="section section--sand" aria-labelledby="where-title">
     <div class="shell">
       <h2 class="section__title" id="where-title">Where this sits in the pathway</h2>
@@ -588,7 +614,7 @@
     </div>
   </section>
 
-  <!-- 19 · Questions -->
+  <!-- 20 · Questions -->
   <section class="section" aria-labelledby="faq-title">
     <div class="shell prose">
       <h2 class="section__title" id="faq-title">Questions</h2>
@@ -603,7 +629,7 @@
     </div>
   </section>
 
-  <!-- 20 · Builder pool and the non-guarantee -->
+  <!-- 21 · Builder pool and the non-guarantee -->
   <section class="section section--ink" aria-labelledby="pool-title">
     <div class="shell prose">
       <h2 class="section__title" id="pool-title">The builder pool</h2>
