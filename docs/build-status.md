@@ -1,6 +1,6 @@
 # Build status — site rebuild
 
-**Updated:** 13 August 2026 · **Branch:** `site-rebuild` · **Nothing merged to `main` yet.**
+**Updated:** 5 October 2026 · **Current enrollment policy:** enrollment remains open throughout the cohort; there is no closing date or date-based signup gate. Historical deadline references below describe earlier build state only.
 
 Read this with `CLAUDE.md`, `docs/project-brief.md` (confirmed decisions in §12) and
 `docs/competency-framework.md`. This file records where the build actually is, so a new
@@ -442,8 +442,7 @@ Every one renders in conspicuous dashed marigold. **Nothing ships with one still
     what makes testing safe: the webhook applies an event only when the reference's mode matches
     `data.domain`, so a test charge can only ever settle a test enrollment.
 
-  **`/api/enroll` must never lose an enrollment**, because the cap is 25 and enrollment closes
-  8 September. Every failure ends with the row written and the visitor told they are on the list:
+  **`/api/enroll` must never lose an enrollment**, because enrollment remains open throughout the cohort. Every failure ends with the row written and the visitor told they are on the list:
   Paystack unconfigured → `reserve`; Paystack refuses or times out → row written, status rolled
   back to `reserved`, reason recorded in `notes`, `reserve` returned; **the Function not deployed
   at all → the page falls back to the old direct anon insert.** That last one is deliberate:
@@ -780,8 +779,7 @@ Paystack change.
 ## 6c. /thank-you told people they had bought the cohort — fixed 13 August 2026
 
 Found by the live GHS 150 transaction above. A Path B readiness-review buyer was
-shown the founding Intermediate cohort's confirmation page: enrollment closing
-8 September, the proof-of-setup task, the setup clinic, Week 1 on 12 September,
+shown the founding Intermediate cohort's confirmation page with the then-current enrollment deadline, the proof-of-setup task, the setup clinic, and Week 1 details,
 and webhooks reachable by Week 2. "What you have paid for" read **"the five-week
 Intermediate cohort"** — precisely what it was not — and the instalments section
 does not apply to GHS 150 paid in one go.

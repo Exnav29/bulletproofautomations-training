@@ -31,8 +31,8 @@ page.
 
 ## 2. Why
 
-**Displacement — the primary justification.** The founding cohort caps at **25 seats** and closes
-**8 September 2026**. A seat is a scarce allocation, not an infinitely reproducible digital good.
+**Displacement — the primary justification.** The founding cohort is planned around **25 seats**,
+and enrollment remains open throughout the cohort. A seat is a scarce allocation, not an infinitely reproducible digital good.
 Someone in a high-income market paying GHS 750 does not merely receive a discount; they consume a
 subsidised seat allocated to a Ghanaian learner. This argument is what makes the policy defensible
 rather than merely commercial.
@@ -182,9 +182,9 @@ become a permanent parallel pricing scheme by inertia.
 **How it is checked.** A checkbox on the enrollment form, recorded on the row. A claim from outside
 Ghana is a downward tier move and takes the path in §6: reserved, no payment taken, verified by hand.
 
-**Verification is against the cohort roll, not against issued credentials.** Cohort 1 finishes
-29 August, the showcase is 5 September and BCAB enrollment closes 8 September, so graduates will be
-claiming this in the same week their certificates are issued.
+**Verification is against the cohort roll, not against issued credentials.** Cohort 1 finished
+29 August and the showcase was 5 September. BCAB enrollment remains open throughout the cohort, so
+graduates may claim this exception whenever they enroll.
 
 ---
 

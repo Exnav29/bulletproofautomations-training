@@ -61,6 +61,9 @@ Never blur them.
    7. **Showcase pitch copy is locked.** The text beginning "Builders don't W8"
    is final. Do not rewrite, tighten, or improve it. Use it verbatim.
 
+   8. **Enrollment never closes.** Do not add an enrollment deadline, closing date, or date-based
+   signup gate. Enrollment remains available throughout a cohort; late learners are handled individually.
+
 ## Voice
 
 Plainspoken, direct, and willing to say no. The existing site's best instinct — a "Who this

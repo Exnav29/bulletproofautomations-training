@@ -109,9 +109,7 @@ Start date: 12 September 2026
 Sessions: Saturdays, **11:30 AM – 2:00 PM GMT** (confirmed 9 August 2026)
 Cohort cap: **25 seats**
 Certification assessment window: **begins 1 November 2026**
-Enrollment deadline: **Tuesday 8 September 2026** (four days before the cohort starts; set after the
-5 September showcase so that event's conversion window is protected, and two days before the
-proof-of-setup task is due)
+Enrollment status: **open throughout the cohort. There is no enrollment closing date.** Late learners are handled individually.
 
 | Offering | Founding price | Standard price |
 |---|---|---|
@@ -235,7 +233,7 @@ Evidence, not styling. In priority order:
    market publishes an assessment standard with domains, weights, and thresholds.
 2. **The instructor** — bio, photo, background, why he is qualified to set this standard.
 3. **Proof from cohort one** — capstone screenshots, portfolio links, named testimonials with faces.
-4. **Specificity** — exact dates, times, cap, price, deadline. Vagueness reads as amateur.
+4. **Specificity** — exact dates, times, cap, price, and enrollment status. Vagueness reads as amateur.
 5. **A credential verification page** — even a simple lookup by credential ID.
 
 ### Proposed site map
@@ -250,7 +248,7 @@ Evidence, not styling. In priority order:
 - `/builder-pool` — Hiring standard and builder pool, with non-guarantee wording.
 - `/workshops` — standalone workshops (secondary now, not the headline). Empty as of 10 August 2026: Price by Value, its only occupant, is retired.
 
-Every course page needs: hard facts block (dates, time, format, cap, price, deadline),
+Every course page needs: hard facts block (dates, time, format, cap, price, enrollment status),
 what it covers, who it is not for, proof, and a real signup with a payment path.
 
 ---
@@ -273,7 +271,7 @@ counter · second assessor · fonts · shared markup · interim homepage.
 
 **Still open. Use visible bracketed placeholders; do not invent any of these.**
 
-- ~~Enrollment deadline~~ — confirmed 9 August 2026: **Tuesday 8 September 2026**, four days before the cohort starts.
+- **Enrollment policy — superseded 5 October 2026:** there is no closing date. Enrollment remains open throughout a cohort, including for late learners.
 - Paystack account status: live or test mode; MoMo channels enabled (MTN, Telecel/Vodafone Cash,
   AirtelTigo); public key; callback URL.
 - Instructor photo, bio, and which vendor certifications to list on `/about`.
@@ -376,13 +374,13 @@ State 1 — Open for enrollment
   CTA: "Enroll — it's free"
 
 State 2 — Cohort in progress (CURRENT STATE)
-  Banner/tag: "Cohort in progress — enrollment closed"
+  Banner/tag: "Cohort in progress — registration remains open"
   Show: showcase invite above the fold with Luma link
   Show: full course page below (curriculum, outcomes, portfolio
         proof, what you'll build each week) so visitors understand
         what they'd be signing up for next time
   CTA: "Watch the showcase — Saturday 5 September, free"
-        secondary CTA: "Notify me when the next cohort opens"
+        secondary CTA: "Register interest for the next cohort"
         (simple email capture, no waitlist framing)
 
 State 3 — Between cohorts
@@ -390,7 +388,7 @@ State 3 — Between cohorts
   Show: showcase recap (testimonials, capstone screenshots) above
         the fold once available
   Show: full course page
-  CTA: "Notify me when enrollment opens"
+  CTA: "Register interest for the next cohort"
 
 ### Foundations course content (source of truth: docs/[teaching-guide])
 Pull the curriculum detail from the instructor guide, not from memory.
@@ -488,8 +486,7 @@ accessible by default (visible keyboard focus, sufficient contrast, semantic hea
 
 **Tier 2 — before the 5 September showcase.** `/foundations` (State 2) · `/pathway` · `/about`.
 
-**Tier 3 — after enrollment closes.** Full `/` · `/verify` · `/builder-pool` · `/workshops` ·
+**Tier 3 — after launch.** Full `/` · `/verify` · `/builder-pool` · `/workshops` ·
 `/privacy`.
 
-Driven by the commercial deadline: the BCAB founding cohort starts 12 September 2026 and the
-Foundations Cohort 1 showcase is 5 September 2026.
+Driven by the launch schedule: the BCAB founding cohort and the Foundations Cohort 1 showcase were the original delivery anchors. Enrollment now remains open throughout the cohort.

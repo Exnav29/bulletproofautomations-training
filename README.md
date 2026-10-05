@@ -28,8 +28,8 @@ product and is never blurred.
 **Training and certification are separate products.** Completing a cohort qualifies a learner to
 attempt the assessment; it does not award the credential. No page may imply otherwise.
 
-The immediate commercial job is enrolling the founding BCAB cohort: 25 seats, starts
-12 September 2026, enrollment closes 8 September 2026.
+The current BCAB cohort began 3 October 2026. Enrollment remains open throughout the cohort;
+there is no enrollment closing date.
 
 ## Architecture
 
