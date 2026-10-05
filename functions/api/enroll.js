@@ -25,8 +25,8 @@
  * THIS ENDPOINT MUST NEVER LOSE AN ENROLLMENT
  * ---------------------------------------------------------------------------
  *
- * The cohort caps at 25 and enrollment closes on 8 September 2026. Every
- * failure path here therefore ends with the enrollment recorded and the
+ * Enrollment stays open throughout the cohort, so every valid attempt must
+ * be preserved. Every failure path here therefore ends with the enrollment recorded and the
  * visitor told they are on the list, never with a dead button:
  *
  *   Paystack not configured   -> row written, "reserve" returned

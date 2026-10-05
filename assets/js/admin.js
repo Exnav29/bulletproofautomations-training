@@ -15,7 +15,6 @@ var CONFIGURED = SUPABASE_URL.length > 0 && SUPABASE_ANON_KEY.length > 0;
    from the data so an empty table still renders a meaningful board. */
 var SEAT_CAP = 25;
 var COHORTS = [{ id: "intermediate_2026_09", label: "Intermediate — current cohort" }];
-var ENROLLMENT_CLOSES = "2026-09-08";
 var COHORT_STARTS = "2026-10-03";
 
 /* The CHECK vocabularies, verified against the live table. Every control is
@@ -284,7 +283,6 @@ function renderBoard() {
   var expected = live.reduce(function (t, r) { return t + Number(r.amount_ghs || 0); }, 0);
   var collected = live.reduce(function (t, r) { return t + Number(r.amount_paid_ghs || 0); }, 0);
 
-  var toClose = daysUntil(ENROLLMENT_CLOSES);
   var toStart = COHORT_STARTS ? daysUntil(COHORT_STARTS) : null;
   var pct = function (n) { return Math.min(100, (n / SEAT_CAP) * 100); };
 
@@ -302,10 +300,10 @@ function renderBoard() {
       '<div class="gauge"><div class="gauge__fill" style="width:' + (expected ? (collected / expected) * 100 : 0) + '%"></div></div>' +
       '<p class="board__sub">of ' + ghs(expected) + " committed · " + ghs(expected - collected) + " outstanding</p>" +
     "</div>" +
-    '<div class="board__cell' + (toClose <= 7 ? " board__cell--urgent" : "") + '">' +
-      '<p class="board__k">Enrollment closes</p>' +
-      '<p class="board__v">' + (toClose > 0 ? toClose + "d" : "closed") + "</p>" +
-      '<p class="board__sub">Tuesday 8 September 2026</p>' +
+    '<div class="board__cell">' +
+      '<p class="board__k">Enrollment status</p>' +
+      '<p class="board__v">Open</p>' +
+      '<p class="board__sub">Late enrollments are accepted</p>' +
     "</div>" +
     '<div class="board__cell">' +
       '<p class="board__k">Cohort starts</p>' +
