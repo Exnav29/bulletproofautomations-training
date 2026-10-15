@@ -21,6 +21,11 @@ jobs:
         run: npm run build
       - name: Validate HTML
         run: npx --yes html-validate "dist/**/*.html"
+      - name: Check admin JavaScript and certificate archive
+        run: |
+          node --check assets/js/admin.js
+          node --check assets/js/admin-archives.js
+          node --test tests/credential-archive.test.js
 
   link-check:
     name: Link check
