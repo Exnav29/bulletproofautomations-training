@@ -190,3 +190,34 @@
 --                          is unguessable. Withholding a credential is
 --                          publish_consent, which drops the row from the
 --                          function's results so no path is ever surfaced.
+
+
+--
+-- 2026-10-15 archive extension — LIVE RLS, DOCUMENTATION ONLY:
+--
+--   credentials         PUBLIC storage bucket, PDF and PNG (15 MiB max).
+--   credential-masters  PRIVATE storage bucket, PDF only (15 MiB max).
+--   Admin /admin UI     assets/js/admin-archives.js, no service-role key.
+--
+--   storage.objects INSERT for authenticated:
+--     - JWT subject present and email johnathan@bulletproofautomations.com;
+--     - bucket limited to the two names above;
+--     - object must match a versioned immutable key:
+--         BPA-FND-2026-WHXRTT/20261015T231122-1a2b3c4d.pdf
+--     - credential ID folder must match an existing public.credentials row.
+--
+--   storage.objects SELECT for authenticated:
+--     - same administrator JWT restriction, limited to these two buckets.
+--   There is NO authenticated UPDATE or DELETE policy for these objects.
+--   Archive of a new version writes a different key; earlier masters persist.
+--
+-- Sequence:
+--   (1) Save versioned private master, (2) upload matching public PDF,
+--   (3) patch existing credentials.pdf_path to object key.
+-- The /api/verify function already builds the public PDF URL from pdf_path.
+-- Its RPCs and the enrollments / payment / verification lookup tables are NOT
+-- changed by this archive extension. No customer email is sent by the portal.
+--
+-- Upload a future cohort's files from /admin after issuing credentials.
+-- For batch backfill, PDF filename MUST be the exact credential_id + '.pdf'.
+-- See docs/credential-archive.md for operating and recovery procedures.
