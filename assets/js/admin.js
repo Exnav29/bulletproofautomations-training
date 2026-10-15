@@ -1123,6 +1123,17 @@ function renderCredentials() {
     });
     actions.appendChild(revoke);
 
+    // Additive archive control. Loading or using it never changes issuance,
+    // status, visibility, or any enrollment/payment feature.
+    var archiveButton = document.createElement("button");
+    archiveButton.type = "button";
+    archiveButton.className = "mini";
+    archiveButton.textContent = row.pdf_path ? "Manage PDF" : "Archive PDF";
+    archiveButton.addEventListener("click", function () {
+      if (typeof window.openCredentialArchive === "function") window.openCredentialArchive(row);
+    });
+    actions.appendChild(archiveButton);
+
     tr.appendChild(actions);
     body.appendChild(tr);
   });
