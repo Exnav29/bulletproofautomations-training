@@ -100,3 +100,64 @@ after update of matched on public.payment_events
 for each row
 when (new.matched is true)
 execute function public.mark_installment_paid_from_event();
+
+
+-- Automatically create the current Intermediate cohort's default installment
+-- ledger after Paystack applies the first real payment. Existing/custom plans
+-- are preserved because conflicts are never overwritten.
+create or replace function public.seed_intermediate_payment_plan_from_enrollment()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  paid_on timestamptz := coalesce(new.paystack_payment_date, now());
+  initial_due date := coalesce(new.paystack_payment_date::date, current_date);
+begin
+  if new.payment_plan is not true
+     or new.payment_status <> 'partially_paid'
+     or coalesce(new.amount_paid_ghs, 0) <= 0
+     or new.cohort <> 'intermediate_2026_09' then
+    return new;
+  end if;
+
+  if new.chosen_option = 'cohort_only'
+     and new.amount_ghs = 750
+     and new.first_instalment_ghs = 400 then
+    insert into public.payment_plan_installments
+      (enrollment_id, installment_number, amount_ghs, due_rule, due_date, send_on,
+       status, paystack_reference, paid_at)
+    values
+      (new.id, 1, 400, 'Initial deposit', initial_due, null,
+       'paid', new.paystack_reference, paid_on),
+      (new.id, 2, 350, 'Before Week 3', date '2026-10-16', date '2026-10-12',
+       'scheduled', null, null)
+    on conflict (enrollment_id, installment_number) do nothing;
+
+  elsif new.chosen_option = 'cohort_and_assessment'
+        and new.amount_ghs = 1050
+        and new.first_instalment_ghs = 400 then
+    insert into public.payment_plan_installments
+      (enrollment_id, installment_number, amount_ghs, due_rule, due_date, send_on,
+       status, paystack_reference, paid_at)
+    values
+      (new.id, 1, 400, 'Initial deposit', initial_due, null,
+       'paid', new.paystack_reference, paid_on),
+      (new.id, 2, 325, 'Before Week 3', date '2026-10-16', date '2026-10-12',
+       'scheduled', null, null),
+      (new.id, 3, 325, 'Before Week 5', date '2026-10-30', date '2026-10-26',
+       'scheduled', null, null)
+    on conflict (enrollment_id, installment_number) do nothing;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists enrollments_seed_intermediate_payment_plan on public.enrollments;
+create trigger enrollments_seed_intermediate_payment_plan
+after insert or update of amount_paid_ghs, payment_status, paystack_reference,
+  paystack_payment_date, payment_plan
+on public.enrollments
+for each row
+execute function public.seed_intermediate_payment_plan_from_enrollment();
