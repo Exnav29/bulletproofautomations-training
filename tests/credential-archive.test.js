@@ -85,8 +85,8 @@ function waitForBatch(h) {
 test("UI is additive and existing admin script loads before archive script", () => {
   assert.ok(html.includes('id="archive-batch-files"'));
   assert.ok(html.includes('id="credential-archive-dialog"'));
-  assert.ok(html.indexOf('src="/assets/js/admin.js"') <
-            html.indexOf('src="/assets/js/admin-archives.js"'));
+  assert.ok(html.indexOf('src="/assets/js/admin.js') <
+            html.indexOf('src="/assets/js/admin-archives.js'));
   assert.ok(html.includes('id="cred-rows"'));
   assert.ok(html.includes('id="issue-form"'));
   assert.ok(html.includes('id="enq-rows"'));
@@ -126,4 +126,17 @@ test("invalid PDF or filename never reaches storage", async () => {
   assert.equal(h.calls.length, 0);
   assert.equal(h.row.pdf_path, null);
   assert.match(h.elements["archive-batch-status"].textContent, /Failed/);
+});
+
+
+test("certificate issue dates display 29 August across browser timezones", () => {
+  const { spawnSync } = require("node:child_process");
+  const source = fs.readFileSync("assets/js/admin.js", "utf8");
+  const start = source.indexOf("function credentialDate(v)");
+  const end = source.indexOf("\n}", start) + 2;
+  const script = source.slice(start, end) + ';console.log(credentialDate("2026-08-29"));';
+  for (const TZ of ["America/Los_Angeles", "Pacific/Honolulu", "Africa/Accra", "Pacific/Kiritimati"]) {
+    const run = spawnSync(process.execPath, ["-e", script], { env: { ...process.env, TZ }, encoding: "utf8" });
+    assert.equal(run.status, 0); assert.equal(run.stdout.trim(), "29 Aug");
+  }
 });

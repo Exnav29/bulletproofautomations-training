@@ -75,3 +75,9 @@
   Cache-Control: public, max-age=31536000, immutable
 /assets/images/*
   Cache-Control: public, max-age=2592000
+
+# Admin archive controls and implementation must change together on deployment.
+/assets/js/admin-archives.js
+  Cache-Control: no-cache, must-revalidate
+/assets/js/admin-previews.js
+  Cache-Control: no-cache, must-revalidate
