@@ -459,31 +459,24 @@
       <h2 class="panel__title" id="archive-batch-title">Archive issued PDF certificates</h2>
       <p class="sec-gap__lede">Select one or more completed certificates. Each filename must be its exact
         registered ID, for example <span class="mono">BPA-FND-2026-WHXRTT.pdf</span>.
-        The admin saves a private master first, publishes a copy, then links the existing
-        credential record. No credential is issued and no email is sent by this action.</p>
+        The server saves the PDF and automatically creates its preview before linking both
+        files to the existing credential record. No credential is issued and no email is sent by this action.</p>
       <div class="archive-tools">
         <label>Certificate PDFs
           <input id="archive-batch-files" type="file" accept=".pdf,application/pdf" multiple>
         </label>
-        <button id="archive-batch-btn" type="button" class="mini">Archive selected PDFs</button>
+        <button id="archive-batch-btn" type="button" class="mini">Upload &amp; archive certificates</button>
       </div>
       <p class="msg" id="archive-batch-status" role="status" aria-live="polite" hidden></p>
     </section>
 
 
     <section class="panel" aria-labelledby="preview-batch-title">
-      <h2 class="panel__title" id="preview-batch-title">Certificate preview images</h2>
-      <p class="sec-gap__lede">The PDFs are already archived. Select their PNG previews to show
-        a thumbnail on each holder&rsquo;s public verification page. Each filename must match the
-        registered certificate ID, for example <span class="mono">BPA-FND-2026-WHXRTT.png</span>.
-        This does not replace PDFs or send messages.</p>
-      <div class="archive-tools">
-        <label>Preview PNG files
-          <input id="preview-upload-files" type="file" accept=".png,image/png" multiple>
-        </label>
-        <button class="mini" type="button" id="preview-upload-btn">Upload selected previews</button>
-      </div>
-      <p class="msg" id="preview-upload-result" role="status" aria-live="polite" hidden></p>
+      <h2 class="panel__title" id="preview-batch-title">Repair certificate previews</h2>
+      <p class="sec-gap__lede">Generate missing previews automatically from archived PDFs.
+        No additional files are needed. Existing PDFs and private masters are preserved.</p>
+      <button class="mini" type="button" id="preview-repair-btn">Repair missing previews</button>
+      <p class="msg" id="preview-repair-result" role="status" aria-live="polite" hidden></p>
     </section>
 
     <div class="filters">
@@ -539,8 +532,12 @@
       <label for="archive-file">PDF for this credential</label>
       <div class="archive-tools">
         <input id="archive-file" type="file" accept=".pdf,application/pdf">
-        <button id="archive-upload-btn" class="mini" type="button">Upload &amp; link PDF</button>
+        <button id="archive-upload-btn" class="mini" type="button">Upload &amp; Archive Certificate</button>
       </div>
+      <div id="archive-current-links" class="archive-actions"></div>
+      <button id="archive-regenerate-btn" type="button" class="mini">Regenerate Preview</button>
+      <h3>Processing jobs</h3>
+      <div id="archive-jobs" aria-live="polite"></div>
       <p class="msg" id="archive-status" role="status" aria-live="polite" hidden></p>
       <h3 class="panel__title" style="margin-top:var(--s5)">Earlier master copies</h3>
       <div id="archive-versions" aria-live="polite"></div>

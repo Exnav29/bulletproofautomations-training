@@ -27,7 +27,18 @@ jobs:
           node --check assets/js/admin-archives.js
           node --check assets/js/admin-previews.js
           node --check assets/js/shell.js
-          node --test tests/credential-archive.test.js tests/credential-previews.test.js
+          node --test tests/*.test.js
+
+  certificate-renderer:
+    name: Server PDF renderer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.5.4
+      - name: Render real PDFs and reject invalid inputs
+        run: deno test --node-modules-dir=none --allow-net --allow-read --allow-env tests/certificate-renderer.test.ts
 
   link-check:
     name: Link check

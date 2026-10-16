@@ -2,14 +2,13 @@
  * Uses the signed-in administrator's Supabase JWT and storage.objects RLS.
  * Never stores a service-role key in the browser.
  *
- * Archive order: PRIVATE master -> PUBLIC copy -> credentials.pdf_path.
+ * Archive order: PRIVATE master -> durable backend job -> verified PDF + PNG paths.
  * Object keys are immutable and versioned. An upload error cannot create a
  * broken public link, and older master copies remain available to reissue.
  */
 (function () {
   "use strict";
 
-  var PUBLIC_BUCKET = "credentials";
   var MASTER_BUCKET = "credential-masters";
   var MAX_BYTES = 15 * 1024 * 1024;
   var archiveRow = null;
@@ -86,19 +85,54 @@
     setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
   }
 
-  function linkRecord(row, key) {
-    return authFetch("/rest/v1/credentials?id=eq." + encodeURIComponent(row.id), {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json", Prefer: "return=representation" },
-      body: JSON.stringify({ pdf_path: key, preview_path: null })
-    }).then(function (response) { return failResponse(response, "Could not link the archived PDF"); })
-      .then(function (response) { return response.json(); })
-      .then(function (items) {
-        if (!Array.isArray(items) || items.length !== 1 || items[0].pdf_path !== key) {
-          throw new Error("No credential record was updated; the archive was not linked.");
-        }
+  function processor(path, options) {
+    var current = session();
+    if (!current) return Promise.reject(new Error("Not signed in"));
+    var token = current.expires_at && Date.now() > current.expires_at
+      ? refresh() : Promise.resolve(current);
+    return token.then(function (fresh) {
+      return fetch(SUPABASE_URL + "/functions/v1/certificate-processor/" + path, {
+        method: options ? "POST" : "GET",
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: "Bearer " + fresh.access_token,
+          "Content-Type": "application/json" },
+        body: options ? JSON.stringify(options) : undefined
+      });
+    }).then(function (r) { return failResponse(r, "Certificate processing request failed"); })
+      .then(function (r) { return r.json(); });
+  }
+
+  function pause() { return new Promise(function (resolve) { setTimeout(resolve, 1500); }); }
+  function waitJob(job, onProgress) {
+    var started = Date.now();
+    function check(current) {
+      onProgress(current.stage || "Processing certificate");
+      if (current.state === "completed") return current;
+      if (current.state === "failed" || current.state === "attention") {
+        throw new Error((current.error || "Processing failed") +
+          " Private master retained. Open Manage PDF to retry without uploading again.");
+      }
+      if (Date.now() - started > 180000) {
+        throw new Error("Processing continues on the server. Open Manage PDF to check the saved job; do not upload again.");
+      }
+      return pause().then(function () { return processor("jobs?id=" + current.id); })
+        .then(function (rows) { if (!rows[0]) throw new Error("Job status unavailable"); return check(rows[0]); });
+    }
+    return check(job);
+  }
+  function processVersion(row, key, mode, onProgress) {
+    return processor("jobs", { credential_id: row.credential_id, master_path: key, mode: mode,
+      expected_pdf_path: row.pdf_path || null, expected_updated_at: row.updated_at })
+      .then(function (job) { return waitJob(job, onProgress); })
+      .then(function (job) {
+        row.pdf_path = job.result.pdf_path;
+        row.preview_path = job.result.preview_path;
+        if (job.result.record_updated_at) row.updated_at = job.result.record_updated_at;
+        if (archiveRow && archiveRow.id === row.id) updateCurrentLinks(row);
+        return job;
       });
   }
+  window.processCredentialArchive = processVersion;
+  window.certificateProcessor = processor;
 
   function validFile(file, id) {
     if (!file || !/\.pdf$/i.test(file.name) || (file.type && file.type !== "application/pdf")) {
@@ -116,23 +150,16 @@
     });
   }
 
-  function archive(file, row) {
+  function archive(file, row, onProgress) {
     var key = freshKey(row.credential_id);
+    var progress = onProgress || function (text) { report(status, text, false); };
     return validFile(file, row.credential_id).then(function () {
-      // A master is saved before anything becomes accessible publicly.
+      progress("Uploading PDF");
       return upload(MASTER_BUCKET, key, file);
     }).then(function () {
-      return upload(PUBLIC_BUCKET, key, file);
-    }).then(function () {
-      // This is the ONLY operation that affects the public verification page.
-      return linkRecord(row, key);
-    }).then(function () {
-      row.pdf_path = key;
-      row.preview_path = null; // Never display a thumbnail from an older PDF revision.
-      return key;
+      return processVersion(row, key, "publish", progress);
     }).catch(function (error) {
-      throw new Error(error.message + " If an upload succeeded, its master remains in Storage; " +
-        "check Manage PDF > Earlier versions before retrying.");
+      throw new Error(error.message + " If the PDF upload succeeded, use Earlier versions to process its retained master.");
     });
   }
 
@@ -144,6 +171,8 @@
   }
 
   function listVersions() {
+    var fresh = credState.rows.filter(function (r) { return r.id === archiveRow.id; })[0];
+    if (fresh) archiveRow = fresh;
     versions.textContent = "Loading archived versions…";
     var keyPrefix = archiveRow.credential_id + "/";
     return authFetch("/storage/v1/object/list/" + MASTER_BUCKET, {
@@ -184,25 +213,14 @@
           if (archiveRow.pdf_path !== key) {
             var restore = document.createElement("button");
             restore.type = "button"; restore.className = "mini";
-            restore.textContent = "Make current";
+            restore.textContent = "Process & make current";
             restore.addEventListener("click", function () {
               if (busy || !window.confirm("Use this archived version as the published certificate for " +
                 archiveRow.holder_name + "? The previous master will be retained.")) return;
               setBusy(true);
-              pdfDownload(MASTER_BUCKET, key).then(function (blob) {
-                // Repair a missing public copy; do not overwrite an existing one.
-                return storage(PUBLIC_BUCKET, key, { method: "HEAD" }).then(function (r) {
-                  if (r.ok) return;
-                  if (r.status !== 404 && r.status !== 400) {
-                    return failResponse(r, "Could not check public archive");
-                  }
-                  return upload(PUBLIC_BUCKET, key, blob);
-                });
-              }).then(function () { return linkRecord(archiveRow, key); })
+              processVersion(archiveRow, key, "restore", function (text) { report(status, text, false); })
                 .then(function () {
-                  archiveRow.pdf_path = key;
-                  archiveRow.preview_path = null; // Clear stale preview on PDF restore.
-                  report(status, "This archived version is now the current PDF. Re-upload its PNG preview if needed.", false);
+                  report(status, "Complete. This version and its matching preview are now published.", false);
                   return loadCredentials();
                 }).then(listVersions)
                 .catch(function (err) { report(status, err.message, true); })
@@ -214,6 +232,49 @@
         });
       }).catch(function (err) { versions.textContent = err.message; });
   }
+
+  function updateCurrentLinks(row) {
+    var links = document.getElementById("archive-current-links");
+    links.textContent = "";
+    [["View verification", "/verify/" + row.credential_id],
+      ["Download PDF", row.pdf_path ? SUPABASE_URL + "/storage/v1/object/public/credentials/" + row.pdf_path : null],
+      ["View certificate preview", row.preview_path ? SUPABASE_URL + "/storage/v1/object/public/credentials/" + row.preview_path : null]]
+      .forEach(function (pair) { if (!pair[1]) return; var a = document.createElement("a");
+        a.textContent = pair[0]; a.href = pair[1]; a.target = "_blank"; a.rel = "noopener"; a.className = "mini"; links.appendChild(a); });
+  }
+
+  function loadJobs() {
+    var box = document.getElementById("archive-jobs");
+    box.textContent = "Loading processing jobs…";
+    processor("jobs?credential=" + archiveRow.credential_id).then(function (jobs) {
+      box.textContent = "";
+      jobs.slice(0, 10).forEach(function (job) {
+        var item = document.createElement("div"); item.className = "archive-version";
+        var text = document.createElement("span");
+        text.textContent = job.state + " — " + job.stage + (job.error ? ": " + job.error : ""); item.appendChild(text);
+        if (["failed", "queued", "running"].indexOf(job.state) !== -1) {
+          var retry = document.createElement("button"); retry.type = "button"; retry.className = "mini";
+          retry.textContent = job.state === "failed" ? "Retry saved PDF" : "Check progress";
+          retry.addEventListener("click", function () {
+            if (busy) return; setBusy(true);
+            var task = job.state === "failed" ? processor("retry", { id: job.id }) : Promise.resolve(job);
+            task.then(function (j) { return waitJob(j, function (t) { report(status, t, false); }); })
+              .then(loadCredentials).then(loadJobs).then(listVersions)
+              .catch(function (e) { report(status, e.message, true); }).then(function () { setBusy(false); });
+          }); item.appendChild(retry);
+        }
+        box.appendChild(item);
+      });
+      if (!jobs.length) box.textContent = "No processing jobs yet.";
+    }).catch(function (e) { box.textContent = e.message; });
+  }
+  document.getElementById("archive-regenerate-btn").addEventListener("click", function () {
+    if (busy || !archiveRow || !archiveRow.pdf_path) return;
+    setBusy(true);
+    processVersion(archiveRow, archiveRow.pdf_path, "repair", function (t) { report(status, t, false); })
+      .then(loadCredentials).then(loadJobs)
+      .catch(function (e) { report(status, e.message, true); }).then(function () { setBusy(false); });
+  });
 
   window.openCredentialArchive = function (row) {
     if (busy) return;
@@ -227,6 +288,8 @@
     dialog.hidden = false;
     document.getElementById("archive-upload-btn").focus();
     listVersions();
+    loadJobs();
+    updateCurrentLinks(row);
   };
 
   document.getElementById("archive-close-btn").addEventListener("click", function () {
@@ -239,14 +302,14 @@
     if (!file) { report(status, "Choose the certificate PDF first.", true); return; }
     if (archiveRow.pdf_path && !window.confirm("This credential already has a published PDF. " +
       "Archive a new version and make it current? The old master is retained.")) return;
-    report(status, "Saving private master, public copy, and record…", false);
+    report(status, "Uploading PDF", false);
     setBusy(true);
-    archive(file, archiveRow).then(function (key) {
-      report(status, "Archived and linked " + key + ". Public verification can now show the PDF.", false);
-      document.getElementById("archive-current").textContent = "Public PDF linked: " + key;
+    archive(file, archiveRow).then(function () {
+      report(status, "Complete. PDF and generated preview are archived and verified.", false);
+      document.getElementById("archive-current").textContent = "Public PDF linked: " + archiveRow.pdf_path;
       fileInput.value = "";
       return loadCredentials();
-    }).then(listVersions)
+    }).then(listVersions).then(loadJobs)
       .catch(function (err) { report(status, err.message, true); })
       .then(function () { setBusy(false); });
   });
@@ -256,18 +319,19 @@
     var files = Array.prototype.slice.call(batchInput.files);
     if (!files.length) { report(batchStatus, "Choose the PDFs to archive.", true); return; }
     var jobs = [];
+    var preflightErrors = [];
     var seen = {};
     for (var i = 0; i < files.length; i++) {
       var match = files[i].name.match(/^(BPA-(?:FND|BCAB)-\d{4}-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{6})\.pdf$/i);
       if (!match) {
-        report(batchStatus, "Rename each file to its exact certificate ID, e.g. BPA-FND-2026-WHXRTT.pdf.", true);
-        return;
+        preflightErrors.push(files[i].name + ": Requires attention — filename must be the certificate ID.");
+        continue;
       }
       var id = match[1].toUpperCase();
       var row = credState.rows.filter(function (r) { return r.credential_id === id; })[0];
       if (!row || seen[id]) {
-        report(batchStatus, "Duplicate or unregistered ID in selected files: " + id, true);
-        return;
+        preflightErrors.push(id + ": Requires attention — duplicate or unregistered ID.");
+        continue;
       }
       seen[id] = true;
       jobs.push({ file: files[i], row: row });
@@ -277,14 +341,14 @@
       "have public PDFs. Archive new versions and make them current? Earlier masters are retained.")) return;
 
     setBusy(true);
-    var successes = [], errors = [];
+    var successes = [], errors = preflightErrors;
     var chain = Promise.resolve();
     jobs.forEach(function (job, index) {
       chain = chain.then(function () {
         report(batchStatus, "Archiving " + (index + 1) + " of " + jobs.length +
           ": " + job.row.holder_name + "…", false);
-        return archive(job.file, job.row).then(function () {
-          successes.push(job.row.credential_id);
+        return archive(job.file, job.row, function (text) { report(batchStatus, job.row.holder_name + ": " + text, false); }).then(function (result) {
+          successes.push(job.row.credential_id + ": " + (result.result.already_processed ? "Already processed" : "Completed"));
         }).catch(function (err) {
           errors.push(job.row.credential_id + ": " + err.message);
         });
@@ -293,8 +357,8 @@
     chain.then(function () {
       return loadCredentials();
     }).then(function () {
-      report(batchStatus, "Archived " + successes.length + " of " + jobs.length +
-        ". " + (errors.length ? "Failures: " + errors.join(" | ") : "All public PDFs linked successfully."),
+      report(batchStatus, "Archived " + successes.length + " of " + files.length +
+        ". " + (errors.length ? "Failed / requires attention: " + errors.join(" | ") : "All PDFs and generated previews linked successfully. " + successes.join(" | ")),
         !!errors.length);
       if (!errors.length) batchInput.value = "";
     }).catch(function (err) {
