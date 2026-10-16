@@ -26,9 +26,19 @@
   }
 
   function isoDate(value) { return value ? String(value).slice(0, 10) : ""; }
+  function auditTime(value) {
+    if (!value) return "";
+    var date = new Date(value);
+    return isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+  }
 
   function planStatus(row) {
-    var labels = { scheduled: "Scheduled", sent: "Sent", paid: "Paid", cancelled: "Cancelled" };
+    var labels = {
+      scheduled: "Scheduled",
+      sent: "Payment requested",
+      paid: "Paid",
+      cancelled: "Cancelled"
+    };
     return labels[row.status] || row.status;
   }
   function loadInstallments() {
@@ -75,6 +85,12 @@
     list.innerHTML = plan.map(function (item) {
       var when = item.due_rule || (item.due_date ? "Due " + isoDate(item.due_date) : "No due date set");
       var auto = item.send_on ? "Auto-send " + isoDate(item.send_on) : "Manual send";
+      var audit = [];
+      if (item.sent_at) audit.push("Requested " + auditTime(item.sent_at));
+      if (item.last_notified_at && item.last_notified_at !== item.sent_at) {
+        audit.push("Last sent " + auditTime(item.last_notified_at));
+      }
+      if (item.paid_at) audit.push("Paid " + auditTime(item.paid_at));
       var actions = "";
       if (item.status === "scheduled" || item.status === "sent") {
         actions = '<div class="plan-row__actions">' +
@@ -86,7 +102,8 @@
       return '<div class="plan-row">' +
         '<div class="plan-row__top"><strong>Payment ' + esc(item.installment_number) + '</strong>' +
           '<span class="plan-row__amount">' + ghs(item.amount_ghs) + '</span></div>' +
-        '<div class="plan-row__meta">' + esc(when) + ' · ' + esc(auto) + ' · ' + esc(planStatus(item)) + '</div>' +
+        '<div class="plan-row__meta">' + esc(when) + ' · ' + esc(auto) + ' · ' + esc(planStatus(item)) +
+          (audit.length ? ' · ' + esc(audit.join(" · ")) : '') + '</div>' +
         actions + '</div>';
     }).join("");
   }
