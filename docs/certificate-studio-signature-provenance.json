@@ -1,0 +1,34 @@
+{
+  "template": "001",
+  "version": 1,
+  "source_pdfs": [
+    "BPA-FND-2026-3BB8FN.pdf",
+    "BPA-FND-2026-ASBGN1.pdf",
+    "BPA-FND-2026-C3V8PF.pdf",
+    "BPA-FND-2026-D7S1ZC.pdf",
+    "BPA-FND-2026-DYYXK5.pdf",
+    "BPA-FND-2026-H558H4.pdf",
+    "BPA-FND-2026-K3J054.pdf",
+    "BPA-FND-2026-TKM9XC.pdf",
+    "BPA-FND-2026-WHXRTT.pdf"
+  ],
+  "signature_sha256": "f4c41e33e2c40bd02d0eb7610616d962d710cdf333b492dccedbbf3f118a4677",
+  "signature_pixels": [
+    358,
+    78
+  ],
+  "source_rect": [
+    155.22219848632812,
+    463.223876953125,
+    348.07403564453125,
+    505.24188232421875
+  ],
+  "source_generator": "Not present in recovered packages; exact embedded artwork extracted from all nine approved issued PDFs.",
+  "assets": {
+    "serif.ttf": "aac3f559445d23f0f567a243f91f3f6ad6cb4b5cafa1521a3479fffe0637f0bd",
+    "provenance.json": "0662df4aade1f94d6772d54631984121fcc9ee75631e6d460daadb7eedf99cd3",
+    "template-001-v1.pdf": "16a2c4cc0e70bd87a869cffbbfe7c17de8479e2ef8c43dcd3ced5200f42f8eac",
+    "signature.png": "f4c41e33e2c40bd02d0eb7610616d962d710cdf333b492dccedbbf3f118a4677",
+    "body.ttf": "57f73e11f51999432bf7ab22ce55b6f945d5eca1bf824404cfa9ec2e3718c84e"
+  }
+}

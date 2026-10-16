@@ -243,6 +243,68 @@
   .archive-version span { flex:1; min-width:12rem; }
   .archive-actions { display:flex; flex-wrap:wrap; align-items:center; gap:var(--s3); margin-top:var(--s4); }
 
+
+/* Certificate Issuance Studio */
+#certificate-studio {
+  margin: 2rem 0;
+  padding: 1.5rem;
+  background: var(--field);
+  border: 1px solid var(--rule-strong);
+  border-top: 4px solid #b99460;
+  border-radius: 8px;
+}
+#certificate-studio[hidden] {
+  display: none;
+}
+.studio-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1.5rem 0;
+}
+.studio-steps [aria-current] {
+  background: #102a36;
+  color: #fff;
+}
+.studio-grid,
+.studio-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 1rem;
+}
+.studio-card {
+  padding: 1rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  margin: 1rem 0;
+}
+.studio-card .mini,
+#studio-body > .mini {
+  margin: 0.35rem;
+}
+.studio-card pre,
+.studio-report {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.85rem;
+}
+.studio-proof {
+  width: 100%;
+  height: auto;
+  border: 1px solid #ddd;
+}
+.studio-context {
+  color: #14686d;
+  font-weight: 600;
+}
+#studio-body textarea {
+  min-height: 8rem;
+}
+#certificate-studio[aria-busy="true"] button {
+  opacity: 0.6;
+  cursor: progress;
+}
+
 </style>
 </head>
 <body>
@@ -281,6 +343,13 @@
 
   <p class="msg msg--bad" id="load-error" role="alert" hidden></p>
 
+  <button class="mini" type="button" id="studio-open">Create &amp; Send Certificates</button>
+  <section id="certificate-studio" aria-labelledby="studio-title" hidden>
+    <h2 id="studio-title">Certificate Issuance Studio</h2>
+    <button class="mini" type="button" id="studio-close">Close Studio</button>
+    <p id="studio-message" class="msg" role="status" hidden></p>
+    <div id="studio-body"></div>
+  </section>
   <!-- Headline figures -->
   <div class="board" id="board"></div>
 
@@ -668,5 +737,6 @@
 <script src="/assets/js/admin-archives.js?v=20261016-auto2" defer></script>
 <script src="/assets/js/admin-previews.js?v=20261016-auto1" defer></script>
 <script src="/assets/js/admin-payments.js" defer></script>
+<script src="/assets/js/admin-studio.js?v=20261016-1" defer></script>
 </body>
 </html>
