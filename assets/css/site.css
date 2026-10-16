@@ -4284,6 +4284,11 @@ a.rail__link:hover .rail__name {
   border: 1px solid var(--rule);
   border-radius: var(--r-sm);
 }
+/* The author-level display:block must not override the HTML hidden attribute.
+   Without this, the transparent placeholder reserves a blank preview box. */
+.cert__img[hidden] { display: none; }
+.cert__pending { margin-bottom: var(--s3); color: var(--muted); font-size: 0.875rem; }
+
 
 .attests {
   margin-top: var(--s5);
