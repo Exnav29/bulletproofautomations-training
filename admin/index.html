@@ -470,6 +470,22 @@
       <p class="msg" id="archive-batch-status" role="status" aria-live="polite" hidden></p>
     </section>
 
+
+    <section class="panel" aria-labelledby="preview-batch-title">
+      <h2 class="panel__title" id="preview-batch-title">Certificate preview images</h2>
+      <p class="sec-gap__lede">The PDFs are already archived. Select their PNG previews to show
+        a thumbnail on each holder&rsquo;s public verification page. Each filename must match the
+        registered certificate ID, for example <span class="mono">BPA-FND-2026-WHXRTT.png</span>.
+        This does not replace PDFs or send messages.</p>
+      <div class="archive-tools">
+        <label>Preview PNG files
+          <input id="preview-upload-files" type="file" accept=".png,image/png" multiple>
+        </label>
+        <button class="mini" type="button" id="preview-upload-btn">Upload selected previews</button>
+      </div>
+      <p class="msg" id="preview-upload-result" role="status" aria-live="polite" hidden></p>
+    </section>
+
     <div class="filters">
       <label class="vh" for="cq">Search holder or credential ID</label>
       <input type="search" id="cq" placeholder="Search holder name or credential ID">
@@ -653,6 +669,7 @@
 </div>
 <script src="/assets/js/admin.js" defer></script>
 <script src="/assets/js/admin-archives.js" defer></script>
+<script src="/assets/js/admin-previews.js" defer></script>
 <script src="/assets/js/admin-payments.js" defer></script>
 </body>
 </html>

@@ -90,7 +90,7 @@
     return authFetch("/rest/v1/credentials?id=eq." + encodeURIComponent(row.id), {
       method: "PATCH",
       headers: { "Content-Type": "application/json", Prefer: "return=representation" },
-      body: JSON.stringify({ pdf_path: key })
+      body: JSON.stringify({ pdf_path: key, preview_path: null })
     }).then(function (response) { return failResponse(response, "Could not link the archived PDF"); })
       .then(function (response) { return response.json(); })
       .then(function (items) {
@@ -128,6 +128,7 @@
       return linkRecord(row, key);
     }).then(function () {
       row.pdf_path = key;
+      row.preview_path = null; // Never display a thumbnail from an older PDF revision.
       return key;
     }).catch(function (error) {
       throw new Error(error.message + " If an upload succeeded, its master remains in Storage; " +
@@ -200,7 +201,8 @@
               }).then(function () { return linkRecord(archiveRow, key); })
                 .then(function () {
                   archiveRow.pdf_path = key;
-                  report(status, "This archived version is now the current PDF.", false);
+                  archiveRow.preview_path = null; // Clear stale preview on PDF restore.
+                  report(status, "This archived version is now the current PDF. Re-upload its PNG preview if needed.", false);
                   return loadCredentials();
                 }).then(listVersions)
                 .catch(function (err) { report(status, err.message, true); })
