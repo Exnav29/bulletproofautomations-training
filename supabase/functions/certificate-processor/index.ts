@@ -14,8 +14,9 @@ async function rpc(name: string, body: unknown) {
   const res = await fetch(PROJECT + '/rest/v1/rpc/' + name, {method:'POST',
     headers:{apikey:KEY!,Authorization:'Bearer '+KEY,'Content-Type':'application/json'},
     body:JSON.stringify(body),signal:AbortSignal.timeout(20000)});
-  const data = await res.json();
-  if (!res.ok) throw Error(data.message || 'Database processing request failed.');
+  const raw = await res.text();
+  const data = raw ? JSON.parse(raw) : null;
+  if (!res.ok) throw Error(data?.message || 'Database processing request failed.');
   return data;
 }
 async function admin(req: Request) {

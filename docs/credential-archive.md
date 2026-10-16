@@ -63,7 +63,7 @@ No certificate email is sent by any archive/repair action.
    never copied into repository, browser or new Cloudflare settings.
 4. Test anonymous denial, admin health, one real archive repair and object hashes.
 5. Schedule recovery after backend availability:
-   `select cron.schedule('certificate-processor-recovery','* * * * *','select private.dispatch_certificate_jobs()');`
+   `select cron.schedule('certificate-processor-recovery','* * * * *','select private.recover_certificate_jobs(); select private.dispatch_certificate_jobs()');`
    Check `cron.job` first; do not create duplicate schedules.
 6. Merge tested PR to main (Cloudflare Pages deploys automatically). Verify built
    assets and actual admin/public behavior before retiring manual-upload policies.

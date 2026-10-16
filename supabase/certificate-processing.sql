@@ -24,22 +24,25 @@ returns jsonb language sql security definer set search_path='' as $$
  and (p_credential is null or credential_id=p_credential) order by created_at desc limit 100) j;
 $$;
 
-create or replace function private.dispatch_certificate_jobs() returns void
+create or replace function private.recover_certificate_jobs() returns void
 language plpgsql security definer set search_path='' as $$
-declare j private.certificate_jobs;
 begin
  perform pg_advisory_xact_lock(1584292026);
  update private.certificate_jobs set state=case when attempts>=3 then 'failed' else 'queued' end,
   stage=case when attempts>=3 then 'Failed' else 'Retrying interrupted conversion' end,
   error='Worker time limit or interruption. Private master retained; safe to retry.',lease=null,lease_until=null,updated_at=now()
  where state='running' and lease_until<now();
- if exists(select 1 from private.certificate_jobs where state='running') then return; end if;
- select * into j from private.certificate_jobs where state='queued' order by created_at limit 1;
- if not found then return; end if;
- perform net.http_post(url:='https://ikkldbhgjleelviwttir.supabase.co/functions/v1/certificate-processor/run',
-  headers:='{"Content-Type":"application/json"}'::jsonb,
-  body:=jsonb_build_object('id',j.id,'token',j.run_token),timeout_milliseconds:=120000);
 end; $$;
+
+create or replace function private.dispatch_certificate_jobs() returns void
+language sql security definer set search_path='' as $$
+ select net.http_post(url:='https://ikkldbhgjleelviwttir.supabase.co/functions/v1/certificate-processor/run',
+  headers:='{"Content-Type":"application/json"}'::jsonb,
+  body:=jsonb_build_object('id',id,'token',run_token),timeout_milliseconds:=120000)
+ from private.certificate_jobs where state='queued'
+ and not exists(select 1 from private.certificate_jobs where state='running')
+ order by created_at limit 1;
+$$;
 
 create or replace function public.certificate_job_start(p_request jsonb) returns jsonb
 language plpgsql security definer set search_path='' as $$
@@ -147,7 +150,7 @@ begin
  return public.certificate_job_status(p_id,null)->0;
 end; $$;
 
-revoke all on function private.dispatch_certificate_jobs() from public,anon,authenticated;
+revoke all on function private.dispatch_certificate_jobs(),private.recover_certificate_jobs() from public,anon,authenticated;
 revoke all on function public.certificate_job_status(uuid,text),public.certificate_job_start(jsonb),
  public.certificate_job_claim(uuid,text),public.certificate_job_stage(uuid,uuid,text),
  public.certificate_job_complete(uuid,uuid,jsonb),public.certificate_job_fail(uuid,uuid,text),public.certificate_job_retry(uuid)
@@ -156,5 +159,5 @@ grant execute on function public.certificate_job_status(uuid,text),public.certif
  public.certificate_job_claim(uuid,text),public.certificate_job_stage(uuid,uuid,text),
  public.certificate_job_complete(uuid,uuid,jsonb),public.certificate_job_fail(uuid,uuid,text),public.certificate_job_retry(uuid) to service_role;
 -- Schedule only after Edge deployment succeeds. Idempotent; one dispatcher.
--- select cron.schedule('certificate-processor-recovery','* * * * *','select private.dispatch_certificate_jobs()');
+-- select cron.schedule('certificate-processor-recovery','* * * * *','select private.recover_certificate_jobs(); select private.dispatch_certificate_jobs()');
 -- Retire manual PNG INSERT and public-PDF browser INSERT only after rollout.
