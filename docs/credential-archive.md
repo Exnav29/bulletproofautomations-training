@@ -1,82 +1,96 @@
-# Credential PDF archive — operator runbook
+# Certificate archive and automatic previews
 
-This is an additive workflow inside the existing /admin dashboard. It does NOT issue credentials, change certificate IDs, send emails, or affect enrollment, Paystack or verification systems.
+The site remains on Cloudflare Pages. Rendering runs in Supabase Edge Functions
+on project `ikkldbhgjleelviwttir`. Product Studio/VPS is not involved.
 
-## Production resources
+## Administrator workflow
 
-- Supabase organization: Bulletproof Automations QA
-- Project: ikkldbhgjleelviwttir
-- Credential source of truth: public.credentials
-- Public Storage bucket: credentials
-- Private master Storage bucket: credential-masters
-- Approved admin email: johnathan@bulletproofautomations.com
+1. Issue the credential using the existing form (unchanged).
+2. Open Manage PDF / Archive PDF, choose ONE PDF, click **Upload & Archive Certificate**.
+3. The browser uploads an insert-only private master using its Supabase Auth JWT.
+4. The server validates and renders page 1 at 144 DPI, validates the full PNG,
+   publishes and retrieves both objects, and transactionally links both paths.
+5. Complete means the objects and database paths were verified. The dialog provides
+   verification, PDF, preview and private-master downloads and earlier versions.
 
-The pdf_path column is already read by /api/verify. It stores a relative object path, never a full URL. The preview_path column is unchanged.
+Bulk: select PDFs named `<certificate_id>.pdf`. Every valid file is independent;
+invalid filenames or failed conversions are reported without stopping other files.
+Repair missing previews processes all current PDF records with no preview. For a
+broken or unlinked image use Manage PDF → Regenerate Preview. No PNG uploads exist.
 
-## Archive the nine 2026 Foundations certificates
+A lost browser connection does not stop a queued conversion. Reopen Manage PDF:
+Processing jobs shows durable status and **Retry saved PDF**. A failed upload before
+a job is created is recoverable under Earlier versions → Process & make current.
+No certificate email is sent by any archive/repair action.
 
-1. Open https://training.bulletproofautomations.com/admin and sign in.
-2. Under Credentials find Archive issued PDF certificates.
-3. Select the approved PDF files named exactly after the issued credential ID. Example: BPA-FND-2026-WHXRTT.pdf. Select all nine if convenient.
-4. Click Archive selected PDFs ONCE and wait for the final report.
-5. Confirm all nine rows show Attached. Use Manage PDF to download the master, then check View certificate on the existing public verifier for several graduates.
-6. Do not resend certificates by email. The first nine already received their emails.
+## Backend
 
-If an attempt partially succeeds, open Manage PDF before retrying. Every upload uses a new immutable versioned key; it never overwrites a prior certificate.
+- `supabase/functions/certificate-processor/`: Deno Edge Function, PDFium WASM
+  3.0.0 + fast-png 8.0.0; no browser canvas, HTML reconstruction or conversion API.
+- Renderer binary is fetched at one fixed versioned npm CDN URL, checked against
+  committed SHA-256 before compilation, and cached per isolate. Requests cannot
+  select URLs or files. Pin dependency changes and review upstream notices.
+- Native Poppler cannot execute in the existing edge runtimes. PDFium is a real
+  PDF rasterizer compatible with this hosting, avoiding additional infrastructure.
+- Queue: private Postgres table, RLS enabled; service-role-only RPCs. No new browser
+  permissions. Supabase validates user JWT via `/auth/v1/user`, then exact admin
+  allowlist. API never accepts frontend claims as authorization.
+- Dispatch uses existing pg_net; pg_cron recovers queued/interrupted jobs once per
+  minute. Only one conversion lease is active. A 256-bit per-job capability is
+  stored privately and sent only to the fixed backend run endpoint. It cannot
+  create work or choose a PDF. Job polling never returns that capability.
+- Execution: 15 MiB PDF, 5 MiB PNG, maximum 12M pixels / 6000px edge, 20s network
+  deadlines, 120s job lease; Supabase also enforces 256MB and 2s CPU/request.
+  Oversized, corrupt or expensive PDFs fail safely, retaining the private master.
+- Private master, public PDF and PNG use immutable matching versioned keys.
+  Preview is `<pdf_path without .pdf>.png`. Paths remain relative.
+- Completion compares both expected pdf_path and updated_at and validates the
+  live job lease in one database transaction. Repair updates preview_path only;
+  replacement/restoration atomically update both. Credential details are untouched.
+- Existing conflicting immutable PNG bytes require investigation; never overwrite
+  an object blindly. Missing PNGs can be recreated safely from the retained master.
 
-## Future issues and recovery
+## Deployment order
 
-- New credential: issue using the existing form, create and approve its PDF, then use Archive PDF on that row.
-- Replacement: use Manage PDF to upload a new version; confirm the dialog. Older private master copies remain.
-- Retrieve: use Manage PDF > Download master.
-- Restore an earlier version: use Manage PDF > Make current. If the matching public copy is missing, the UI republishes it before linking the record.
-- Partial failure: a private master may succeed while the public upload or database update fails. The old pdf_path remains untouched. Check earlier versions before retrying.
-- A 401/403 means the signed-in user lacks Storage privileges, or the policy rejected the filename or bucket. Do not bypass the policy.
-- Do not manually set pdf_path unless the associated public object was checked.
-- Do not overwrite or delete old masters: the Storage policy grants no UPDATE or DELETE.
+1. Feature branch/PR. Run Node tests, renderer tests, build, HTML validation,
+   secret scanning. Feature code must be committed before production deployment.
+2. Apply `supabase/certificate-processing.sql` with the connected Supabase account.
+   It adds only private queue infrastructure and service-role RPCs.
+3. Deploy `certificate-processor` with `verify_jwt=false` because the function
+   validates administrator JWTs itself and accepts private job capabilities for
+   database dispatch. Existing payment functions are never changed. Default
+   SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided by Supabase; keys are
+   never copied into repository, browser or new Cloudflare settings.
+4. Test anonymous denial, admin health, one real archive repair and object hashes.
+5. Schedule recovery after backend availability:
+   `select cron.schedule('certificate-processor-recovery','* * * * *','select private.dispatch_certificate_jobs()');`
+   Check `cron.job` first; do not create duplicate schedules.
+6. Merge tested PR to main (Cloudflare Pages deploys automatically). Verify built
+   assets and actual admin/public behavior before retiring manual-upload policies.
+7. Apply `supabase/certificate-processing-retire-manual.sql` only after successful
+   rollout. It preserves private master INSERT/SELECT and credential admin rights.
 
-## Security
+## Existing-cohort backfill
 
-PDF files must be nonempty, no larger than 15 MiB, and pass a PDF signature check. The browser uses the signed-in administrator's Supabase Auth JWT, NEVER the service-role key. Storage RLS requires the approved email and a real credential ID in the object path. Keys use a versioned format such as:
+Retrieve the nine existing records; use their CURRENT pdf_path and updated_at.
+Call `certificate_job_start` with mode repair and master_path equal to pdf_path.
+This fetches both production public and private PDFs, proves their bytes match,
+renders the real page, uploads a matching PNG, and updates only preview_path.
+Never use a locally prepared PNG, reissue, change dates, or resend emails.
+Query sanitized job status and verify every public PNG and PDF afterwards. A repeat
+checks identical objects and does not modify already-correct records.
 
-BPA-FND-2026-WHXRTT/20261015T224259-11ab22cd.pdf
+## Recovery and rollback
 
-The credentials bucket serves public PDFs, while credential-masters is private.
-
-IMPORTANT: Hiding a credential from the verification result does not revoke a public Storage URL someone already saved. Moving public PDF serving behind a signed, access-controlled route would require a separate security change.
-
-## No-regression boundary
-
-The new JavaScript runs after admin.js and leaves its session, enrollment, payments, issuance, visibility, and revocation logic alone. /api/verify and the RPC functions are unchanged. Node tests: node --test tests/credential-archive.test.js. Complete a live admin login, upload/download, enrollment, payment, and public verification smoke test before marking a production rollout complete.
-
-
-## Certificate image previews (2026-10-16)
-
-A published PDF alone is **not** an image preview. The public verifier displays
-a PNG only when public.credentials.preview_path has an associated public
-Storage object. Without that field the verifier shows a clear PDF-download
-fallback instead of an empty image box.
-
-To backfill or provide previews:
-
-1. Render the first PDF page to PNG (landscape, 1584 x 1224 works well for US Letter);
-   do not change the already-issued PDF.
-2. Name each thumbnail by its certificate ID: BPA-FND-2026-WHXRTT.png.
-3. Sign into /admin and select them under **Certificate preview images**.
-4. Click **Upload selected previews** and check the final report.
-5. Verify each credential shows the preview and its existing PDF download.
-
-The browser determines the PNG Storage key from the existing pdf_path,
-replacing only .pdf with .png. It uploads that immutable public PNG and
-updates **preview_path only** after upload success. Authenticated Storage
-RLS restricts PNG uploads to the approved admin, the credentials bucket,
-and the matching already-linked PDF. Neither the PDF path nor credential
-validity changes.
-
-When publishing a replacement PDF, the admin archive intentionally clears
-preview_path to avoid displaying an out-of-date image. The replacement
-preview may then be uploaded. Old PDF masters are unaffected.
-
-The inaugural cohort previews are included in the downloadable
-Bulletproof_Foundations_2026_Archive_9_Previews.zip created for the
-2026-10-16 backfill.
+- Inspect `public.certificate_job_status(null,null)` as service_role, or the admin
+  Processing jobs panel. Never expose private run_token values in logs.
+- Recovery dispatcher returns interrupted jobs to queued; after 3 interruptions
+  marks failed, for manual retry. Ordinary conversion errors fail immediately.
+- Retry saved jobs only while their expected credential version still matches.
+  A newer issue/revocation/visibility edit causes Requires attention; reload and
+  start from current data. Earlier private masters remain downloadable.
+- Revert frontend PR first to roll back the UI. Pause the named cron job and wait
+  for active leases to finish before reverting backend. Retain queue audit data,
+  both Storage buckets, existing PDFs and linked previews. Never delete masters.
+- Do not run the historical root SQL files as migrations.
+- Existing external HTTP 421 link-check failures are unrelated to rendering.

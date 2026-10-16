@@ -27,7 +27,7 @@ jobs:
           node --check assets/js/admin-archives.js
           node --check assets/js/admin-previews.js
           node --check assets/js/shell.js
-          node --test tests/credential-archive.test.js tests/credential-previews.test.js
+          node --test tests/*.test.js
 
   link-check:
     name: Link check

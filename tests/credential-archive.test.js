@@ -29,7 +29,7 @@ function harness(options = {}) {
     createElement() { return element(); },
     body: { appendChild() {} }
   };
-  const row = { id: "record-1", holder_name: "Carl Lokko", credential_id: ID, pdf_path: null };
+  const row = { id: "record-1", holder_name: "Carl Lokko", credential_id: ID, pdf_path: null, updated_at: "2026-10-16T00:00:00Z" };
   const calls = [];
   const authFetch = async (path, opts = {}) => {
     calls.push({ path, opts });
@@ -46,6 +46,14 @@ function harness(options = {}) {
   };
   const context = {
     document,
+    SUPABASE_URL: "https://example.supabase.co", SUPABASE_ANON_KEY: "public",
+    session: () => ({ access_token: "admin-jwt" }),
+    fetch: async (url, opts) => {
+      calls.push({ path: url, opts });
+      const request = JSON.parse(opts.body);
+      if (options.failPublic) return new Response('{"error":"conversion failed"}', { status: 422 });
+      return new Response(JSON.stringify({state:"completed", stage:"Complete", result:{pdf_path:request.master_path,preview_path:request.master_path.replace(/.pdf$/, ".png")}}));
+    },
     window: { confirm() { return true; } },
     credState: { rows: [row] },
     authFetch, loadCredentials: async () => {},
@@ -84,18 +92,19 @@ test("UI is additive and existing admin script loads before archive script", () 
   assert.ok(html.includes('id="enq-rows"'));
 });
 
-test("batch archive writes master, public PDF, then pdf_path in that order", async () => {
+test("single browser PDF upload starts backend processing; no public object or DB writes", async () => {
   const h = harness();
   h.elements["archive-batch-files"].files = [file()];
   h.elements["archive-batch-btn"].listeners.click();
   await waitForBatch(h);
-  assert.equal(h.calls.length, 3);
+  assert.equal(h.calls.length, 2);
   assert.match(h.calls[0].path, /^\/storage\/v1\/object\/credential-masters\/BPA-FND-2026-WHXRTT\//);
-  assert.match(h.calls[1].path, /^\/storage\/v1\/object\/credentials\/BPA-FND-2026-WHXRTT\//);
-  assert.match(h.calls[2].path, /^\/rest\/v1\/credentials\?id=eq\./);
-  const key = JSON.parse(h.calls[2].opts.body).pdf_path;
-  assert.ok(key.endsWith(".pdf"));
-  assert.equal(h.row.pdf_path, key);
+  assert.match(h.calls[1].path, /functions\/v1\/certificate-processor\/jobs$/);
+  assert.equal(h.calls[1].opts.headers.Authorization, "Bearer admin-jwt");
+  const request = JSON.parse(h.calls[1].opts.body);
+  assert.equal(request.mode, "publish");
+  assert.equal(h.row.pdf_path, request.master_path);
+  assert.equal(h.row.preview_path, request.master_path.replace(/.pdf$/, ".png"));
   assert.equal(h.elements["archive-batch-btn"].disabled, false);
 });
 
@@ -106,7 +115,7 @@ test("failed public upload leaves credential link unchanged", async () => {
   await waitForBatch(h);
   assert.equal(h.calls.length, 2);
   assert.equal(h.row.pdf_path, null);
-  assert.match(h.elements["archive-batch-status"].textContent, /Failures/);
+  assert.match(h.elements["archive-batch-status"].textContent, /Failed/);
 });
 
 test("invalid PDF or filename never reaches storage", async () => {
@@ -116,5 +125,5 @@ test("invalid PDF or filename never reaches storage", async () => {
   await waitForBatch(h);
   assert.equal(h.calls.length, 0);
   assert.equal(h.row.pdf_path, null);
-  assert.match(h.elements["archive-batch-status"].textContent, /Failures/);
+  assert.match(h.elements["archive-batch-status"].textContent, /Failed/);
 });

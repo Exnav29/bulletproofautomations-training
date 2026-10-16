@@ -232,3 +232,11 @@
 --   public.credentials.preview_path is set only AFTER successful upload.
 --   No changes to verify_credential, credentials schema, PDF files,
 --   enrollment, Paystack tables, or private master storage.
+
+-- 2026-10-16 automated archive processing:
+-- Cloudflare Pages admin uploads ONE private master. Supabase Edge Function
+-- certificate-processor renders page 1 with PDFium WASM, validates public PDF/PNG
+-- bytes, then atomically registers paths. A private Postgres queue and pg_cron
+-- recovery retain failed masters and prevent stale/concurrent jobs overwriting
+-- newer records. See supabase/certificate-processing.sql and deployment runbook.
+-- Historical manual PNG INSERT is retired only after verified rollout.
