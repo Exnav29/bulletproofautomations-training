@@ -120,9 +120,18 @@
     return check(job);
   }
   function processVersion(row, key, mode, onProgress) {
-    return processor("jobs", { credential_id: row.credential_id, master_path: key, mode: mode,
-      expected_pdf_path: row.pdf_path || null, expected_updated_at: row.updated_at })
-      .then(function (job) { return waitJob(job, onProgress); })
+    var request = { credential_id: row.credential_id, master_path: key, mode: mode,
+      expected_pdf_path: row.pdf_path || null, expected_updated_at: row.updated_at };
+    return processor("jobs", request).catch(function (error) {
+      if (!/timed out|timeout|failed to fetch|network|\(50[234]\)/i.test(error.message)) throw error;
+      onProgress("Checking saved processing status");
+      // A timeout is an unknown outcome. Look for this exact saved version
+      // before a single idempotent retry; never upload the file again.
+      return processor("jobs?credential=" + row.credential_id).then(function (jobs) {
+        var existing = jobs.filter(function (j) { return j.master_path === key && j.mode === mode; })[0];
+        return existing || processor("jobs", request);
+      });
+    }).then(function (job) { return waitJob(job, onProgress); })
       .then(function (job) {
         row.pdf_path = job.result.pdf_path;
         row.preview_path = job.result.preview_path;
@@ -234,6 +243,7 @@
   }
 
   function updateCurrentLinks(row) {
+    document.getElementById("archive-current").textContent = row.pdf_path ? "Public PDF linked: " + row.pdf_path : "No public PDF is linked yet.";
     var links = document.getElementById("archive-current-links");
     links.textContent = "";
     [["View verification", "/verify/" + row.credential_id],

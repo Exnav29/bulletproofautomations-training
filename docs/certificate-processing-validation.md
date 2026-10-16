@@ -8,7 +8,7 @@ Recovery: active `certificate-processor-recovery` cron, once per minute.
 
 ## Results
 
-- Node workflow tests: 17 pass.
+- Node workflow tests: 20 pass.
 - Deno actual rendering tests: 5 pass (landscape, rotated portrait, portrait,
   invalid/oversized/corrupt PDFs, excessive page dimensions/corrupt PNG).
 - TypeScript check, JavaScript syntax, build and HTML validation pass.
@@ -46,12 +46,19 @@ Recovery: active `certificate-processor-recovery` cron, once per minute.
 
 ## Acceptance limits
 
-The cloud browser currently has no authenticated administrator session.
-Authenticated live upload/restoration and admin enrollment/payment screens
-cannot be claimed as browser-tested until the administrator signs in. Their
-existing scripts and backend paths are unchanged; the new archive UI has
-integration coverage. No real enrollment, payment, issuance, revocation or
-email action was performed to smoke-test unrelated features in production.
+The administrator signed in successfully. Enrollment roll, payment reporting,
+credential register and archive controls loaded. Private-master download and
+retained-master processing/restoration were exercised in the actual browser.
+The controlled test used an identical copy of Carl's approved PDF, then restored
+his original published paths. An extra immutable private master is retained as
+version history; no existing master was modified or deleted.
+
+The live test found and fixed deployment cache mismatch and a timezone-only
+admin date display issue (stored issue dates never changed). A transient job-start
+timeout retained the uploaded master and was recovered without reupload. Automatic
+status-check/retry coverage was added for both uncertain success and no-job cases.
+No real enrollment, payment, credential issuance or revocation was performed solely
+to smoke-test unrelated features in production.
 
 Edge functions enforce 256 MB / 2 seconds CPU per request. Complex or excessive
 PDFs fail safely and retain the master for retry/attention. Cold renderer loads

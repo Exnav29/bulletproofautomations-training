@@ -16,9 +16,9 @@ on project `ikkldbhgjleelviwttir`. Product Studio/VPS is not involved.
 Bulk: select PDFs named `<certificate_id>.pdf`. Every valid file is independent;
 invalid filenames or failed conversions are reported without stopping other files.
 Repair missing previews processes all current PDF records with no preview. For a
-broken or unlinked image use Manage PDF → Regenerate Preview. No PNG uploads exist.
+broken or unlinked image use Manage PDF → Regenerate Preview. No PNG uploads exist. Deployed archive script URLs carry an explicit version; bump it whenever updating these handlers so controls cannot use a stale implementation.
 
-A lost browser connection does not stop a queued conversion. Reopen Manage PDF:
+A timed-out start checks for an existing saved job before one idempotent retry; it never uploads the PDF a second time. A lost browser connection does not stop a queued conversion. Reopen Manage PDF:
 Processing jobs shows durable status and **Retry saved PDF**. A failed upload before
 a job is created is recoverable under Earlier versions → Process & make current.
 No certificate email is sent by any archive/repair action.
