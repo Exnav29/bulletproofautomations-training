@@ -31,6 +31,7 @@ function harness(options = {}) {
   };
   const row = { id: "record-1", holder_name: "Carl Lokko", credential_id: ID, pdf_path: null, updated_at: "2026-10-16T00:00:00Z" };
   const calls = [];
+  var failedStart;
   const authFetch = async (path, opts = {}) => {
     calls.push({ path, opts });
     if (path.startsWith("/storage/v1/object/") && opts.method === "POST") {
@@ -50,7 +51,12 @@ function harness(options = {}) {
     session: () => ({ access_token: "admin-jwt" }),
     fetch: async (url, opts) => {
       calls.push({ path: url, opts });
+      if (url.includes("jobs?credential=")) {
+        const jobs = options.existingAfterTimeout ? [{master_path:failedStart.master_path,mode:failedStart.mode,state:"completed",result:{pdf_path:failedStart.master_path,preview_path:failedStart.master_path.replace(/.pdf$/, ".png")}}] : [];
+        return new Response(JSON.stringify(jobs));
+      }
       const request = JSON.parse(opts.body);
+      if (options.timeoutOnce && !failedStart) { failedStart = request; return new Response('{"error":"Signal timed out"}',{status:400}); }
       if (options.failPublic) return new Response('{"error":"conversion failed"}', { status: 422 });
       return new Response(JSON.stringify({state:"completed", stage:"Complete", result:{pdf_path:request.master_path,preview_path:request.master_path.replace(/.pdf$/, ".png")}}));
     },
@@ -139,4 +145,21 @@ test("certificate issue dates display 29 August across browser timezones", () =>
     const run = spawnSync(process.execPath, ["-e", script], { env: { ...process.env, TZ }, encoding: "utf8" });
     assert.equal(run.status, 0); assert.equal(run.stdout.trim(), "29 Aug");
   }
+});
+
+
+test("a timed-out start checks durable status then retries the saved PDF once", async () => {
+  const h=harness({timeoutOnce:true});h.elements["archive-batch-files"].files=[file()];
+  h.elements["archive-batch-btn"].listeners.click();await waitForBatch(h);
+  assert.equal(h.calls.length,4);
+  assert.match(h.calls[2].path,/jobs\?credential=/);
+  assert.equal(h.calls.filter(c=>c.path.startsWith("/storage/")).length,1);
+  assert.equal(h.row.preview_path,h.row.pdf_path.replace(/.pdf$/, ".png"));
+});
+test("a start with uncertain success reconnects its existing job without resending", async () => {
+  const h=harness({timeoutOnce:true,existingAfterTimeout:true});h.elements["archive-batch-files"].files=[file()];
+  h.elements["archive-batch-btn"].listeners.click();await waitForBatch(h);
+  assert.equal(h.calls.length,3);
+  assert.equal(h.calls.filter(c=>c.path.endsWith("/jobs")&&c.opts.method==="POST").length,1);
+  assert.ok(h.row.preview_path);
 });
