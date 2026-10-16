@@ -941,12 +941,20 @@
       var wrap = node.querySelector('[data-f="cert"]');
       var pdf = node.querySelector('[data-f="pdf"]');
       var img = node.querySelector('[data-f="preview"]');
+      var fallback = node.querySelector('[data-f="preview-fallback"]');
       if (wrap) wrap.hidden = false;
       if (pdf) pdf.setAttribute("href", row.pdfUrl);
       if (img && row.previewUrl) {
-        img.setAttribute("src", row.previewUrl);
         img.setAttribute("alt", "The " + (NAMES[row.credential] || "certificate") + " issued to " + row.holderName);
+        img.addEventListener("error", function () {
+          img.hidden = true;
+          if (fallback) fallback.hidden = false;
+        });
+        img.setAttribute("src", row.previewUrl);
         img.hidden = false;
+        if (fallback) fallback.hidden = true;
+      } else if (fallback) {
+        fallback.hidden = false;
       }
     }
 
