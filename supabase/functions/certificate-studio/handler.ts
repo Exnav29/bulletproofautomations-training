@@ -28,8 +28,9 @@ async function db(name: string, body: unknown) {
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(20000),
   });
-  const d = await r.json();
-  if (!r.ok) throw Error(d.message || "Database request failed");
+  const raw = await r.text();
+  const d = raw ? JSON.parse(raw) : null;
+  if (!r.ok) throw Error(d?.message || "Database request failed");
   return d;
 }
 async function get(bucket: string, key: string) {
