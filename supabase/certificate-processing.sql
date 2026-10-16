@@ -123,6 +123,7 @@ begin
  end if;
  update private.certificate_jobs set state='completed',stage='Complete',error=null,
   result=p_result||jsonb_build_object('already_processed',coalesce(already,false),'record_updated_at',(select updated_at from public.credentials where id=c.id)),lease=null,lease_until=null,updated_at=now() where id=p_id;
+ perform private.dispatch_certificate_jobs();
  return public.certificate_job_status(p_id,null)->0;
 end; $$;
 

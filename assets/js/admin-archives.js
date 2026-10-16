@@ -127,6 +127,7 @@
         row.pdf_path = job.result.pdf_path;
         row.preview_path = job.result.preview_path;
         if (job.result.record_updated_at) row.updated_at = job.result.record_updated_at;
+        if (archiveRow && archiveRow.id === row.id) updateCurrentLinks(row);
         return job;
       });
   }
@@ -232,6 +233,16 @@
       }).catch(function (err) { versions.textContent = err.message; });
   }
 
+  function updateCurrentLinks(row) {
+    var links = document.getElementById("archive-current-links");
+    links.textContent = "";
+    [["View verification", "/verify/" + row.credential_id],
+      ["Download PDF", row.pdf_path ? SUPABASE_URL + "/storage/v1/object/public/credentials/" + row.pdf_path : null],
+      ["View certificate preview", row.preview_path ? SUPABASE_URL + "/storage/v1/object/public/credentials/" + row.preview_path : null]]
+      .forEach(function (pair) { if (!pair[1]) return; var a = document.createElement("a");
+        a.textContent = pair[0]; a.href = pair[1]; a.target = "_blank"; a.rel = "noopener"; a.className = "mini"; links.appendChild(a); });
+  }
+
   function loadJobs() {
     var box = document.getElementById("archive-jobs");
     box.textContent = "Loading processing jobs…";
@@ -278,13 +289,7 @@
     document.getElementById("archive-upload-btn").focus();
     listVersions();
     loadJobs();
-    var links = document.getElementById("archive-current-links");
-    links.textContent = "";
-    [["View verification", "/verify/" + row.credential_id],
-      ["Download PDF", row.pdf_path ? SUPABASE_URL + "/storage/v1/object/public/credentials/" + row.pdf_path : null],
-      ["View certificate preview", row.preview_path ? SUPABASE_URL + "/storage/v1/object/public/credentials/" + row.preview_path : null]]
-      .forEach(function (pair) { if (!pair[1]) return; var a = document.createElement("a");
-        a.textContent = pair[0]; a.href = pair[1]; a.target = "_blank"; a.rel = "noopener"; a.className = "mini"; links.appendChild(a); });
+    updateCurrentLinks(row);
   };
 
   document.getElementById("archive-close-btn").addEventListener("click", function () {
@@ -342,8 +347,8 @@
       chain = chain.then(function () {
         report(batchStatus, "Archiving " + (index + 1) + " of " + jobs.length +
           ": " + job.row.holder_name + "…", false);
-        return archive(job.file, job.row, function (text) { report(batchStatus, job.row.holder_name + ": " + text, false); }).then(function () {
-          successes.push(job.row.credential_id);
+        return archive(job.file, job.row, function (text) { report(batchStatus, job.row.holder_name + ": " + text, false); }).then(function (result) {
+          successes.push(job.row.credential_id + ": " + (result.result.already_processed ? "Already processed" : "Completed"));
         }).catch(function (err) {
           errors.push(job.row.credential_id + ": " + err.message);
         });
@@ -353,7 +358,7 @@
       return loadCredentials();
     }).then(function () {
       report(batchStatus, "Archived " + successes.length + " of " + files.length +
-        ". " + (errors.length ? "Failed / requires attention: " + errors.join(" | ") : "All PDFs and generated previews linked successfully."),
+        ". " + (errors.length ? "Failed / requires attention: " + errors.join(" | ") : "All PDFs and generated previews linked successfully. " + successes.join(" | ")),
         !!errors.length);
       if (!errors.length) batchInput.value = "";
     }).catch(function (err) {
