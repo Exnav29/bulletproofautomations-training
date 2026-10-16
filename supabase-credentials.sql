@@ -221,3 +221,14 @@
 -- Upload a future cohort's files from /admin after issuing credentials.
 -- For batch backfill, PDF filename MUST be the exact credential_id + '.pdf'.
 -- See docs/credential-archive.md for operating and recovery procedures.
+
+
+--
+-- 2026-10-16 preview fix (existing production storage policy extension):
+--   storage.objects INSERT to authenticated in public credentials bucket
+--   for version-matched, immutable PNG images only.
+--   Bucket + authenticated admin email + matching credentials.pdf_path
+--   required. Object key is the current pdf_path with .pdf -> .png.
+--   public.credentials.preview_path is set only AFTER successful upload.
+--   No changes to verify_credential, credentials schema, PDF files,
+--   enrollment, Paystack tables, or private master storage.
