@@ -81,3 +81,10 @@
   Cache-Control: no-cache, must-revalidate
 /assets/js/admin-previews.js
   Cache-Control: no-cache, must-revalidate
+
+# Authenticated Studio proof images are blob URLs; no public signature assets.
+/admin*
+  ! Content-Security-Policy
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://*.supabase.co; form-action 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests
+/assets/js/admin-studio.js
+  Cache-Control: no-cache, must-revalidate

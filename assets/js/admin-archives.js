@@ -153,7 +153,7 @@
     // Refuse accidentally misnamed or HTML files rather than publishing them.
     return file.slice(0, 5).text().then(function (header) {
       if (header !== "%PDF-") throw new Error("This file is not a valid PDF.");
-      if (!id || !/^BPA-(?:FND|BCAB)-\d{4}-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{6}$/.test(id)) {
+      if (!id || !/^BPA-(?:FND|BCAB|TRN)-\d{4}-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{6}$/.test(id)) {
         throw new Error("Unrecognised certificate ID.");
       }
     });
@@ -332,7 +332,7 @@
     var preflightErrors = [];
     var seen = {};
     for (var i = 0; i < files.length; i++) {
-      var match = files[i].name.match(/^(BPA-(?:FND|BCAB)-\d{4}-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{6})\.pdf$/i);
+      var match = files[i].name.match(/^(BPA-(?:FND|BCAB|TRN)-\d{4}-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{6})\.pdf$/i);
       if (!match) {
         preflightErrors.push(files[i].name + ": Requires attention — filename must be the certificate ID.");
         continue;

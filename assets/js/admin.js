@@ -990,7 +990,8 @@ document.getElementById("pay-csv").addEventListener("click", function () {
 
 var CRED_NAMES = {
   foundations: "Foundations Certificate",
-  bcab: "BCAB"
+  bcab: "BCAB",
+  completion: "Training Certificate of Completion"
 };
 
 // Crockford base32: no I, L, O or U, so an ID survives being read aloud or

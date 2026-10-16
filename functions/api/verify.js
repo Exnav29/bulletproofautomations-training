@@ -100,6 +100,9 @@ export async function onRequest({ request, env }) {
     }
   }
 
+  const details = await rpc(env, "studio_public_details", { p_ids: rows.map(function(row) { return row.credential_id; }) });
+  const titles = {};
+  if (details.ok && Array.isArray(details.data)) details.data.forEach(function(row) { titles[row.credential_id] = row; });
   const base = env.SUPABASE_URL + "/storage/v1/object/public/credentials/";
 
   return json({
@@ -112,6 +115,8 @@ export async function onRequest({ request, env }) {
         credentialId: row.credential_id,
         holderName: row.holder_name,
         credential: row.credential,
+        courseTitle: titles[row.credential_id] ? titles[row.credential_id].course_title : null,
+        completionStatement: titles[row.credential_id] ? titles[row.credential_id].completion_statement : null,
         issuedOn: row.issued_on,
         expiresOn: row.expires_on,
         platformVersion: row.platform_version,

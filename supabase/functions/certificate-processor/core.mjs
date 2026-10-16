@@ -1,5 +1,5 @@
-export const ID = /^BPA-(?:FND|BCAB)-\d{4}-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{6}$/;
-export const KEY = /^(BPA-(?:FND|BCAB)-\d{4}-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{6})\/\d{8}T\d{6}-[0-9a-f]{8}\.pdf$/;
+export const ID = /^BPA-(?:FND|BCAB|TRN)-\d{4}-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{6}$/;
+export const KEY = /^(BPA-(?:FND|BCAB|TRN)-\d{4}-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{6})\/\d{8}T\d{6}-[0-9a-f]{8}\.pdf$/;
 export function validateJob(body) {
   if (!body || !ID.test(body.credential_id) || !['publish','restore','repair'].includes(body.mode) ||
       !KEY.test(body.master_path) || body.master_path.split('/')[0] !== body.credential_id ||

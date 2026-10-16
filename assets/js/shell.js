@@ -928,7 +928,7 @@
     var status = fill(node, "status", STATUS[row.status] || row.status);
     if (status) status.setAttribute("data-state", row.status);
 
-    fill(node, "name", NAMES[row.credential] || row.credential);
+    fill(node, "name", row.courseTitle || NAMES[row.credential] || row.credential);
     fill(node, "holder", row.holderName);
     fill(node, "id", row.credentialId);
     fill(node, "issued", fmtDate(row.issuedOn));
@@ -961,6 +961,11 @@
     var tpl = document.getElementById("tpl-attests-" + row.credential);
     var slot = node.querySelector('[data-f="attests"]');
     if (tpl && slot) slot.appendChild(tpl.content.cloneNode(true));
+    if (row.credential === "completion" && slot) {
+      var completion = document.createElement("p");
+      completion.textContent = row.completionStatement || "Records successful completion of the training course. This is a Certificate of Completion.";
+      slot.appendChild(completion);
+    }
 
     return node;
   }
@@ -968,7 +973,7 @@
   function setLinkedIn(row) {
     if (!linkedin) return;
     var values = {
-      name: NAMES[row.credential] || row.credential,
+      name: row.courseTitle || NAMES[row.credential] || row.credential,
       org: "Bulletproof Automations",
       issued: fmtDate(row.issuedOn),
       expires: row.expiresOn ? fmtDate(row.expiresOn) : "Leave blank — this credential does not expire",

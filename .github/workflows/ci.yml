@@ -23,6 +23,7 @@ jobs:
         run: npx --yes html-validate "dist/**/*.html"
       - name: Check admin JavaScript and certificate archive
         run: |
+          node --check assets/js/admin-studio.js
           node --check assets/js/admin.js
           node --check assets/js/admin-archives.js
           node --check assets/js/admin-previews.js
@@ -37,6 +38,16 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.5.4
+      - name: Install pinned Studio test dependencies
+        run: |
+          npm ci --prefix supabase/functions/certificate-studio --ignore-scripts
+          ln -s supabase/functions/certificate-studio/node_modules node_modules
+      - name: Studio authorization and PostgreSQL state machine
+        run: |
+          deno check --node-modules-dir=manual supabase/functions/certificate-studio/index.ts
+          deno test --node-modules-dir=manual --allow-env tests/studio-auth.test.ts
+          deno run --node-modules-dir=manual --allow-read --allow-env tests/studio-db.test.mjs
+          node tests/studio-ui.test.mjs
       - name: Render real PDFs and reject invalid inputs
         run: deno test --node-modules-dir=none --allow-net --allow-read --allow-env tests/certificate-renderer.test.ts
 

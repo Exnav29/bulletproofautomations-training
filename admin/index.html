@@ -244,6 +244,7 @@
   .archive-actions { display:flex; flex-wrap:wrap; align-items:center; gap:var(--s3); margin-top:var(--s4); }
 
 </style>
+<link rel="stylesheet" href="/assets/css/admin-studio.css">
 </head>
 <body>
 
@@ -281,6 +282,13 @@
 
   <p class="msg msg--bad" id="load-error" role="alert" hidden></p>
 
+  <button class="mini" type="button" id="studio-open">Create &amp; Send Certificates</button>
+  <section id="certificate-studio" aria-labelledby="studio-title" hidden>
+    <h2 id="studio-title">Certificate Issuance Studio</h2>
+    <button class="mini" type="button" id="studio-close">Close Studio</button>
+    <p id="studio-message" class="msg" role="status" hidden></p>
+    <div id="studio-body"></div>
+  </section>
   <!-- Headline figures -->
   <div class="board" id="board"></div>
 
@@ -668,5 +676,6 @@
 <script src="/assets/js/admin-archives.js?v=20261016-auto2" defer></script>
 <script src="/assets/js/admin-previews.js?v=20261016-auto1" defer></script>
 <script src="/assets/js/admin-payments.js" defer></script>
+<script src="/assets/js/admin-studio.js?v=20261016-1" defer></script>
 </body>
 </html>

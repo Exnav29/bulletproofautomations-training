@@ -80,7 +80,7 @@ Deno.serve(async req=>{
     if(path==='jobs' && req.method==='GET') {
       const url=new globalThis.URL(req.url),id=url.searchParams.get('id'),credential=url.searchParams.get('credential');
       if(id&&!/^[0-9a-f-]{36}$/.test(id))return response({error:'Invalid job ID.'},400);
-      if(credential&&!/^BPA-(?:FND|BCAB)-\d{4}-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{6}$/.test(credential))return response({error:'Invalid credential ID.'},400);
+      if(credential&&!/^BPA-(?:FND|BCAB|TRN)-\d{4}-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{6}$/.test(credential))return response({error:'Invalid credential ID.'},400);
       return response(await rpc('certificate_job_status',{p_id:id||null,p_credential:credential||null}));
     }
     if(path==='retry' && req.method==='POST') {
