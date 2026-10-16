@@ -47,7 +47,7 @@ const api = {
     // object is accepted. No UPDATE/DELETE of PDFs, PNGs or private masters.
     const res=await fetch(PROJECT+'/storage/v1/object/'+bucket+'/'+key,{method:'POST',
       headers:{apikey:KEY!,Authorization:'Bearer '+KEY,'Content-Type':mime,'x-upsert':'false','Cache-Control':'max-age=31536000, immutable'},
-      body:bytes,signal:AbortSignal.timeout(20000)});
+      body:new Uint8Array(bytes).buffer,signal:AbortSignal.timeout(20000)});
     if(!res.ok && ![400,409].includes(res.status)) throw Error('Archive upload failed ('+res.status+').');
     const stored=await api.get(bucket,key,true);
     if(await sha(stored)!==await sha(bytes)) throw Error('Existing immutable object differs; requires attention.');

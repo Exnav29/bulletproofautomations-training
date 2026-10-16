@@ -3,7 +3,7 @@ import { PDFiumLibrary } from 'npm:@hyzyla/pdfium@3.0.0';
 import { encode, decode } from 'npm:fast-png@8.0.0';
 export const MAX_PDF = 15 * 1024 * 1024;
 const WASM = 'https://cdn.jsdelivr.net/npm/@hyzyla/pdfium@3.0.0/dist/pdfium.wasm';
-const WASM_SHA = 'dbeeaf5bbff216d555fecec7cd486072838c4632a2272d31b52ef1fd05008fe7c';
+const WASM_SHA = 'beeaf5bbff216d555fecec7cd486072838c4632a2272d31b52ef1fd05008fe7c';
 let library;
 export async function sha(data) {
   return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', data)), x => x.toString(16).padStart(2, '0')).join('');
