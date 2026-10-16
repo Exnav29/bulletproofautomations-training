@@ -218,6 +218,14 @@ function shortDate(v) {
   if (!v) return "—";
   return new Date(v).toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
 }
+// Credential issue dates are calendar dates, not UTC instants. Preserve the
+// printed date even when the administrator's browser is west of UTC.
+function credentialDate(v) {
+  if (!v) return "—";
+  return new Date(String(v).slice(0, 10) + "T12:00:00Z").toLocaleDateString("en-GB", {
+    day: "2-digit", month: "short", timeZone: "UTC"
+  });
+}
 /* A test row is a real row in the real table — that is the point, it exercises
    the real path — so it has to announce itself somewhere. /api/enroll stamps
    the marker into notes when a Paystack TEST-mode checkout is started.
@@ -1081,7 +1089,7 @@ function renderCredentials() {
     cell(row.holder_name);
     cell(CRED_NAMES[row.credential] || row.credential);
     cell(row.credential_id);
-    cell(shortDate(row.issued_on));
+    cell(credentialDate(row.issued_on));
     cell(status === "valid" ? "Valid" : status === "expired" ? "Expired" : "Revoked");
     cell(row.publish_consent ? (row.allow_name_lookup ? "Yes" : "By ID only") : "Hidden");
     cell(row.pdf_path ? "Attached" : "None");
