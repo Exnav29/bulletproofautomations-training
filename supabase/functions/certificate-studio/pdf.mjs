@@ -112,7 +112,7 @@ export async function generate(
   );
   if (serif.widthOfTextAtSize(data.full_name, 27) <= 544)
     text(data.full_name, 180, 265, 544, 27, serif, teal, true);
-  else lines(data.full_name, 180, 260, 544, 22, 2, serif, teal);
+  else lines(data.full_name, 180, 250, 544, 20, 2, serif, teal);
   lines(data.statement, 190, 320, 520, 11, 2);
   lines(data.course_name + " — " + data.level, 190, 349, 520, 15, 2, body);
   text(date(data.start_date) + " – " + date(data.end_date), 160, 455, 200, 10);

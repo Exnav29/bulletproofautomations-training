@@ -42,7 +42,8 @@ Deno.test(
     );
     const a4 = await generate(example, assets, { draft: false, format: "a4" }),
       draft = await generate(example, assets, { draft: true });
-    const combined = await combine([letter, letter]);
+    const second = await generate({...example,full_name:"Another Controlled Graduate",credential_id:"BPA-TRN-2026-T3ST02"},assets,{draft:false});
+    const combined = await combine([letter, second]);
     for (const [bytes, w, h, count] of [
       [letter, 792, 612, 1],
       [a4, 841.8898, 595.2756, 1],
@@ -69,7 +70,7 @@ Deno.test(
 Deno.test(
   "long names, course titles, completion wording and unicode render",
   async () => {
-    await generate(
+    const longPdf = await generate(
       {
         ...example,
         full_name: "Johnathan Alexander Lightfoot Mensah-Owusu Adjei Boateng",
@@ -81,6 +82,7 @@ Deno.test(
       assets,
       { draft: false },
     );
+    await Deno.writeFile("../studio-validation/long-name-proof.pdf",longPdf);
   },
 );
 Deno.test(
