@@ -359,10 +359,10 @@
 
   <p class="msg msg--bad" id="load-error" role="alert" hidden></p>
 
-  <section class="ops-view" data-ops-view="studio" aria-label="Certificate Issuance Studio">
+  <section class="ops-view" data-ops-view="studio" aria-label="Certificate administration workspace">
   <div class="ops-intro"><p>Courses, graduates, official certificates, print packs, and individual email delivery in one guided workspace.</p></div>
   <button class="mini ops-action-primary" type="button" id="studio-open">Open Certificate Studio</button>
-  <section id="certificate-studio" aria-labelledby="studio-title" hidden>
+  <section id="certificate-studio" aria-label="Certificate issuance wizard" hidden>
     <h2 id="studio-title">Certificate Issuance Studio</h2>
     <button class="mini" type="button" id="studio-close">Close Studio</button>
     <p id="studio-message" class="msg" role="status" hidden></p>
@@ -399,7 +399,7 @@
   </section>
   <section class="ops-view" data-ops-view="enrollments" aria-label="Enrollment management">
     <div class="ops-intro"><p>Manage participants, follow-up queues and payment plans from the student record.</p></div>
-    <div class="ops-toolsbar"><label for="cohort">Cohort <select class="mini" id="cohort" aria-label="Cohort"></select></label><button class="mini" type="button" id="csv">Export enrollment CSV</button></div>
+    <div class="ops-toolsbar"><label>Cohort <select class="mini" id="cohort"></select></label><button class="mini" type="button" id="csv">Export enrollment CSV</button></div>
   <!-- The roll -->
   <section aria-labelledby="roll-title">
     <h2 class="panel__title" id="roll-title">The roll — <span id="roll-count">0</span></h2>
