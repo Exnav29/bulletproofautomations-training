@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-admin-view="overview">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Enrollments and payments — Bulletproof Automations Training</title>
+<title>Overview — Bulletproof Automations Training</title>
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="/assets/fonts/archivo-latin-variable.woff2" as="font" type="font/woff2" crossorigin>
 <!-- The public stylesheet carries the tokens, the self-hosted face and the base
@@ -306,13 +306,14 @@
 }
 
 </style>
+<link rel="stylesheet" href="/assets/css/admin-console.css?v=20261017-a">
 </head>
 <body>
 
 <!-- Sign in ------------------------------------------------------------- -->
 <div class="signin" id="signin" hidden>
   <form class="signin__box" id="signin-form">
-    <h1 class="signin__title">Enrollments</h1>
+    <h1 class="signin__title">Training administration</h1>
     <p class="signin__note">Sign in with a Supabase Auth account on the training project. No fallback password ships in this page.</p>
 
     <div class="signin__field">
@@ -331,25 +332,53 @@
 
 <!-- Dashboard ----------------------------------------------------------- -->
 <main class="adm" id="dash" hidden>
-
+  <div class="ops-shell">
+    <aside class="ops-sidebar" aria-label="Administration navigation">
+      <a class="ops-brand" href="/admin/" aria-label="Bulletproof Automations training home">
+        <span class="ops-brand__mark" aria-hidden="true">B<span>×</span>A</span>
+        <span class="ops-brand__name">Bulletproof Automations<small>Training administration</small></span>
+      </a>
+      <div class="ops-sidebar__group">Training operations</div>
+      <nav class="ops-nav" aria-label="Training administration sections">
+        <a data-ops-link="overview" href="/admin/"><span aria-hidden="true">◈</span> Overview</a>
+        <a data-ops-link="enrollments" href="/admin/enrollments/"><span aria-hidden="true">◎</span> Enrollments</a>
+        <a data-ops-link="payments" href="/admin/payments/"><span aria-hidden="true">▤</span> Payments</a>
+        <a data-ops-link="credentials" href="/admin/credentials/"><span aria-hidden="true">▣</span> Credentials</a>
+        <a data-ops-link="studio" href="/admin/studio/"><span aria-hidden="true">✧</span> Certificate Studio</a>
+        <a data-ops-link="verification" href="/admin/verification/"><span aria-hidden="true">⌕</span> Verification activity</a>
+      </nav>
+      <div class="ops-sidebar__foot">Official training records<br><span>Private administrator workspace</span></div>
+    </aside>
+    <div class="ops-main">
   <div class="adm-top">
-    <h1 class="adm-top__title">Enrollments and payments</h1>
+    <div class="ops-heading"><p class="ops-heading__eyebrow">Training operations</p><h1 class="adm-top__title" id="ops-page-title">Overview</h1><p id="ops-page-summary" class="ops-heading__summary">What needs your attention today.</p></div>
     <span class="adm-top__who" id="who"></span>
-    <select class="mini" id="cohort" aria-label="Cohort"></select>
-    <button class="mini" type="button" id="refresh">Refresh</button>
-    <button class="mini" type="button" id="csv">Export CSV</button>
+    <button class="mini" type="button" id="refresh">Refresh data</button>
     <button class="mini" type="button" id="signout">Sign out</button>
   </div>
 
   <p class="msg msg--bad" id="load-error" role="alert" hidden></p>
 
-  <button class="mini" type="button" id="studio-open">Create &amp; Send Certificates</button>
+  <section class="ops-view" data-ops-view="studio" aria-label="Certificate Issuance Studio">
+  <div class="ops-intro"><p>Courses, graduates, official certificates, print packs, and individual email delivery in one guided workspace.</p></div>
+  <button class="mini ops-action-primary" type="button" id="studio-open">Open Certificate Studio</button>
   <section id="certificate-studio" aria-labelledby="studio-title" hidden>
     <h2 id="studio-title">Certificate Issuance Studio</h2>
     <button class="mini" type="button" id="studio-close">Close Studio</button>
     <p id="studio-message" class="msg" role="status" hidden></p>
     <div id="studio-body"></div>
   </section>
+  </section>
+  <section class="ops-view" data-ops-view="overview" aria-label="Operations overview">
+    <div class="ops-welcome">
+      <div><p class="ops-welcome__short">The training desk</p><h2>Everything in its place.</h2><p>Review what needs attention, then go straight to the right workspace.</p></div>
+      <a href="/admin/studio/" class="ops-welcome__cta">Create certificates <span aria-hidden="true">↗</span></a>
+    </div>
+    <div class="ops-shortcuts" aria-label="Quick actions">
+      <a href="/admin/enrollments/"><strong>Student roster</strong><span>Enrollment records and follow-ups</span></a>
+      <a href="/admin/payments/"><strong>Payment ledger</strong><span>Transactions and exceptions</span></a>
+      <a href="/admin/credentials/"><strong>Issued credentials</strong><span>Corrections, archives, verification</span></a>
+    </div>
   <!-- Headline figures -->
   <div class="board" id="board"></div>
 
@@ -367,6 +396,10 @@
     </section>
   </div>
 
+  </section>
+  <section class="ops-view" data-ops-view="enrollments" aria-label="Enrollment management">
+    <div class="ops-intro"><p>Manage participants, follow-up queues and payment plans from the student record.</p></div>
+    <div class="ops-toolsbar"><label for="cohort">Cohort <select class="mini" id="cohort" aria-label="Cohort"></select></label><button class="mini" type="button" id="csv">Export enrollment CSV</button></div>
   <!-- The roll -->
   <section aria-labelledby="roll-title">
     <h2 class="panel__title" id="roll-title">The roll — <span id="roll-count">0</span></h2>
@@ -418,8 +451,9 @@
     </div>
   </section>
 
+  </section>
   <!-- Payments ---------------------------------------------------------- -->
-  <section class="sec-gap" aria-labelledby="pay-title">
+  <section class="sec-gap ops-view" data-ops-view="payments" aria-labelledby="pay-title">
     <h2 class="panel__title" id="pay-title">Payments — what Paystack actually sent</h2>
     <p class="sec-gap__lede">Every webhook is recorded here before any money is applied to the roll, including
       ones that fail signature verification and ones that match no enrollment. Read-only: this is the evidence
@@ -474,7 +508,9 @@
   <!-- Credentials ---------------------------------------------------------
        Issuing writes the row that /verify reads. There is no deploy in the
        loop: issue here and the credential resolves on the next lookup. -->
-  <section class="sec-gap" aria-labelledby="cred-title">
+  <section class="sec-gap ops-view ops-credential-view" data-ops-view="credentials" aria-labelledby="cred-title">
+    <div class="ops-intro"><p>Find a certificate first. Corrections keep the same credential ID and verification URL.</p></div>
+    <a class="ops-correction-link" href="/admin/credentials/?q=BPA-FND-2026-WHXRTT">Locate Carl Peter Lokko’s correction record</a>
     <h2 class="panel__title" id="cred-title">Credentials — the register behind /verify</h2>
     <p class="sec-gap__lede">Issuing a credential here makes it verifiable immediately at
       training.bulletproofautomations.com/verify. Revoking never deletes: a deleted row reads as
@@ -482,6 +518,7 @@
 
     <p class="msg msg--bad" id="cred-error" role="alert" hidden></p>
 
+    <details class="ops-detail" id="ops-manual-issue"><summary>Manual credential issuance (advanced)</summary>
     <section class="panel" aria-labelledby="issue-title">
       <h2 class="panel__title" id="issue-title">Issue a credential</h2>
       <form id="issue-form" class="issue">
@@ -522,8 +559,9 @@
         <button class="btn btn--go" type="submit" id="issue-btn">Issue credential</button>
       </form>
     </section>
+    </details>
 
-
+    <details class="ops-detail" id="ops-bulk-archive"><summary>Bulk PDF archive and recovery</summary>
     <section class="panel" aria-labelledby="archive-batch-title">
       <h2 class="panel__title" id="archive-batch-title">Archive issued PDF certificates</h2>
       <p class="sec-gap__lede">Select one or more completed certificates. Each filename must be its exact
@@ -547,6 +585,7 @@
       <button class="mini" type="button" id="preview-repair-btn">Repair missing previews</button>
       <p class="msg" id="preview-repair-result" role="status" aria-live="polite" hidden></p>
     </section>
+    </details>
 
     <div class="filters">
       <label class="vh" for="cq">Search holder or credential ID</label>
@@ -617,7 +656,7 @@
   </div>
 
   <!-- Verification enquiries ---------------------------------------------- -->
-  <section class="sec-gap" aria-labelledby="enq-title">
+  <section class="sec-gap ops-view" data-ops-view="verification" aria-labelledby="enq-title">
     <h2 class="panel__title" id="enq-title">Verification enquiries &mdash; <span id="enq-count">0</span></h2>
     <p class="sec-gap__lede">Everyone who identified themselves to use the lookup. The ones marked
       <strong>hiring</strong> are employers consuming the credential, which is the audience the whole
@@ -642,6 +681,8 @@
       </table>
     </div>
   </section>
+    </div>
+  </div>
 </main>
 
 <!-- Detail drawer -------------------------------------------------------- -->
@@ -733,10 +774,11 @@
     <pre class="raw" id="pdrawer-raw"></pre>
   </div>
 </div>
-<script src="/assets/js/admin.js?v=20261016-dates1" defer></script>
+<script src="/assets/js/admin-console.js?v=20261017-a" defer></script>
+<script src="/assets/js/admin.js?v=20261017-a" defer></script>
 <script src="/assets/js/admin-archives.js?v=20261016-auto2" defer></script>
 <script src="/assets/js/admin-previews.js?v=20261016-auto1" defer></script>
 <script src="/assets/js/admin-payments.js" defer></script>
-<script src="/assets/js/admin-studio.js?v=20261016-1" defer></script>
+<script src="/assets/js/admin-studio.js?v=20261017-a" defer></script>
 </body>
 </html>
