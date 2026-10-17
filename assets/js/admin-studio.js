@@ -1103,6 +1103,62 @@
       });
     button("Refresh report", reload);
   }
+  // Offer corrections from the main credential register, including the nine
+  // historically imported Foundations credentials. This uses the SAME audited
+  // Studio correction/draft/approval pipeline as the Completion Report.
+  // It never PATCHes credentials or replaces a PDF directly.
+  window.openStudioCorrection = function (row) {
+    run(async function () {
+      root.hidden = false;
+      await reload();
+      var matching = model.graduates.filter(function (g) {
+        return g.credential_id === row.credential_id;
+      });
+      var pending = matching.find(function (g) {
+        return g.correction && g.state !== "issued";
+      });
+      var chosenBatch;
+      if (pending) {
+        chosenBatch = model.batches.find(function (b) {
+          return b.id === pending.batch_id;
+        });
+        report("An existing correction draft is ready for your review. The original certificate ID is preserved.");
+      } else {
+        // Only correct the version currently published on the verifier.
+        var current = matching.find(function (g) {
+          return g.state === "issued" && g.master_path === row.pdf_path;
+        });
+        if (!current) {
+          throw Error("No current Studio-issued document is linked for this certificate. Nothing was changed.");
+        }
+        var reason = window.prompt("Reason for correcting " + row.credential_id + ":");
+        if (!reason || !reason.trim()) return;
+        var name = window.prompt("Correct name exactly as it should be printed:", current.data.full_name);
+        if (name === null) return;
+        var email = window.prompt("Recipient email (unchanged unless necessary):", current.data.email || "");
+        if (email === null) return;
+        var created = await api("correct", {
+          id: current.id,
+          reason: reason.trim(),
+          graduate: Object.assign({}, current.data, {
+            full_name: name.trim(),
+            email: email.trim()
+          })
+        });
+        model = await api("list");
+        chosenBatch = model.batches.find(function (b) {
+          return b.id === created.id;
+        });
+        report("Correction draft created. Review the proof, approve issuance, and retain the original credential ID.");
+      }
+      if (!chosenBatch) throw Error("Could not locate the correction batch.");
+      batch = chosenBatch;
+      cohort = model.cohorts.find(function (h) { return h.id === batch.cohort_id; });
+      course = cohort && model.courses.find(function (c) { return c.id === cohort.course_id; });
+      next(batch.state === "draft" ? 3 : 5);
+      root.scrollIntoView({ behavior: "smooth" });
+    });
+  };
   document.getElementById("studio-open").addEventListener("click", function () {
     run(async function () {
       root.hidden = false;
