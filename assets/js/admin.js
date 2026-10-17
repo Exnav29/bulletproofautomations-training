@@ -111,6 +111,7 @@ function showDash() {
   document.getElementById("signin").hidden = true;
   document.getElementById("dash").hidden = false;
   document.getElementById("who").textContent = s && s.email ? s.email : "";
+  document.dispatchEvent(new Event("admin:authenticated"));
 }
 
 document.getElementById("signin-form").addEventListener("submit", function (event) {
@@ -342,7 +343,12 @@ function renderQueues() {
 
   Array.prototype.forEach.call(document.querySelectorAll("[data-queue]"), function (button) {
     button.addEventListener("click", function () {
-      document.getElementById("f-flag").value = button.getAttribute("data-queue");
+      var flag = button.getAttribute("data-queue");
+      if (document.documentElement.getAttribute("data-admin-view") !== "enrollments") {
+        window.location.href = "/admin/enrollments/?flag=" + encodeURIComponent(flag);
+        return;
+      }
+      document.getElementById("f-flag").value = flag;
       renderRoll();
       document.getElementById("roll-title").scrollIntoView({ behavior: "smooth", block: "start" });
     });
@@ -1155,7 +1161,7 @@ function renderCredentials() {
           window.alert("Certificate Studio is still loading; please try again.");
           return;
         }
-        window.openStudioCorrection(row);
+        window.location.href = "/admin/studio/?correction=" + encodeURIComponent(row.credential_id);
       });
       actions.appendChild(correction);
     }
