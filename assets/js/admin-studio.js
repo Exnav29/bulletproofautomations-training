@@ -1188,7 +1188,7 @@
         typeof session !== "function" || !session() || root.dataset.routeOpen) return;
     root.dataset.routeOpen = "yes";
     var credential = new URLSearchParams(window.location.search).get("correction");
-    if (credential && /^BPA-(?:FND|BCAB|TRN)-\\d{4}-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{6}$/.test(credential)) {
+    if (credential && /^BPA-(?:FND|BCAB|TRN)-\d{4}-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{6}$/.test(credential)) {
       window.openStudioCorrection({ credential_id: credential, pdf_path: null });
     } else {
       document.getElementById("studio-open").click();
