@@ -25,7 +25,7 @@ for (const page of pages) {
     assert.equal((html.match(new RegExp('id="' + id + '"', "g")) || []).length, 1,
       "Missing/duplicate legacy " + id + " on " + page);
   }
-  assert.ok(html.includes('href="/assets/css/admin-console.css?v=20261017-a"'));
+  assert.ok(html.includes('href="/assets/css/admin-console.css?v=20261017-b"'));
   assert.ok(html.includes('/assets/js/admin-console.js?v=20261017-a'));
   const url = "https://training.bulletproofautomations.com/admin/" +
     (page === "overview" ? "" : page + "/");
@@ -65,6 +65,7 @@ assert.match(css, /prefers-reduced-motion/);
 const admin = fs.readFileSync("assets/js/admin.js", "utf8");
 const studio = fs.readFileSync("assets/js/admin-studio.js", "utf8");
 assert.match(admin, /\/admin\/studio\/\?correction=/);
+assert.match(admin, /holderCell\.appendChild\(quickCorrection\)/);
 assert.match(admin, /\/admin\/enrollments\/\?flag=/);
 assert.match(studio, /window\.openStudioCorrection/);
 assert.match(studio, /admin:authenticated/);
