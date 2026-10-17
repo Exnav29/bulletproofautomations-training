@@ -239,6 +239,40 @@ for (const file of walkFiles(dist, [".html", ".js"], [])) {
   }
 }
 
+/* --------------------------------------------------------------------------
+   Training administration: six independent URLs with one canonical source.
+   The legacy admin scripts require a shared set of DOM IDs and event handlers,
+   so building a separate DOM tree for each route could silently break payment,
+   archive and enrollment operations. Instead each *physical* route gets the
+   same authenticated shell with a data-admin-view that exposes only its own
+   workspace. This has real URLs, direct links, refresh and no runtime router.
+   No JS is needed to decide which workspace is visible.
+   -------------------------------------------------------------------------- */
+const adminViews = {
+  enrollments: "Enrollments",
+  payments: "Payments",
+  credentials: "Credentials",
+  studio: "Certificate Studio",
+  verification: "Verification activity"
+};
+const adminSource = path.join(dist, "admin/index.html");
+if (fs.existsSync(adminSource)) {
+  const template = fs.readFileSync(adminSource, "utf8");
+  if (!template.includes('data-admin-view="overview"')) {
+    throw new Error("Training admin source must declare the overview view");
+  }
+  for (const [view, title] of Object.entries(adminViews)) {
+    const folder = path.join(dist, "admin", view);
+    fs.mkdirSync(folder, { recursive: true });
+    fs.writeFileSync(
+      path.join(folder, "index.html"),
+      template.replace('data-admin-view="overview"', 'data-admin-view="' + view + '"')
+        .replace("<title>Overview — Bulletproof Automations Training</title>",
+          "<title>" + title + " — Bulletproof Automations Training</title>")
+    );
+  }
+}
+
 // Report the environment variable names, not the internal token names.
 const TOKEN_TO_ENV = {
   __SUPABASE_URL__: "SUPABASE_URL",
