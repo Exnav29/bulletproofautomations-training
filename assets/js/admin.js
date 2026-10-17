@@ -1143,6 +1143,23 @@ function renderCredentials() {
     });
     actions.appendChild(archiveButton);
 
+    // A correction is not a new credential. Route it through the signed Studio
+    // proof-and-approval flow rather than editing the display name in isolation.
+    if (row.pdf_path && (row.credential === "foundations" || row.credential === "completion")) {
+      var correction = document.createElement("button");
+      correction.type = "button";
+      correction.className = "mini";
+      correction.textContent = "Correct Certificate";
+      correction.addEventListener("click", function () {
+        if (typeof window.openStudioCorrection !== "function") {
+          window.alert("Certificate Studio is still loading; please try again.");
+          return;
+        }
+        window.openStudioCorrection(row);
+      });
+      actions.appendChild(correction);
+    }
+
     tr.appendChild(actions);
     body.appendChild(tr);
   });
