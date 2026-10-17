@@ -159,4 +159,26 @@ assert.equal(calls.filter((c) => c.action === "send_email").length, 0);
 console.log(
   "PASS: actual admin DOM course/cohort wizard, manual print-only roster, eligibility, PDF proof gallery, explicit issuance, print-only no-email behavior and explicit handout tracking.",
 );
+// An imported historical graduate can be corrected from the credential
+// register; a saved correction draft must resume without creating duplicates.
+const certificate = "BPA-FND-2026-WHXRTT";
+m.batches.push({
+  id: "correctionBatch", cohort_id: "cohort1", state: "draft", revision: 1,
+  snapshot: { course_name: "n8n Foundations", cohort_name: "Foundations 2026" }
+});
+m.graduates.push({
+  id: "correctionGraduate", batch_id: "correctionBatch",
+  credential_id: certificate, state: "draft", correction: true,
+  eligible: false, data: { full_name: "Carl Peter Lokko", email: "c.lokko.gh@gmail.com" }
+});
+const correctCalls = calls.filter((x) => x.action === "correct").length;
+w.openStudioCorrection({ credential_id: certificate, pdf_path: certificate + "/old.pdf" });
+await tick();
+assert.equal(calls.filter((x) => x.action === "correct").length, correctCalls);
+assert.equal(w.document.getElementById("certificate-studio").hidden, false);
+assert.ok(w.document.getElementById("studio-body").textContent.includes("Carl Peter Lokko"));
+assert.ok(w.document.getElementById("studio-body").textContent.includes("Add graduates and approve eligibility"));
+assert.ok(w.document.getElementById("studio-message").textContent.includes("existing correction draft"));
+console.log("PASS: saved corrected-name draft resumed from certificate register; original credential ID unchanged; no duplicate correction.");
+
 w.close();
