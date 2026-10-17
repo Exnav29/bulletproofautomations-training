@@ -104,6 +104,7 @@ function refresh() {
 function showSignin() {
   document.getElementById("signin").hidden = false;
   document.getElementById("dash").hidden = true;
+  document.dispatchEvent(new Event("admin:signedout"));
 }
 
 function showDash() {
