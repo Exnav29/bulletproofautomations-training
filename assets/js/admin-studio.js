@@ -1178,4 +1178,23 @@
     .addEventListener("click", function () {
       root.hidden = true;
     });
+
+  // A Studio URL opens its wizard after the existing administrator session is
+  // active. No additional login flow or sensitive state appears in the URL.
+  // Correction deep links only carry a public certificate ID; authorization,
+  // draft selection and proof approval still happen in the existing backend.
+  function openRoute() {
+    if (document.documentElement.getAttribute("data-admin-view") !== "studio" ||
+        typeof session !== "function" || !session() || root.dataset.routeOpen) return;
+    root.dataset.routeOpen = "yes";
+    var credential = new URLSearchParams(window.location.search).get("correction");
+    if (credential && /^BPA-(?:FND|BCAB|TRN)-\\d{4}-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{6}$/.test(credential)) {
+      window.openStudioCorrection({ credential_id: credential, pdf_path: null });
+    } else {
+      document.getElementById("studio-open").click();
+    }
+  }
+  document.addEventListener("admin:authenticated", openRoute);
+  document.addEventListener("admin:signedout", function () { delete root.dataset.routeOpen; });
+  openRoute();
 })();
