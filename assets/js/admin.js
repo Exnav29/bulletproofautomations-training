@@ -1094,7 +1094,16 @@ function renderCredentials() {
       return td;
     }
 
-    cell(row.holder_name);
+    var holderCell = cell(row.holder_name);
+    // The primary correction action belongs beside the holder's name:
+    // administrators should never need horizontal table scrolling to find it.
+    if (row.pdf_path && (row.credential === "foundations" || row.credential === "completion")) {
+      var quickCorrection = document.createElement("a");
+      quickCorrection.className = "ops-correct-quick";
+      quickCorrection.textContent = "Correct Certificate";
+      quickCorrection.href = "/admin/studio/?correction=" + encodeURIComponent(row.credential_id);
+      holderCell.appendChild(quickCorrection);
+    }
     cell(CRED_NAMES[row.credential] || row.credential);
     cell(row.credential_id);
     cell(credentialDate(row.issued_on));
@@ -1149,23 +1158,6 @@ function renderCredentials() {
       if (typeof window.openCredentialArchive === "function") window.openCredentialArchive(row);
     });
     actions.appendChild(archiveButton);
-
-    // A correction is not a new credential. Route it through the signed Studio
-    // proof-and-approval flow rather than editing the display name in isolation.
-    if (row.pdf_path && (row.credential === "foundations" || row.credential === "completion")) {
-      var correction = document.createElement("button");
-      correction.type = "button";
-      correction.className = "mini";
-      correction.textContent = "Correct Certificate";
-      correction.addEventListener("click", function () {
-        if (typeof window.openStudioCorrection !== "function") {
-          window.alert("Certificate Studio is still loading; please try again.");
-          return;
-        }
-        window.location.href = "/admin/studio/?correction=" + encodeURIComponent(row.credential_id);
-      });
-      actions.appendChild(correction);
-    }
 
     tr.appendChild(actions);
     body.appendChild(tr);
