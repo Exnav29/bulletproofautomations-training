@@ -82,6 +82,21 @@ w.authFetch = async (_url, opts) => {
       "BPA-TRN-2026-T3ST01";
     m.batches[0].state = "issued";
   }
+  if (action === "prepare_email") {
+    const graduate = m.graduates.find((g) => g.id === data.id);
+    m.deliveries.push({
+      id: "delivery-" + data.id,
+      graduate_id: data.id,
+      state: "prepared",
+      message: {
+        to: graduate.data.email,
+        subject: data.subject,
+        body: data.body,
+        attachment_name: graduate.credential_id + ".pdf",
+      },
+    });
+    result = { id: "delivery-" + data.id };
+  }
   if (action === "print_pack" || action === "download")
     return { ok: true, blob: async () => new w.Blob(["PDF"]) };
   return { ok: true, json: async () => result };
@@ -159,6 +174,73 @@ assert.equal(calls.filter((c) => c.action === "send_email").length, 0);
 console.log(
   "PASS: actual admin DOM course/cohort wizard, manual print-only roster, eligibility, PDF proof gallery, explicit issuance, print-only no-email behavior and explicit handout tracking.",
 );
+// Per-recipient email editing must be inline, retain the complete body
+// across navigation and refresh, and never send without separate approval.
+m.graduates[0].data.email = "controlled@example.com";
+m.graduates.push({
+  id: "g2",
+  batch_id: "batch1",
+  data: { full_name: "Second Graduate", email: "second@example.com" },
+  eligible: true,
+  state: "issued",
+  credential_id: "BPA-TRN-2026-T3ST02",
+  print_status: "ready",
+});
+await click("5. Approve & issue");
+await click("Refresh processing progress");
+await click("6. Delivery");
+field("Delivery method", "email");
+const emailMethodLabel = [...w.document.querySelectorAll("label")].find(
+  (l) => l.textContent === "Delivery method",
+);
+assert.ok(emailMethodLabel);
+w.document.getElementById(emailMethodLabel.htmlFor).dispatchEvent(new w.Event("change"));
+await tick();
+w.prompt = () => { throw new Error("Native prompt must not be used for email editing"); };
+
+function editorInput(label) {
+  const editorLabel = [...w.document.querySelectorAll("label")].find(
+    (l) => l.textContent === label,
+  );
+  assert.ok(editorLabel, "Missing inline email field: " + label);
+  return w.document.getElementById(editorLabel.htmlFor);
+}
+function typeInline(label, value) {
+  const input = editorInput(label);
+  input.value = value;
+  input.dispatchEvent(new w.Event("input", { bubbles: true }));
+}
+typeInline("Email subject for Controlled Graduate", "Congratulations, graduate!");
+typeInline("Email body for Controlled Graduate", "Hello {{first_name}},\\n\\nYour certificate is ready.\\n" + "Extra details. ".repeat(80));
+typeInline("Email subject for Second Graduate", "Second student's unique subject");
+typeInline("Email body for Second Graduate", "Independent body for the second student.");
+assert.ok(w.document.querySelectorAll("textarea.studio-email-body").length === 2);
+assert.ok(w.document.querySelectorAll(".studio-email-save-status").length === 2);
+assert.ok(w.localStorage.length >= 2, "Drafts should persist to browser storage");
+await click("5. Approve & issue");
+await click("Refresh processing progress");
+await click("6. Delivery");
+assert.equal(editorInput("Email subject for Controlled Graduate").value, "Congratulations, graduate!");
+assert.ok(editorInput("Email body for Controlled Graduate").value.includes("Extra details."));
+assert.equal(editorInput("Email subject for Second Graduate").value, "Second student's unique subject");
+assert.equal(editorInput("Email body for Second Graduate").value, "Independent body for the second student.");
+assert.equal(calls.filter((c) => c.action === "prepare_email").length, 0);
+assert.equal(calls.filter((c) => c.action === "send_email").length, 0);
+await click("Prepare email for review");
+assert.ok(!w.document.getElementById("studio-message").textContent || calls.some((c) => c.action === "prepare_email"), "Studio reported: " + w.document.getElementById("studio-message").textContent);
+const prepared = calls.find((c) => c.action === "prepare_email");
+assert.ok(prepared, "Prepare call must be made only on explicit click");
+assert.equal(prepared.data.subject, "Congratulations, graduate!");
+assert.ok(prepared.data.body.includes("Your certificate is ready."));
+assert.equal(prepared.data.id, m.graduates[0].id);
+assert.equal(calls.filter((c) => c.action === "send_email").length, 0);
+assert.equal(editorInput("Email subject for Second Graduate").value, "Second student's unique subject");
+assert.ok(w.document.body.textContent.includes("Review recipient, message and attachment"));
+console.log("PASS: two independent inline email drafts, autosave across navigation and refresh, no prompts, preparation without sending.");
+// Signing out clears locally persisted personal message drafts.
+w.document.dispatchEvent(new w.Event("admin:signedout"));
+assert.equal(w.localStorage.length, 0, "Signout must clear sensitive browser drafts");
+
 // An imported historical graduate can be corrected from the credential
 // register; a saved correction draft must resume without creating duplicates.
 const certificate = "BPA-FND-2026-WHXRTT";

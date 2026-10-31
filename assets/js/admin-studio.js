@@ -108,6 +108,58 @@
       return batch && g.batch_id === batch.id;
     });
   }
+  // Subject and message drafts live only in this administrator's browser.
+  // Keeping them outside the rerendered wizard DOM prevents losing a long
+  // message on navigation, refresh, or a failed prepare request.
+  var emailDraftPrefix = "bpa.studio.email-draft.v1.";
+  function emailDraftKey(g) {
+    return emailDraftPrefix + batch.id + "." + g.id;
+  }
+  function readEmailDraft(g) {
+    try {
+      var raw = window.localStorage.getItem(emailDraftKey(g));
+      if (!raw) return null;
+      var draft = JSON.parse(raw);
+      if (
+        !draft ||
+        typeof draft.subject !== "string" ||
+        typeof draft.body !== "string"
+      ) return null;
+      return draft;
+    } catch (_e) {
+      return null;
+    }
+  }
+  function writeEmailDraft(g, subject, content) {
+    try {
+      window.localStorage.setItem(
+        emailDraftKey(g),
+        JSON.stringify({ subject: subject, body: content }),
+      );
+      return true;
+    } catch (_e) {
+      return false;
+    }
+  }
+  function deleteEmailDraft(g) {
+    try {
+      window.localStorage.removeItem(emailDraftKey(g));
+    } catch (_e) {
+      // Storage may be disabled; the current editor remains usable.
+    }
+  }
+  function clearEmailDraftsOnSignout() {
+    try {
+      var keys = [];
+      for (var i = 0; i < window.localStorage.length; i++) {
+        var key = window.localStorage.key(i);
+        if (key && key.startsWith(emailDraftPrefix)) keys.push(key);
+      }
+      keys.forEach(function (key) { window.localStorage.removeItem(key); });
+    } catch (_e) {
+      // No browser storage to clear.
+    }
+  }
   function save(blob, name) {
     var u = URL.createObjectURL(blob);
     setTimeout(function () {
@@ -912,37 +964,99 @@
                 card,
               );
           });
-          var sent = existing.some(function (d) {
-            return d.state === "sent";
+          // A prepared delivery is an immutable reviewed message. It must be
+          // excluded before a replacement can be prepared; do not duplicate.
+          var prepared = existing.some(function (d) {
+            return ["prepared", "sending", "uncertain"].includes(d.state);
           });
-          button(
-            sent ? "Prepare explicit resend" : "Prepare personalized email",
-            async function () {
-              var reason = sent
-                ? window.prompt("Reason for explicit resend:")
-                : "";
-              if (sent && !reason) return;
-              var subject = window.prompt(
-                "Email subject",
-                batch.snapshot.email_subject || emailSubject,
+          if (prepared) {
+            el("p", "An email is already prepared or in progress. Review it above. Exclude a prepared message before creating a replacement.", card);
+          } else {
+            var sent = existing.some(function (d) {
+              return d.state === "sent";
+            });
+            var editor = el("section", undefined, card, "studio-email-editor");
+            el("h5", sent ? "Prepare an explicit certificate resend" : "Personalize this graduate's email", editor);
+            el(
+              "p",
+              "Edit the subject and full message here. Changes save automatically in this browser; navigating or refreshing won't erase them. No email is sent until you separately review and approve it.",
+              editor,
+              "studio-email-hint",
+            );
+            var draft = readEmailDraft(g);
+            var subjectInput = field(
+              editor,
+              "Email subject for " + g.data.full_name,
+              draft ? draft.subject : (batch.snapshot.email_subject || emailSubject),
+            );
+            var bodyInput = field(
+              editor,
+              "Email body for " + g.data.full_name,
+              draft ? draft.body : (batch.snapshot.email_body || emailBody),
+              "textarea",
+            );
+            subjectInput.maxLength = 250;
+            bodyInput.maxLength = 30000;
+            bodyInput.rows = 14;
+            bodyInput.classList.add("studio-email-body");
+            var saveStatus = el("p", "", editor, "studio-email-save-status");
+            var tokens = el(
+              "p",
+              "Personalization tokens: {{first_name}}, {{name}}, {{course}}, {{start_date}}, {{end_date}}, {{credential_id}}, {{url}}, {{issue_date}}.",
+              editor,
+              "studio-email-hint",
+            );
+            function storeDraft() {
+              saveStatus.textContent = writeEmailDraft(
+                g,
+                subjectInput.value,
+                bodyInput.value,
+              )
+                ? "Draft saved in this browser."
+                : "Browser storage unavailable. Keep this page open until preparing the message.";
+            }
+            subjectInput.addEventListener("input", storeDraft);
+            bodyInput.addEventListener("input", storeDraft);
+            saveStatus.textContent = draft
+              ? "Your saved draft was restored from this browser."
+              : "Draft ready. Changes save automatically as you type.";
+            if (sent) {
+              el(
+                "p",
+                "This student has already been sent a certificate. Do not use certificate resend for a congratulations-only follow-up; that should be a separate email without an attachment.",
+                editor,
+                "studio-email-hint",
               );
-              if (subject === null) return;
-              var content = window.prompt(
-                "Message template (personalization tokens are expanded)",
-                batch.snapshot.email_body || emailBody,
-              );
-              if (content === null) return;
-              await api("prepare_email", {
-                id: g.id,
-                subject: subject,
-                body: content,
-                resend: sent,
-                reason: reason,
-              });
-              await reload();
-            },
-            card,
-          );
+            }
+            var resendReason = sent
+              ? field(editor, "Reason for resending certificate to " + g.data.full_name, "")
+              : null;
+            button(
+              sent ? "Prepare explicit resend for review" : "Prepare email for review",
+              async function () {
+                var subject = subjectInput.value.trim();
+                var content = bodyInput.value.trim();
+                if (!subject || !content) throw Error("Enter both a subject and a message body.");
+                if (/[\r\n]/.test(subject)) throw Error("Email subject must be one line.");
+                var reason = resendReason ? resendReason.value.trim() : "";
+                if (sent && !reason) throw Error("Explain why the certificate is being resent.");
+                // Save first: even a network failure must not erase the message.
+                storeDraft();
+                await api("prepare_email", {
+                  id: g.id,
+                  subject: subject,
+                  body: content,
+                  resend: sent,
+                  reason: reason,
+                });
+                deleteEmailDraft(g);
+                report("Email prepared for review. No message has been sent.");
+                await reload();
+              },
+              editor,
+            );
+          }
+
         }
       });
       if (["email", "both"].includes(method.value))
@@ -1195,6 +1309,6 @@
     }
   }
   document.addEventListener("admin:authenticated", openRoute);
-  document.addEventListener("admin:signedout", function () { delete root.dataset.routeOpen; });
+  document.addEventListener("admin:signedout", function () { delete root.dataset.routeOpen; clearEmailDraftsOnSignout(); });
   openRoute();
 })();
