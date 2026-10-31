@@ -2,6 +2,7 @@
 import { PDFDocument, rgb, degrees } from "npm:pdf-lib@1.17.1";
 import fontkit from "npm:@pdf-lib/fontkit@1.1.1";
 import QRCode from "npm:qrcode@1.5.4";
+import { certificateCourseLabel } from "./domain.mjs";
 export const SIGNATURE_SHA =
   "f4c41e33e2c40bd02d0eb7610616d962d710cdf333b492dccedbbf3f118a4677";
 export const TEMPLATE_SHA =
@@ -114,7 +115,7 @@ export async function generate(
     text(data.full_name, 180, 265, 544, 27, serif, teal, true);
   else lines(data.full_name, 180, 250, 544, 20, 2, serif, teal);
   lines(data.statement, 190, 320, 520, 11, 2);
-  lines(data.course_name + " — " + data.level, 190, 349, 520, 15, 2, body);
+  lines(certificateCourseLabel(data.course_name, data.level), 190, 349, 520, 15, 2, body);
   text(date(data.start_date) + " – " + date(data.end_date), 160, 455, 200, 10);
   text("Founder, Bulletproof Automations", 160, 532, 200, 8, body, muted);
   text("ISSUE DATE", 385, 486, 110, 8, body, muted);
