@@ -227,6 +227,7 @@ assert.equal(editorInput("Email body for Second Graduate").value, "Independent b
 assert.equal(calls.filter((c) => c.action === "prepare_email").length, 0);
 assert.equal(calls.filter((c) => c.action === "send_email").length, 0);
 await click("Prepare email for review");
+assert.ok(!w.document.getElementById("studio-message").textContent || calls.some((c) => c.action === "prepare_email"), "Studio reported: " + w.document.getElementById("studio-message").textContent);
 const prepared = calls.find((c) => c.action === "prepare_email");
 assert.ok(prepared, "Prepare call must be made only on explicit click");
 assert.equal(prepared.data.subject, "Congratulations, graduate!");
