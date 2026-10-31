@@ -1037,7 +1037,7 @@
                 var subject = subjectInput.value.trim();
                 var content = bodyInput.value.trim();
                 if (!subject || !content) throw Error("Enter both a subject and a message body.");
-                if (/[\\r\\n]/.test(subject)) throw Error("Email subject must be one line.");
+                if (/[\r\n]/.test(subject)) throw Error("Email subject must be one line.");
                 var reason = resendReason ? resendReason.value.trim() : "";
                 if (sent && !reason) throw Error("Explain why the certificate is being resent.");
                 // Save first: even a network failure must not erase the message.
