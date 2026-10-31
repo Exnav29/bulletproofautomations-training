@@ -147,6 +147,67 @@ html[data-admin-view="credentials"] [data-ops-view="credentials"] {display:flex!
 #studio-body .studio-steps .mini {flex-shrink:0;white-space:nowrap;}
 #studio-body .studio-grid {gap:1rem;}
 #studio-body .studio-card {border-color:var(--ops-line);border-radius:8px;}
+/* Email delivery: real, accessible per-graduate composition rather than two
+   native prompt dialogs. Long messages remain usable on mobile. */
+#studio-body .studio-email-editor {
+  display:grid;
+  gap:.85rem;
+  margin-top:1rem;
+  padding:1.1rem 1.2rem;
+  border:1px solid var(--ops-line);
+  border-left:3px solid var(--ops-gold);
+  background:#f7faf9;
+  border-radius:7px;
+  min-width:0;
+}
+#studio-body .studio-email-editor h5 { margin:0; font-size:1rem; color:var(--ops-deep); }
+#studio-body .studio-email-editor .fld { width:100%; min-width:0; margin:0; }
+#studio-body .studio-email-editor input,
+#studio-body .studio-email-editor textarea {
+  box-sizing:border-box;
+  width:100%;
+  max-width:100%;
+  padding:.75rem;
+  font:inherit;
+  color:var(--ops-deep);
+  background:#fff;
+  border:1px solid var(--ops-line);
+  border-radius:6px;
+}
+#studio-body .studio-email-editor .studio-email-body {
+  min-height:19rem;
+  line-height:1.6;
+  resize:vertical;
+  white-space:pre-wrap;
+}
+#studio-body .studio-email-editor input:focus-visible,
+#studio-body .studio-email-editor textarea:focus-visible {
+  outline:2px solid var(--ops-teal);
+  outline-offset:2px;
+}
+#studio-body .studio-email-hint,
+#studio-body .studio-email-save-status {
+  margin:0;
+  font-size:.82rem;
+  color:#516873;
+  line-height:1.5;
+}
+#studio-body .studio-email-save-status { color:var(--ops-teal); font-weight:650; }
+#studio-body .studio-email-editor .mini {
+  justify-self:start;
+  background:var(--ops-navy);
+  color:#fff;
+  border-color:var(--ops-navy);
+}
+#studio-body .studio-email-editor .mini:hover {
+  background:var(--ops-teal);
+  color:#fff;
+}
+@media(max-width:750px) {
+  #studio-body .studio-email-editor { padding:.8rem; }
+  #studio-body .studio-email-editor .studio-email-body { min-height:16rem; }
+}
+
 /* Keep the legacy credential archive modal above the new workspace. */
 .archive-dialog {z-index:100;}
 @media(max-width:1000px) {
