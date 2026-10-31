@@ -190,7 +190,11 @@ await click("5. Approve & issue");
 await click("Refresh processing progress");
 await click("6. Delivery");
 field("Delivery method", "email");
-w.document.getElementById(select.htmlFor).dispatchEvent(new w.Event("change"));
+const emailMethodLabel = [...w.document.querySelectorAll("label")].find(
+  (l) => l.textContent === "Delivery method",
+);
+assert.ok(emailMethodLabel);
+w.document.getElementById(emailMethodLabel.htmlFor).dispatchEvent(new w.Event("change"));
 await tick();
 w.prompt = () => { throw new Error("Native prompt must not be used for email editing"); };
 
