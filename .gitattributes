@@ -1,0 +1,2 @@
+# Byte-exact copy of a deployed Edge Function; its SHA-256 is recorded in the README beside it.
+supabase/deployed/** -text
