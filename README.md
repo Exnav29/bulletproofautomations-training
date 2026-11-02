@@ -133,6 +133,7 @@ Read these in order before changing anything:
 | File | What it is |
 |---|---|
 | [CLAUDE.md](CLAUDE.md) | Terminology, immutable rules, voice, working rules. **Start here.** |
+| [docs/PRD-WEBINARS-WORKSHOPS.md](docs/PRD-WEBINARS-WORKSHOPS.md) | **Planned feature**: extend existing registration for webinars/workshops; no implementation yet. |
 | [docs/build-status.md](docs/build-status.md) | Where the build actually is, conventions, blockers |
 | [docs/project-brief.md](docs/project-brief.md) | Confirmed decisions — dates, prices, site map |
 | [docs/competency-framework.md](docs/competency-framework.md) | **Canonical.** All weights, thresholds and legal wording |
