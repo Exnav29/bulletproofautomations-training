@@ -16,6 +16,14 @@ Full background: @docs/project-brief.md
 Certification standard: @docs/competency-framework.md
 **Current build state, conventions and blockers: @docs/build-status.md — read this first.**
 
+## Active feature brief: webinars and workshops (planning, 2 November 2026)
+
+The current request is to extend **existing** training enrollment to support standalone webinars and workshops. **Read [docs/PRD-WEBINARS-WORKSHOPS.md](docs/PRD-WEBINARS-WORKSHOPS.md) in full before writing code.** Treat it as the feature's product and acceptance contract; this section is only a pointer.
+
+Key guardrails: reuse the Cloudflare Pages + Supabase + existing enrollment/admin/Paystack patterns; do not create a new booking application or use `book.bulletproofautomations.com` for group registrations. Cohort `/api/enroll` and the `enrollments` schema are BCAB-specific, so preserve them and add only the narrow event-specific records needed. The shared live Paystack receiver is version 9 and currently excludes Scheduling `BPS-` payments but may otherwise fall back to cohort matching by email: webinar payments need explicit isolation BEFORE that fallback. Review `docs/paystack-webhook-deployment.md`, and do not deploy live payments, production webhook changes, or database migrations without separate approval. Check draft PR #54 for already-applied private graduate webinar entitlements; do not replay its migration.
+
+Do not implement directly from this short paragraph: use the PRD. The PRD is documentation only, not authorization to build, migrate or deploy unreviewed changes.
+
 ## Terminology — use these exactly
 
 | Use | Never use |
