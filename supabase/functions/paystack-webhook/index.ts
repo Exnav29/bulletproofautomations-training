@@ -68,6 +68,27 @@ function referenceMode(reference: unknown): 'live' | 'test' | null {
   return null
 }
 
+/** Paystack sends metadata as an object, or as a JSON string when the caller set one. */
+function metadataApp(metadata: unknown): string | null {
+  let m = metadata
+  if (typeof m === 'string') {
+    try {
+      m = JSON.parse(m)
+    } catch (_) {
+      return null
+    }
+  }
+  return m && typeof m === 'object' && typeof (m as any).app === 'string' ? (m as any).app : null
+}
+
+/** A Bulletproof Scheduling charge or refund: a BPS- reference anywhere a charge
+ *  or refund carries one, or that app's metadata marker. */
+function isSchedulingPayment(data: Record<string, any>, txnReference: string | null): boolean {
+  const refs = [txnReference, data?.reference, data?.transaction_reference, data?.transaction?.reference]
+  if (refs.some((r) => typeof r === 'string' && r.startsWith('BPS-'))) return true
+  return [data?.metadata, data?.transaction?.metadata].some((m) => metadataApp(m) === 'bulletproof-scheduling')
+}
+
 /** First of these that is a non-empty string, else null. */
 function firstString(...values: unknown[]): string | null {
   for (const v of values) if (typeof v === 'string' && v) return v
@@ -372,6 +393,47 @@ serve(async (req) => {
       }),
     })
     return new Response(JSON.stringify({ ok: true, applied: false, matched: false }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  /* NOT A TRAINING PAYMENT: Bulletproof Scheduling.
+   *
+   * The Paystack account is shared with Bulletproof Scheduling
+   * (book.bulletproofautomations.com), so its charges and refunds arrive here
+   * too. That app confirms its own payments with Paystack's API; none of them
+   * is ever an enrollment. Without this stop, a LIVE appointment payment would
+   * miss every reference join below and reach the email fallback, crediting
+   * the payer's enrollment with appointment money.
+   *
+   * It is recognised by what that app sets on every checkout, never by email:
+   * references it mints start BPS-, and its metadata carries
+   * app = "bulletproof-scheduling". Either is enough. Training references
+   * start BPA- and training metadata has no `app`, so neither can match one.
+   *
+   * Placed after the signature and mode checks, so those still decide first,
+   * and before any enrollment lookup. If the note cannot be written, answer 503
+   * like the other failed writes: Paystack retries, the retry finds the event
+   * logged but not matched, and comes back here. Nothing has moved yet. */
+  if (isSchedulingPayment(data, txnReference)) {
+    const noted = await db(`payment_events?id=eq.${eventRow.id}`, {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        matched: false,
+        match_note: 'Bulletproof Scheduling payment; not an enrollment',
+      }),
+    })
+    if (!noted.ok) {
+      const detail = await noted.text().catch(() => '')
+      console.error('scheduling payment: could not mark event', eventRow.id, noted.status, detail.slice(0, 300))
+      return new Response(JSON.stringify({ ok: false, error: 'event-note-failed' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    return new Response(JSON.stringify({ ok: true, applied: false, scheduling: true }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     })
