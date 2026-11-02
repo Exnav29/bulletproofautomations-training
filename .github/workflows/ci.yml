@@ -62,10 +62,15 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.5.4
-      # Runs the real function against an in-memory PostgREST stand-in. Covers the
-      # Bulletproof Scheduling guard and the existing training payment behaviour.
-      - name: Webhook regression suite
-        run: deno test --allow-net --allow-env --allow-read tests/paystack-webhook.test.ts
+      # Runs the real function against production's ledger schema and triggers in PGlite
+      # (tests/fixtures/payment-ledger.sql). Covers the Bulletproof Scheduling guard, the
+      # existing training payment behaviour and payment_events_mark_installment_paid.
+      - name: Webhook regression suite (main)
+        run: deno test --node-modules-dir=none --allow-net --allow-env --allow-read tests/paystack-webhook.test.ts
+      - name: Webhook regression suite (production snapshot)
+        run: deno test --node-modules-dir=none --allow-net --allow-env --allow-read tests/paystack-webhook.test.ts
+        env:
+          WEBHOOK_MODULE: ${{ github.workspace }}/supabase/deployed/paystack-webhook-v9/index.ts
       # The deployed snapshot must stay byte-identical to what production runs.
       - name: Production snapshot checksum
         run: |

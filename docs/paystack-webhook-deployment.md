@@ -1,6 +1,6 @@
 # Paystack webhook: what is deployed, and how to bring it in line with `main`
 
-_Last updated 2026-11-02._
+_Last updated 2026-11-02 (corrected the same day: installments; see below)._
 
 ## The two versions
 
@@ -9,8 +9,8 @@ _Last updated 2026-11-02._
 | Source | [`supabase/deployed/paystack-webhook-v9/index.ts`](../supabase/deployed/paystack-webhook-v9/README.md) | `supabase/functions/paystack-webhook/index.ts` |
 | Base | `e7f7e34`: August code, deployed as v8 on 2026-08-13 | `3110f7d` and later: adds installment plans (#30, 2026-09-18) |
 | Scheduling guard | yes | yes, the same code |
-| Installment payments | **not handled** | handled |
-| Regression suite | 20 / 21 | 21 / 21 |
+| Installment lookup in the function | no: matched by email, then the database trigger marks the installment paid | yes: by installment reference (the trigger also runs) |
+| Regression suite (30 cases) | 30 / 30 | 30 / 30 |
 
 The Paystack account is shared with Bulletproof Scheduling (book.bulletproofautomations.com).
 Both versions stop its payments, recognised by a `BPS-` reference or
@@ -18,48 +18,64 @@ Both versions stop its payments, recognised by a `BPS-` reference or
 signature verification and the test/live checks. Without it, a live appointment payment would
 reach the email fallback and be credited to the payer's enrollment.
 
-## Why production passes 20 of 21
+## Installments in production
 
-The one failing case is `training: installment charge advances the enrollment and the installment`.
-It tests code that production has never had:
+An earlier version of this page said production leaves paid installments `pending`, and that this
+was why it passed 20 of 21 cases. **That was wrong.** The test database then had no triggers;
+production's does.
 
-- `main` (#30) first looks the reference up in `payment_plan_installments`. Then it credits the
-  owning enrollment and marks that installment `paid`.
-- Production (August code) has no installment lookup. An installment's reference
-  (`BPA-CAB-…`, stored on the installment row) misses the enrollment reference join and falls back
-  to email. The enrollment balance is credited, which is usually the right enrollment. But the
-  installment row stays `pending`, so the installment scheduler may keep treating it as unpaid.
+- **What happens in production:**
+  - The August function has no installment lookup, so an installment's reference misses the
+    enrollment reference join and is credited to the enrollment by email.
+  - The function then marks the event `matched`.
+  - The database trigger `payment_events_mark_installment_paid` (see
+    `supabase-payment-plans.sql`, enabled in production) then marks the installment with that
+    reference `paid`.
+- **Read-only audit, 2026-11-02:**
+  - 9 installments `paid`, each with exactly one verified, matched `charge.success` event.
+  - 0 installments not marked paid despite a verified payment.
+  - The 2 `sent` installments are unpaid: one checkout is `abandoned` at Paystack, and the other
+    has not been started.
+  - Paystack's 10 successful live charges are all in the ledger.
+- **What `main` changes:** it finds the installment by its own reference instead of by email, so
+  it no longer depends on the payer using the same email address. The trigger still marks the
+  installment paid.
 
-This was true before the scheduling guard and is not changed by it. On the August code, the same
-case fails identically with and without the guard.
+The tests now run against production's schema, triggers included, in PGlite
+(`tests/fixtures/payment-ledger.sql`, copied from the live catalog). Both versions pass all 30
+cases.
 
 ## Run the suite
 
 ```bash
-deno test --allow-net --allow-env --allow-read tests/paystack-webhook.test.ts           # main: 21/21
+deno test --node-modules-dir=none --allow-net --allow-env --allow-read tests/paystack-webhook.test.ts   # main: 30/30
 WEBHOOK_MODULE=$PWD/supabase/deployed/paystack-webhook-v9/index.ts \
-  deno test --allow-net --allow-env --allow-read tests/paystack-webhook.test.ts         # production: 20/21
+  deno test --node-modules-dir=none --allow-net --allow-env --allow-read tests/paystack-webhook.test.ts # production: 30/30
 ```
 
-CI runs the first line on every pull request.
+`tests/fixtures/payment-ledger.sql` is production's `payment_events`, `enrollments` and
+`payment_plan_installments`, with their constraints, indexes, trigger functions and triggers,
+exported read-only from the live catalog. If the live schema changes, re-export it rather than
+editing it by hand. A test checks that its trigger functions still match
+`supabase-payment-plans.sql`.
+
+CI runs both lines on every pull request.
 
 ## Bring production in line with `main` safely
 
-Deploying `main`'s webhook switches on installment handling for real payments. Treat it as its
-own release, not part of the scheduling work.
+Deploying `main`'s webhook changes how installment payments are matched: by installment
+reference instead of by email. The installment is still marked paid by the trigger. That is a
+smaller change than first described, but it still changes live payment handling, so treat it as
+its own release, not part of the scheduling work.
 
 1. **Merge this PR, then don't deploy it on its own.** Merging changes only the repository.
    Cloudflare Pages republishes the static site, which is unchanged by this PR. Edge Functions
    are deployed only by hand with `supabase functions deploy`.
-2. **Decide whether installment plans are live.** Check whether the site's installment endpoints
-   (`/api/installment`, the scheduler) are in use, and whether `payment_plan_installments` has
-   rows with a `paystack_reference`. If installments are already being charged, production is
-   under-recording them today (see above). That raises the priority of step 4, but does not
-   change how to do it.
-3. **Before deploying, reconcile any installment payments made so far.** Each `payment_events`
-   row whose reference matches a `payment_plan_installments.paystack_reference` was credited by
-   email. Mark those installments `paid` by hand. Don't replay the events: the enrollment balance
-   is already credited, and a replay would add the money twice.
+2. **Installment plans are live** (11 rows, 2026-11-02), and production records them correctly
+   through the trigger. No reconciliation is needed before deploying: the audit found no paid
+   installment left unmarked. Re-run that check just before deploying.
+3. **Don't replay old events.** Every installment payment so far is already applied, and a
+   replay would add the money twice.
 4. **Deploy `main`'s webhook in a quiet window.** Download production first
    (`sha256 0d1255d0…acb10` expected). Deploy, download again, and compare with `main`. Probe
    with `GET` (405) and an unsigned bad-JSON `POST` (400); neither writes to the ledger. Then

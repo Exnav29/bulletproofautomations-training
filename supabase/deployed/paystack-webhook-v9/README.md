@@ -17,8 +17,11 @@ by accident, and the site build (`scripts/build.js`) never publishes `supabase/`
 After the deploy, the source downloaded back from production was compared with this file:
 same bytes, same SHA-256.
 
-**Not in production:** the installment-plan changes to this function from #30
-(`3110f7d`, 2026-09-18). Version 9 is the August code. See
+**Not in production:** the installment-reference lookup added to this function in #30
+(`3110f7d`, 2026-09-18). Version 9 is the August code. It still records installment payments
+correctly: it credits the enrollment by email, and the database trigger
+`payment_events_mark_installment_paid` then marks the installment paid. The tests pass 30/30
+against this file, using production's schema and triggers. See
 [docs/paystack-webhook-deployment.md](../../../docs/paystack-webhook-deployment.md).
 
 ## Check that production still matches
