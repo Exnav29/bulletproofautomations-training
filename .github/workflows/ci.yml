@@ -29,6 +29,9 @@ jobs:
           node --check assets/js/admin-archives.js
           node --check assets/js/admin-previews.js
           node --check assets/js/shell.js
+          node --check assets/js/admin-workshops.js
+          node --check assets/js/workshop-tracking.js
+          for f in functions/api/*.js functions/api/workshops/*.js functions/api/admin/*.js; do node --check "$f"; done
           node --test tests/*.test.js
 
   certificate-renderer:
@@ -51,6 +54,7 @@ jobs:
           node tests/studio-ui.test.mjs
           npm run build
           node tests/admin-console.test.mjs
+          node tests/workshop-tracking.test.mjs
       - name: Render real PDFs and reject invalid inputs
         run: deno test --node-modules-dir=none --allow-net --allow-read --allow-env tests/certificate-renderer.test.ts
 

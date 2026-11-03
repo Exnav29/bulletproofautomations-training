@@ -185,7 +185,11 @@ const injected = {
   // never passes through the build. Without this value /verify renders a form
   // whose every submission is refused by /api/verify, which is why it is
   // treated as required rather than optional.
-  __TURNSTILE_SITE_KEY__: process.env.TURNSTILE_SITE_KEY || ""
+  __TURNSTILE_SITE_KEY__: process.env.TURNSTILE_SITE_KEY || "",
+  // Meta Pixel ID for the webinar/workshop pages. Public by nature, OPTIONAL:
+  // empty means assets/js/workshop-tracking.js never loads the Pixel at all.
+  // Accepted only if it is all digits, so a mistyped value cannot inject markup.
+  __META_PIXEL_ID__: /^[0-9]{6,20}$/.test(process.env.META_PIXEL_ID || "") ? process.env.META_PIXEL_ID : ""
 };
 
 function injectEnv(text) {
