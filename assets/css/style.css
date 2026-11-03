@@ -844,3 +844,7 @@ section { padding: 72px 0; }
     .site-header, .site-footer, .btn, .mobile-menu-btn { display: none !important; }
     body { background: white; color: black; }
 }
+
+.site-footer .footer-contact { margin-top: 8px; }
+.site-footer .footer-contact a { color: var(--text-secondary); }
+.site-footer .footer-contact a:hover { color: var(--gold); }
