@@ -71,6 +71,24 @@ jobs:
         run: deno test --node-modules-dir=none --allow-net --allow-env --allow-read tests/paystack-webhook.test.ts
         env:
           WEBHOOK_MODULE: ${{ github.workspace }}/supabase/deployed/paystack-webhook-v9/index.ts
+      - name: Webhook regression suite (v10 release candidate)
+        run: deno test --node-modules-dir=none --allow-net --allow-env --allow-read tests/paystack-webhook.test.ts
+        env:
+          WEBHOOK_MODULE: ${{ github.workspace }}/supabase/releases/paystack-webhook-v10/index.ts
+      # Webinar/workshop isolation: no workshop transaction may reach cohort matching.
+      - name: Workshop isolation suite (main)
+        run: deno test --node-modules-dir=none --allow-net --allow-env --allow-read tests/paystack-webhook-workshops.test.ts
+      - name: Workshop isolation suite (v10 release candidate)
+        run: deno test --node-modules-dir=none --allow-net --allow-env --allow-read tests/paystack-webhook-workshops.test.ts
+        env:
+          WEBHOOK_MODULE: ${{ github.workspace }}/supabase/releases/paystack-webhook-v10/index.ts
+      # Documents the production hazard v10 closes: v9 credits a webinar charge by email.
+      - name: Workshop baseline (production v9)
+        run: deno test --node-modules-dir=none --allow-net --allow-env --allow-read tests/paystack-webhook-workshops.test.ts
+        env:
+          WEBHOOK_MODULE: ${{ github.workspace }}/supabase/deployed/paystack-webhook-v9/index.ts
+      - name: Workshop migration rolls back and re-applies
+        run: deno test --node-modules-dir=none --allow-read tests/workshops-migration.test.ts
       # The deployed snapshot must stay byte-identical to what production runs.
       - name: Production snapshot checksum
         run: |
