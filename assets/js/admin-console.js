@@ -1,4 +1,4 @@
-/* Route-aware training operations console. Six real /admin/... pages use the
+/* Route-aware training operations console. Seven real /admin/... pages use the
    same proven forms and business logic, never separate copies of state.
    No additional authentication, storage, or network service is introduced. */
 (function () {
@@ -10,7 +10,8 @@
     payments: ["Payments", "Every Paystack event, reconciliation and export in one place."],
     credentials: ["Credentials", "Issued records, corrections, document archives and revocations."],
     studio: ["Certificate Studio", "Create, approve, print and deliver your course certificates."],
-    verification: ["Verification activity", "People and organizations checking issued credentials."]
+    verification: ["Verification activity", "People and organizations checking issued credentials."],
+    workshops: ["Webinars & workshops", "Registrations, verified payments, reviews and campaign results."]
   };
   if (!Object.prototype.hasOwnProperty.call(pages, view)) view = "overview";
   var title = document.getElementById("ops-page-title");

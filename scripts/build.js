@@ -253,7 +253,8 @@ const adminViews = {
   payments: "Payments",
   credentials: "Credentials",
   studio: "Certificate Studio",
-  verification: "Verification activity"
+  verification: "Verification activity",
+  workshops: "Webinars &amp; workshops"
 };
 const adminSource = path.join(dist, "admin/index.html");
 if (fs.existsSync(adminSource)) {
