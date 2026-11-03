@@ -70,7 +70,14 @@ let failEventPatch = false
 Deno.serve({ port: DB_PORT, onListen() {} }, async (req) => {
   const url = new URL(req.url)
   const table = url.pathname.replace('/rest/v1/', '')
-  if (!TABLES.has(table)) return new Response('no such table', { status: 404 })
+  // PostgREST's own answer for a table missing from the schema cache. This is what v10 sees
+  // for workshop_payment_attempts if it is deployed before the workshop migration.
+  if (!TABLES.has(table)) {
+    return Response.json(
+      { code: 'PGRST205', message: `Could not find the table 'public.${table}' in the schema cache` },
+      { status: 404 },
+    )
+  }
   const params = url.searchParams
   try {
     if (req.method === 'POST') {
