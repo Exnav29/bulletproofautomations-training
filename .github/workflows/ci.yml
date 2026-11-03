@@ -89,6 +89,8 @@ jobs:
           WEBHOOK_MODULE: ${{ github.workspace }}/supabase/deployed/paystack-webhook-v9/index.ts
       - name: Workshop migration rolls back and re-applies
         run: deno test --node-modules-dir=none --allow-read tests/workshops-migration.test.ts
+      - name: Workshop API end to end (registration, payment states, privacy, outbox)
+        run: deno test --node-modules-dir=none --allow-net --allow-read --allow-env tests/workshops-api.test.ts
       # The deployed snapshot must stay byte-identical to what production runs.
       - name: Production snapshot checksum
         run: |

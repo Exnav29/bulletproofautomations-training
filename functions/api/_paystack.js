@@ -202,8 +202,11 @@ export async function initializeTransaction(env, options) {
     // Ghanaian MoMo, so offering it to somebody in Germany is a dead option on
     // the checkout page rather than a choice. Defaults to the Ghana list when
     // no tier is passed, so existing callers are unaffected.
-    channels: channelsFor(options.tier || "ghana"),
-    metadata: {
+    channels: options.channels || channelsFor(options.tier || "ghana"),
+    /* Webinar and workshop checkouts pass their own metadata (app marker and
+       registration id). Cohort callers pass none and get exactly the object
+       below, unchanged. */
+    metadata: options.metadata || {
       enrollment_id: options.enrollmentId,
       chosen_option: options.option,
       cohort: COHORT,
@@ -251,4 +254,41 @@ export async function initializeTransaction(env, options) {
   }
 
   return { ok: true, url: data.data.authorization_url, reference: data.data.reference };
+}
+
+/* Server-side confirmation of one transaction by reference: GET
+ * /transaction/verify/:reference with the secret key. Used by the workshop
+ * status endpoint so a returning visitor can be confirmed before the webhook
+ * lands. Read-only at Paystack; the caller decides what, if anything, to apply.
+ * Same API-host rule as initializeTransaction: a live key always talks to
+ * api.paystack.co. */
+export async function verifyTransaction(env, reference) {
+  const secret = env.PAYSTACK_SECRET_KEY;
+  if (!secret) return { ok: false, reason: "paystack-not-configured" };
+  const base =
+    paystackMode(env) === "test" && typeof env.PAYSTACK_API_BASE === "string" && env.PAYSTACK_API_BASE
+      ? env.PAYSTACK_API_BASE.replace(/\/+$/, "")
+      : "https://api.paystack.co";
+  let res;
+  try {
+    res = await fetch(base + "/transaction/verify/" + encodeURIComponent(reference), {
+      headers: { Authorization: "Bearer " + secret }
+    });
+  } catch (err) {
+    return { ok: false, reason: "paystack-unreachable" };
+  }
+  const data = await res.json().catch(function () { return null; });
+  if (!res.ok || !data || data.status !== true || !data.data) {
+    return { ok: false, reason: "paystack-verify-" + res.status };
+  }
+  const t = data.data;
+  return {
+    ok: true,
+    status: t.status,
+    reference: t.reference,
+    amountMinor: typeof t.amount === "number" ? Math.round(t.amount) : null,
+    currency: t.currency || null,
+    domain: t.domain || null,
+    paidAt: t.paid_at || t.paidAt || null
+  };
 }
