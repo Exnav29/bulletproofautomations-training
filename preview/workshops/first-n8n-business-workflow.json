@@ -1,0 +1,53 @@
+{
+  "slug": "first-n8n-business-workflow",
+  "status": "published",
+  "kind": "webinar",
+  "title": "Build Your First Useful n8n Business Workflow",
+  "summary": "See how a repeatable business task becomes an automation with a trigger, clean inputs, safeguards and a clear result.",
+  "directory_line": "Go from a manual task to a workflow you can explain and test.",
+  "description": "Visual preview only. This is an illustrative free introductory webinar, not a scheduled class.",
+  "starts_at": "2026-12-12T11:00:00Z",
+  "time_zone": "Africa/Accra",
+  "duration_minutes": 90,
+  "format": "live online webinar",
+  "price_ghs": 0,
+  "capacity": 50,
+  "audience": "Professionals curious about n8n and practical business automation",
+  "leave_with": [
+    "A simple working workflow design with trigger, action and error path.",
+    "A checklist to decide what tasks should not be automated.",
+    "A clear explanation of what the workflow saves and what it costs to maintain."
+  ],
+  "run_of_show": [
+    {
+      "at": "0:00",
+      "title": "Choose a concrete manual task",
+      "detail": "Define the start and the expected result"
+    },
+    {
+      "at": "0:20",
+      "title": "Build the core workflow",
+      "detail": "Trigger, data, action and response"
+    },
+    {
+      "at": "0:55",
+      "title": "Test failures and edge cases",
+      "detail": "What to do when the workflow breaks"
+    },
+    {
+      "at": "1:15",
+      "title": "Questions and next steps",
+      "detail": "How to keep learning"
+    }
+  ],
+  "good_fit": "You want a grounded introduction to practical workflow automation.",
+  "not_fit": "You expect a production-ready business integration in a single introductory session.",
+  "bring": "a laptop and an interest in repetitive business processes.",
+  "instructor": "johnathan",
+  "faq": [
+    {
+      "q": "Do I need to know n8n already?",
+      "a": "No. This session begins with the fundamentals."
+    }
+  ]
+}
