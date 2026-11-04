@@ -21,6 +21,15 @@ jobs:
         run: npm run build
       - name: Validate HTML
         run: npx --yes html-validate "dist/**/*.html"
+      # Webinar pages render only from published content, and none is published yet,
+      # so build the test fixtures separately to validate the generated markup.
+      - name: Validate generated webinar pages (test fixtures, never deployed)
+        run: |
+          WORKSHOP_CONTENT_DIR=tests/fixtures/workshops npm run build
+          test -f dist/workshops/sample-webinar/index.html
+          npx --yes html-validate "dist/workshops/**/*.html"
+          npm run build
+          test ! -e dist/workshops
       - name: Check admin JavaScript and certificate archive
         run: |
           node --check assets/js/admin-console.js
@@ -31,6 +40,8 @@ jobs:
           node --check assets/js/shell.js
           node --check assets/js/admin-workshops.js
           node --check assets/js/workshop-tracking.js
+          node --check assets/js/workshops.js
+          node --check scripts/workshops.js
           for f in functions/api/*.js functions/api/workshops/*.js functions/api/admin/*.js; do node --check "$f"; done
           node --test tests/*.test.js
 

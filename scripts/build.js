@@ -227,6 +227,35 @@ for (const item of publicPaths) {
   fs.cpSync(src, path.join(dist, item), { recursive: true });
 }
 
+/* --------------------------------------------------------------------------
+   Webinars and workshops: generated from content/workshops/*.json (which
+   never ships). With no published session nothing is emitted at all: no
+   route, no nav item, no sitemap entry. A published file that is incomplete,
+   in the past, or carries a [PLACEHOLDER] fails the build. See
+   scripts/workshops.js.
+   -------------------------------------------------------------------------- */
+const workshops = require("./workshops.js");
+// WORKSHOP_CONTENT_DIR lets local QA and CI render the test fixtures. It is
+// ignored on Cloudflare Pages, so a fixture can never reach production.
+const workshopDir = process.env.WORKSHOP_CONTENT_DIR && !process.env.CF_PAGES
+  ? path.resolve(root, process.env.WORKSHOP_CONTENT_DIR)
+  : path.join(root, "content", "workshops");
+const workshopPaths = workshops.render(workshops.loadSessions(workshopDir), dist);
+const navItem = workshopPaths.length
+  ? '<li><a href="/workshops" aria-current="{{n_workshops}}">Webinars and workshops</a></li>' : "";
+const footItem = workshopPaths.length ? '<li><a href="/workshops">Webinars and workshops</a></li>' : "";
+// The whole marker line goes when there is nothing to show, so no blank,
+// whitespace-only line is left behind for html-validate to reject.
+partialCache.set("header.html", readPartial("header.html").replace(/\n[ \t]*<!-- workshops-nav -->/, navItem ? "\n          " + navItem : ""));
+partialCache.set("footer.html", readPartial("footer.html").replace(/\n[ \t]*<!-- workshops-footer -->/, footItem ? "\n          " + footItem : ""));
+if (workshopPaths.length) {
+  const sitemapFile = path.join(dist, "sitemap.xml");
+  const entries = workshopPaths.map(function (p) {
+    return "  <url>\n    <loc>" + workshops.ORIGIN + p + "</loc>\n  </url>\n";
+  }).join("");
+  fs.writeFileSync(sitemapFile, fs.readFileSync(sitemapFile, "utf8").replace("</urlset>", entries + "</urlset>"));
+}
+
 let processed = 0;
 for (const file of walkHtml(dist, [])) {
   if (processHtml(file)) processed++;
@@ -314,3 +343,4 @@ console.log(
   "Built " + (publicPaths.length - missing.length) + " of " + publicPaths.length +
   " declared paths into dist/ - resolved includes in " + processed + " page(s)"
 );
+console.log("Webinar and workshop pages: " + (workshopPaths.length ? workshopPaths.join(", ") : "none published, so none built"));
