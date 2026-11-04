@@ -1,7 +1,7 @@
 /* Browser-to-server journeys against the local stack (tests/local-stack/README.md).
  *   node tests/local-stack/journey.js <screenshot-dir>
  * Real Chromium (Playwright), real Pages Functions (wrangler, :8788), real SQL and the
- * real v10 webhook. Paystack is the local stand-in. Exits non-zero on any failed check. */
+ * webinar business's webhook. Paystack is the local stand-in. Exits non-zero on any failed check. */
 const { chromium } = require("playwright");
 const out = process.argv[2] || ".";
 const SITE = "http://127.0.0.1:8788";
@@ -44,8 +44,9 @@ async function register(page, slug, email, query) {
   const reg = s.registrations[0];
   check("paid: registration confirmed and paid", reg.status === "confirmed" && reg.payment_status === "paid" && Number(reg.amount_paid_minor) === 15000, reg);
   const ev = s.payment_events.find((e) => e.event === "charge.success");
-  check("paid: webhook logged, signed, matched to the workshop row, not to an enrollment",
-    ev && ev.signature_valid && ev.matched && ev.enrollment_id === null &&
+  check("paid: nothing written to the training ledger (payment_events)", s.training_ledger.length === 0, s.training_ledger);
+  check("paid: webinar ledger row signed, matched and linked to the webinar attempt",
+    ev && ev.signature_valid && ev.matched &&
     s.attempts.some((a) => a.registration_id === reg.id && a.payment_event_id === ev.id), ev);
   check("paid: cohort enrollment with the same email unchanged", JSON.stringify(s.cohort) === JSON.stringify(before.cohort), s.cohort);
   check("paid: cohort installment unchanged", JSON.stringify(s.installments) === JSON.stringify(before.installments), s.installments);

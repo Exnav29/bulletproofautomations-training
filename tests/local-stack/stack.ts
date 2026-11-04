@@ -11,7 +11,7 @@
  *   :54351  Paystack STAND-IN: initialize, verify, a checkout page, and signed
  *           charge.success webhooks (HMAC-SHA512 with a test key, domain "test").
  *           It is not Paystack and proves nothing about Paystack itself.
- *   :8000   The real webhook: supabase/releases/paystack-webhook-v10/index.ts
+ *   :8000   The webinar business's webhook: supabase/functions/workshop-paystack-webhook/index.ts
  *   :54352  /state — read-only JSON of the database, for assertions.
  *
  * The Pages Functions run separately under wrangler (see tests/local-stack/README.md).
@@ -21,7 +21,8 @@ import { loadDatabase, serveDatabase } from '../helpers/postgrest.ts'
 
 type Row = Record<string, any>
 const u = (p: string) => new URL(p, import.meta.url)
-const TEST_KEY = 'sk_test_local_stack_only_00000000000000000000'
+// The WEBINAR business's test key (the training business's key below is different).
+const TEST_KEY = 'sk_test_webinar_local_stack_000000000000000000'
 const EMAIL = 'preview.tester@example.com'
 
 const pg = await loadDatabase([u('../fixtures/payment-ledger.sql'), u('../fixtures/supabase-stubs.sql'),
@@ -94,12 +95,14 @@ Deno.serve({ port: 54351, hostname: '127.0.0.1', onListen() {} }, async (req) =>
   return new Response('not found', { status: 404 })
 })
 
-// --- the real webhook, v10 candidate -------------------------------------------------------
-Deno.env.set('PAYSTACK_SECRET_KEY', 'sk_live_local_stack_never_used_0000000000000')
-Deno.env.set('PAYSTACK_TEST_SECRET_KEY', TEST_KEY)
+// --- the webinar business's webhook -----------------------------------------------------
+Deno.env.set('WORKSHOP_PAYSTACK_TEST_SECRET_KEY', TEST_KEY)
+Deno.env.set('PAYSTACK_SECRET_KEY', 'sk_live_training_business_local_never_used_00')
+Deno.env.set('PAYSTACK_TEST_SECRET_KEY', 'sk_test_training_business_local_never_used_00')
 Deno.env.set('PROJECT_URL', 'http://127.0.0.1:54350')
 Deno.env.set('SERVICE_ROLE_KEY', 'local-service-role')
-await import('../../supabase/releases/paystack-webhook-v10/index.ts')
+const { handle } = await import('../../supabase/functions/workshop-paystack-webhook/index.ts')
+Deno.serve({ port: 8000, hostname: '127.0.0.1', onListen() {} }, handle)
 
 // --- mail stand-in (Hostinger API shape), captures what would be sent -----------------------
 const mail: Row[] = []
@@ -116,7 +119,8 @@ Deno.serve({ port: 54352, hostname: '127.0.0.1', onListen() {} }, async () => {
   return Response.json({
     registrations: await q(`select id, email_normalized, status, payment_status, review_reason, amount_paid_minor, utm_campaign, utm_content, ad_consent from public.workshop_registrations order by created_at`),
     attempts: await q(`select registration_id, reference, status, amount_minor, received_minor, mode, verified_via, payment_event_id from public.workshop_payment_attempts order by created_at`),
-    payment_events: await q(`select event, reference, signature_valid, matched, match_note, enrollment_id, id from public.payment_events order by received_at`),
+    training_ledger: await q(`select * from public.payment_events`),
+    payment_events: await q(`select event, reference, signature_valid, matched, match_note, id from public.workshop_payment_events order by received_at`),
     notifications: await q(`select registration_id, kind, status, attempts, error from public.workshop_notifications order by created_at`),
     meta_events: await q(`select registration_id, event_name, event_id, value_ghs, status from public.workshop_meta_events order by created_at`),
     cohort: await q(`select id, email, amount_paid_ghs, payment_status, paystack_reference from public.enrollments`),
@@ -125,4 +129,4 @@ Deno.serve({ port: 54352, hostname: '127.0.0.1', onListen() {} }, async () => {
     mail,
   })
 })
-console.log('local stack ready: db :54350, paystack stand-in :54351, webhook v10 :8000, state :54352')
+console.log('local stack ready: db :54350, paystack stand-in :54351, webinar webhook :8000, state :54352')

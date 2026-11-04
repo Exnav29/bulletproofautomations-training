@@ -32,7 +32,7 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   if (url.host === 'paystack.mock') {
     if (url.pathname === '/transaction/initialize') {
       if (paystack.failInit) return Response.json({ status: false, message: 'declined' }, { status: 400 })
-      paystack.initialized.push(body)
+      paystack.initialized.push({ ...body, _auth: (init?.headers as Row)?.Authorization })
       return Response.json({ status: true, data: { authorization_url: 'https://checkout.paystack.com/x', reference: body.reference } })
     }
     const ref = decodeURIComponent(url.pathname.replace('/transaction/verify/', ''))
@@ -61,8 +61,10 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
 const ENV: Row = {
   SUPABASE_URL: DB.url,
   SUPABASE_SERVICE_ROLE_KEY: 'service-role-for-tests',
-  PAYSTACK_SECRET_KEY: 'sk_test_api_suite_only',
-  PAYSTACK_API_BASE: 'http://paystack.mock',
+  // The WEBINAR business's key. The training business's key is set too, and differs.
+  WORKSHOP_PAYSTACK_SECRET_KEY: 'sk_test_webinar_api_suite_only',
+  WORKSHOP_PAYSTACK_API_BASE: 'http://paystack.mock',
+  PAYSTACK_SECRET_KEY: 'sk_test_training_api_suite_only',
   HOSTINGER_MAIL_API_TOKEN: 'mail-token',
 }
 
@@ -150,9 +152,25 @@ Deno.test('validation: terms required; honeypot records nothing; stale price ref
 
 Deno.test('paid: live key without WORKSHOP_PAID_CHECKOUT takes no money and starts no attempt', opts, async () => {
   await reset()
-  const r = await call(register, '/api/workshops/register', form(), { ...ENV, PAYSTACK_SECRET_KEY: 'sk_live_api_suite_only' })
+  const r = await call(register, '/api/workshops/register', form(), { ...ENV, WORKSHOP_PAYSTACK_SECRET_KEY: 'sk_live_webinar_api_suite_only' })
   assertEquals([r.json.state, r.json.checkout], ['pending_payment', 'unavailable'])
   assertEquals((await rows(`select count(*)::int n from public.workshop_payment_attempts`))[0].n, 0)
+})
+
+Deno.test('paid: the training business key alone never opens webinar checkout', opts, async () => {
+  await reset()
+  const env = { ...ENV, WORKSHOP_PAYSTACK_SECRET_KEY: undefined }
+  const r = await call(register, '/api/workshops/register', form({ testOptIn: true }), env)
+  assertEquals([r.json.state, r.json.checkout], ['pending_payment', 'unavailable'])
+  assertEquals(paystack.initialized.length, 0)
+})
+
+Deno.test('paid: a webinar key equal to the training key is refused (same business = shared webhook)', opts, async () => {
+  await reset()
+  const env = { ...ENV, WORKSHOP_PAYSTACK_SECRET_KEY: 'sk_test_same_key_everywhere', PAYSTACK_SECRET_KEY: 'sk_test_same_key_everywhere' }
+  const r = await call(register, '/api/workshops/register', form({ testOptIn: true }), env)
+  assertEquals([r.json.state, r.json.checkout], ['pending_payment', 'unavailable'])
+  assertEquals(paystack.initialized.length, 0)
 })
 
 Deno.test('paid: a test key reaches checkout only with the explicit test opt-in', opts, async () => {
@@ -165,6 +183,7 @@ Deno.test('paid: a test key reaches checkout only with the explicit test opt-in'
   assert(r.json.events.initiate_checkout.startsWith('ic_'))
   const sent = paystack.initialized[0]
   assertEquals([sent.amount, sent.currency, sent.metadata.app], [15000, 'GHS', 'bulletproof-training-workshops'])
+  assertEquals(sent._auth, 'Bearer sk_test_webinar_api_suite_only') // the webinar business's key, never the training key
   assertEquals(sent.channels, ['mobile_money', 'card'])
   assert(!('cohort' in sent.metadata), 'cohort metadata must not appear on a workshop checkout')
 })

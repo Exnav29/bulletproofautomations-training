@@ -166,6 +166,31 @@ create trigger workshop_registrations_touch before update on public.workshop_reg
   for each row execute function public.workshop_touch_updated_at();
 
 -- ---------------------------------------------------------------------------
+-- Webinar payment ledger. Every event the webinar Paystack business sends to
+-- supabase/functions/workshop-paystack-webhook is recorded here, including
+-- ones that fail verification. It is separate from public.payment_events, the
+-- training business's ledger, which this feature never writes to.
+-- ---------------------------------------------------------------------------
+create table if not exists public.workshop_payment_events (
+  id uuid primary key default gen_random_uuid(),
+  received_at timestamptz not null default now(),
+  event text,
+  reference text,
+  email text,
+  amount_minor bigint,
+  currency text,
+  status text,
+  domain text,
+  paid_at timestamptz,
+  signature_valid boolean not null default false,
+  matched boolean not null default false,
+  match_note text,
+  raw jsonb not null,
+  unique (event, reference)
+);
+create index if not exists workshop_payment_events_received_idx on public.workshop_payment_events (received_at desc);
+
+-- ---------------------------------------------------------------------------
 -- Outboxes: email and Meta Conversions API. Rows are enqueued in the same
 -- transaction as the state change that warrants them; the dispatcher claims
 -- with SKIP LOCKED, so two dispatchers never send the same row.
@@ -236,13 +261,12 @@ begin
   end if;
 end $$;
 
--- Writes the same two columns the webhook already writes on every event
--- (matched, match_note). payment_events gains NO column: a workshop event is
--- linked from workshop_payment_attempts.payment_event_id instead, so the shared
--- ledger's schema is unchanged. p_reg is kept for readability at call sites.
+-- Notes the outcome on the webinar ledger row (workshop_payment_events). The
+-- training ledger (payment_events) is never read or written by this feature.
+-- p_reg is kept for readability at call sites.
 create or replace function public.workshop_note_event(p_event_id uuid, p_reg uuid, p_matched boolean, p_note text)
 returns void language sql set search_path = '' as $$
-  update public.payment_events
+  update public.workshop_payment_events
      set matched = p_matched,
          match_note = p_note
    where id = p_event_id
@@ -822,18 +846,19 @@ alter table public.workshop_payment_attempts enable row level security;
 alter table public.workshop_notifications enable row level security;
 alter table public.workshop_meta_events enable row level security;
 alter table public.workshop_dispatch_config enable row level security;
+alter table public.workshop_payment_events enable row level security;
 
 revoke all on public.workshop_sessions, public.workshop_registrations, public.workshop_status_tokens,
   public.workshop_payment_attempts, public.workshop_notifications, public.workshop_meta_events,
-  public.workshop_dispatch_config from public, anon, authenticated;
+  public.workshop_dispatch_config, public.workshop_payment_events from public, anon, authenticated;
 grant all on public.workshop_sessions, public.workshop_registrations, public.workshop_status_tokens,
   public.workshop_payment_attempts, public.workshop_notifications, public.workshop_meta_events,
-  public.workshop_dispatch_config to service_role;
+  public.workshop_dispatch_config, public.workshop_payment_events to service_role;
 
 -- The signed-in admin reads (never writes) the operational tables. Token
 -- hashes and the dispatcher secret are not readable even by the admin.
 grant select on public.workshop_sessions, public.workshop_registrations, public.workshop_payment_attempts,
-  public.workshop_notifications, public.workshop_meta_events to authenticated;
+  public.workshop_notifications, public.workshop_meta_events, public.workshop_payment_events to authenticated;
 
 drop policy if exists "Admin reads workshop sessions" on public.workshop_sessions;
 create policy "Admin reads workshop sessions" on public.workshop_sessions for select to authenticated
@@ -846,6 +871,9 @@ create policy "Admin reads workshop attempts" on public.workshop_payment_attempt
   using ((auth.jwt() ->> 'email') = 'johnathan@bulletproofautomations.com');
 drop policy if exists "Admin reads workshop notifications" on public.workshop_notifications;
 create policy "Admin reads workshop notifications" on public.workshop_notifications for select to authenticated
+  using ((auth.jwt() ->> 'email') = 'johnathan@bulletproofautomations.com');
+drop policy if exists "Admin reads workshop payment events" on public.workshop_payment_events;
+create policy "Admin reads workshop payment events" on public.workshop_payment_events for select to authenticated
   using ((auth.jwt() ->> 'email') = 'johnathan@bulletproofautomations.com');
 drop policy if exists "Admin reads workshop meta events" on public.workshop_meta_events;
 create policy "Admin reads workshop meta events" on public.workshop_meta_events for select to authenticated

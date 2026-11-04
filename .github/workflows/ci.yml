@@ -86,22 +86,10 @@ jobs:
         run: deno test --node-modules-dir=none --allow-net --allow-env --allow-read tests/paystack-webhook.test.ts
         env:
           WEBHOOK_MODULE: ${{ github.workspace }}/supabase/deployed/paystack-webhook-v9/index.ts
-      - name: Webhook regression suite (v10 release candidate)
-        run: deno test --node-modules-dir=none --allow-net --allow-env --allow-read tests/paystack-webhook.test.ts
-        env:
-          WEBHOOK_MODULE: ${{ github.workspace }}/supabase/releases/paystack-webhook-v10/index.ts
-      # Webinar/workshop isolation: no workshop transaction may reach cohort matching.
-      - name: Workshop isolation suite (main)
-        run: deno test --node-modules-dir=none --allow-net --allow-env --allow-read tests/paystack-webhook-workshops.test.ts
-      - name: Workshop isolation suite (v10 release candidate)
-        run: deno test --node-modules-dir=none --allow-net --allow-env --allow-read tests/paystack-webhook-workshops.test.ts
-        env:
-          WEBHOOK_MODULE: ${{ github.workspace }}/supabase/releases/paystack-webhook-v10/index.ts
-      # Documents the production hazard v10 closes: v9 credits a webinar charge by email.
-      - name: Workshop baseline (production v9)
-        run: deno test --node-modules-dir=none --allow-net --allow-env --allow-read tests/paystack-webhook-workshops.test.ts
-        env:
-          WEBHOOK_MODULE: ${{ github.workspace }}/supabase/deployed/paystack-webhook-v9/index.ts
+      # The webinar Paystack business has its own webhook. Every case also asserts the
+      # same-email cohort rows are unchanged and nothing is written to payment_events.
+      - name: Webinar webhook (separate Paystack business) isolation suite
+        run: deno test --node-modules-dir=none --allow-net --allow-env --allow-read tests/workshop-webhook.test.ts
       - name: Workshop migration rolls back and re-applies
         run: deno test --node-modules-dir=none --allow-read tests/workshops-migration.test.ts
       - name: Workshop API end to end (registration, payment states, privacy, outbox)
@@ -128,18 +116,22 @@ jobs:
           deno-version: v2.5.4
       - name: Check out main alongside
         run: git worktree add --detach "$RUNNER_TEMP/main" origin/main
-      - name: main's own webhook tests (cohort, installments, Scheduling) against v9, v10 and this branch
+      - name: main's own webhook tests (cohort, installments, Scheduling) against production v9 and this branch
         run: |
           T="$RUNNER_TEMP/main/tests/paystack-webhook.test.ts"
           WEBHOOK_MODULE=$PWD/supabase/deployed/paystack-webhook-v9/index.ts deno test --node-modules-dir=none --allow-net --allow-env --allow-read "$T"
-          WEBHOOK_MODULE=$PWD/supabase/releases/paystack-webhook-v10/index.ts deno test --node-modules-dir=none --allow-net --allow-env --allow-read "$T"
           WEBHOOK_MODULE=$PWD/supabase/functions/paystack-webhook/index.ts deno test --node-modules-dir=none --allow-net --allow-env --allow-read "$T"
       - name: Cohort enrollment and installment endpoints, main's code then this branch's
         run: |
           FUNCTIONS_ROOT="$RUNNER_TEMP/main/functions" deno test --node-modules-dir=none --allow-net --allow-env --allow-read tests/baseline/cohort-functions.test.ts
           deno test --node-modules-dir=none --allow-net --allow-env --allow-read tests/baseline/cohort-functions.test.ts
-      - name: Shared payment helper is byte-identical to main
-        run: git diff --exit-code origin/main -- functions/api/_paystack.js functions/api/enroll.js functions/api/_installments.js functions/api/installment.js functions/api/installment-scheduler.js functions/api/_regions.js functions/_middleware.js
+      - name: Shared payment code, the training webhook and its tests are byte-identical to main
+        run: >-
+          git diff --exit-code origin/main --
+          functions/api/_paystack.js functions/api/enroll.js functions/api/_installments.js
+          functions/api/installment.js functions/api/installment-scheduler.js functions/api/_regions.js
+          functions/_middleware.js supabase/functions/paystack-webhook supabase/deployed tests/paystack-webhook.test.ts
+          tests/fixtures/payment-ledger.sql
       - name: Built site identical to main except the reviewed list
         run: tests/baseline/compare-site.sh "$RUNNER_TEMP/main"
 

@@ -1,27 +1,25 @@
 /**
- * Webinar/workshop payments through the shared Paystack webhook.
+ * The webinar Paystack business's webhook (supabase/functions/workshop-paystack-webhook).
  *
- *   deno test --node-modules-dir=none --allow-net --allow-env --allow-read tests/paystack-webhook-workshops.test.ts
- *   WEBHOOK_MODULE=$PWD/supabase/releases/paystack-webhook-v10/index.ts deno test ... (release candidate)
- *   WEBHOOK_MODULE=$PWD/supabase/deployed/paystack-webhook-v9/index.ts  deno test ... (production baseline)
+ *   deno test --node-modules-dir=none --allow-net --allow-env --allow-read tests/workshop-webhook.test.ts
  *
- * Database: PGlite loaded with production's ledger (tests/fixtures/payment-ledger.sql),
- * Supabase role stubs, and supabase/migrations/20261103120000_workshops.sql — the real
- * RPCs, triggers and constraints. A stand-in translates PostgREST table and rpc/ calls.
+ * Database: PGlite with production's ledger (tests/fixtures/payment-ledger.sql), Supabase role
+ * stubs and the workshop migration, so cohort tables, the training ledger (payment_events) and
+ * the installment trigger are all real. Every case seeds a part-paid cohort enrollment and an
+ * open installment under the SAME email, and asserts afterwards that the cohort rows are
+ * byte-for-byte unchanged and that nothing at all was written to payment_events.
  *
- * The invariant under test: NO workshop transaction — valid, duplicate, mismatched,
- * unknown, refunded, or hit by a database failure — reaches the cohort enrollment code.
- * Every case seeds a pending cohort enrollment and installment under the SAME email
- * and asserts both are byte-for-byte unchanged afterwards.
- *
- * Against v9 only the baseline case runs: it demonstrates the hazard v10 exists to
- * close (v9 credits a BPA-WEB- charge to the payer's cohort enrollment by email).
+ * The training webhook (paystack-webhook, production v9) is not involved and not changed:
+ * its own suite, tests/paystack-webhook.test.ts, is main's file and runs unchanged.
  */
 import { assert, assertEquals } from 'https://deno.land/std@0.168.0/testing/asserts.ts'
 import { PGlite } from 'npm:@electric-sql/pglite@0.3.14'
 
-const LIVE = 'sk_live_test_suite_only_000000000000000000000'
-const TEST = 'sk_test_test_suite_only_000000000000000000000'
+// The WEBINAR business's keys, and (different) training business keys for the guard.
+const LIVE = 'sk_live_webinar_business_suite_000000000000000'
+const TEST = 'sk_test_webinar_business_suite_000000000000000'
+const TRAINING_LIVE = 'sk_live_training_business_suite_00000000000000'
+const TRAINING_TEST = 'sk_test_training_business_suite_00000000000000'
 const DB_PORT = 54331
 
 type Row = Record<string, any>
@@ -31,7 +29,7 @@ for (const f of ['./fixtures/payment-ledger.sql', './fixtures/supabase-stubs.sql
   await pg.exec(await Deno.readTextFile(new URL(f, import.meta.url)))
 }
 
-const TABLES = new Set(['payment_events', 'enrollments', 'payment_plan_installments', 'workshop_payment_attempts'])
+const TABLES = new Set(['workshop_payment_events'])
 const RPCS = new Set(['workshop_apply_charge', 'workshop_apply_refund'])
 function ident(name: string) {
   if (!/^[a-z_]+$/.test(name)) throw new Error(`stand-in: bad identifier ${name}`)
@@ -127,7 +125,7 @@ const installmentRow = {
 async function reset(session: Row = {}) {
   failRpc = false
   failAttemptLookup = false
-  await pg.exec(`truncate public.workshop_meta_events, public.workshop_notifications, public.workshop_status_tokens,
+  await pg.exec(`truncate public.workshop_payment_events, public.workshop_meta_events, public.workshop_notifications, public.workshop_status_tokens,
     public.workshop_payment_attempts, public.workshop_registrations, public.workshop_sessions,
     public.payment_events, public.payment_plan_installments, public.enrollments cascade`)
   await pg.exec('alter table public.enrollments disable trigger enrollments_seed_intermediate_payment_plan')
@@ -147,6 +145,7 @@ const cohortSnapshot = async () => ({
 })
 async function assertCohortUntouched(before: Row) {
   assertEquals(await cohortSnapshot(), before, 'cohort enrollment or installments changed')
+  assertEquals(await count('select 1 from public.payment_events'), 0, 'the training ledger was written to')
 }
 
 let seq = 0
@@ -181,20 +180,18 @@ async function staleAttempt(regId: string): Promise<string> {
 }
 const reg = async (id: string) => (await select('select * from public.workshop_registrations where id = $1', [id]))[0]
 const attempt = async (r: string) => (await select('select * from public.workshop_payment_attempts where reference = $1', [r]))[0]
-const lastEvent = async () => (await select('select * from public.payment_events order by received_at desc limit 1'))[0]
+const lastEvent = async () => (await select('select * from public.workshop_payment_events order by received_at desc limit 1'))[0]
 const count = async (sql: string, v: unknown[] = []) => (await select(`select count(*)::int as n from (${sql}) q`, v))[0].n
 
 // --- the function under test ------------------------------------------------------------
 
-Deno.env.set('PAYSTACK_SECRET_KEY', LIVE)
-Deno.env.set('PAYSTACK_TEST_SECRET_KEY', TEST)
+Deno.env.set('WORKSHOP_PAYSTACK_SECRET_KEY', LIVE)
+Deno.env.set('WORKSHOP_PAYSTACK_TEST_SECRET_KEY', TEST)
+Deno.env.set('PAYSTACK_SECRET_KEY', TRAINING_LIVE)
+Deno.env.set('PAYSTACK_TEST_SECRET_KEY', TRAINING_TEST)
 Deno.env.set('PROJECT_URL', `http://127.0.0.1:${DB_PORT}`)
 Deno.env.set('SERVICE_ROLE_KEY', 'service-role-for-tests')
-const modulePath = Deno.env.get('WEBHOOK_MODULE') ??
-  new URL('../supabase/functions/paystack-webhook/index.ts', import.meta.url).href
-const IS_V9 = modulePath.includes('paystack-webhook-v9')
-await import(modulePath.startsWith('file:') || modulePath.startsWith('http') ? modulePath : `file://${modulePath}`)
-const FN = 'http://127.0.0.1:8000/'
+const { handle, keysProblem } = await import('../supabase/functions/workshop-paystack-webhook/index.ts')
 
 async function hmac(raw: string, secret: string) {
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret),
@@ -204,7 +201,7 @@ async function hmac(raw: string, secret: string) {
 }
 async function deliver(event: Row, key: string = LIVE): Promise<Row> {
   const raw = JSON.stringify(event)
-  const res = await fetch(FN, { method: 'POST', headers: { 'x-paystack-signature': await hmac(raw, key) }, body: raw })
+  const res = await handle(new Request('http://webhook.local/', { method: 'POST', headers: { 'x-paystack-signature': await hmac(raw, key) }, body: raw }))
   return { status: res.status, ...(await res.json().catch(() => ({}))) }
 }
 const charge = (reference: string, amount = 15000, extra: Row = {}) => ({
@@ -218,44 +215,30 @@ const refund = (transactionReference: string, amount: number, id: number, extra:
     domain: 'live', customer: { email: EMAIL }, ...extra },
 })
 const opts = { sanitizeOps: false, sanitizeResources: false }
-const v10 = { ...opts, ignore: IS_V9 }
 
-// --- baseline: the production hazard --------------------------------------------------
 
-Deno.test({
-  name: 'baseline (v9 only): a BPA-WEB- charge is credited to the same-email cohort enrollment',
-  ...opts, ignore: !IS_V9,
-  fn: async () => {
-    await reset()
-    const r = await deliver(charge('BPA-WEB-2026-0000000001', 15000))
-    assertEquals(r.applied, true)
-    const e = (await select('select * from public.enrollments where id = $1', [ENR]))[0]
-    // 400 already paid + GHS 150 of webinar money now sitting on a cohort balance.
-    assertEquals(Number(e.amount_paid_ghs), 550)
-  },
-})
+// --- isolation ---------------------------------------------------------------------------
 
-// --- v10 / main: isolation -------------------------------------------------------------
 
-Deno.test({ name: 'verified workshop charge confirms the registration and touches no cohort row', ...v10, fn: async () => {
+Deno.test({ name: 'verified workshop charge confirms the registration and touches no cohort row', ...opts, fn: async () => {
   await reset()
   const before = await cohortSnapshot()
   const id = await register()
   const reference = await start(id)
   const r = await deliver(charge(reference))
-  assertEquals([r.status, r.workshop, r.outcome, r.applied], [200, true, 'confirmed', true])
+  assertEquals([r.status, r.outcome, r.applied], [200, 'confirmed', true])
   const g = await reg(id)
   assertEquals([g.status, g.payment_status, Number(g.amount_paid_minor)], ['confirmed', 'paid', 15000])
   assertEquals((await attempt(reference)).status, 'succeeded')
   const ev = await lastEvent()
-  assertEquals([ev.matched, ev.enrollment_id], [true, null])
+  assertEquals([ev.matched, ev.signature_valid], [true, true])
   assertEquals((await attempt(reference)).payment_event_id, ev.id) // linked from the workshop side only
   assertEquals(await count(`select 1 from public.workshop_notifications where registration_id = $1 and kind = 'confirmation'`, [id]), 1)
   assertEquals(await count(`select 1 from public.workshop_meta_events where event_id = $1`, ['pu_' + id]), 1)
   await assertCohortUntouched(before)
 } })
 
-Deno.test({ name: 'duplicate delivery of the same charge applies once', ...v10, fn: async () => {
+Deno.test({ name: 'duplicate delivery of the same charge applies once', ...opts, fn: async () => {
   await reset()
   const before = await cohortSnapshot()
   const id = await register()
@@ -268,7 +251,7 @@ Deno.test({ name: 'duplicate delivery of the same charge applies once', ...v10, 
   await assertCohortUntouched(before)
 } })
 
-Deno.test({ name: 'retry: both references are kept; a late success on the OLD one confirms', ...v10, fn: async () => {
+Deno.test({ name: 'retry: both references are kept; a late success on the OLD one confirms', ...opts, fn: async () => {
   await reset()
   const before = await cohortSnapshot()
   const id = await register()
@@ -282,7 +265,7 @@ Deno.test({ name: 'retry: both references are kept; a late success on the OLD on
   await assertCohortUntouched(before)
 } })
 
-Deno.test({ name: 'second successful payment keeps access and flags the duplicate for refund review', ...v10, fn: async () => {
+Deno.test({ name: 'second successful payment keeps access and flags the duplicate for refund review', ...opts, fn: async () => {
   await reset()
   const before = await cohortSnapshot()
   const id = await register()
@@ -301,7 +284,7 @@ Deno.test({ name: 'second successful payment keeps access and flags the duplicat
   await assertCohortUntouched(before)
 } })
 
-Deno.test({ name: 'refunding the duplicate returns the registration to paid; access never removed', ...v10, fn: async () => {
+Deno.test({ name: 'refunding the duplicate returns the registration to paid; access never removed', ...opts, fn: async () => {
   await reset()
   const id = await register()
   const first = await start(id)
@@ -318,7 +301,7 @@ for (const [label, extra, note] of [
   ['wrong amount', { amount: 1500 }, 'expected 15000'],
   ['wrong currency', { currency: 'NGN' }, 'NGN'],
 ] as const) {
-  Deno.test({ name: `${label}: held for review, never confirmed, never cohort`, ...v10, fn: async () => {
+  Deno.test({ name: `${label}: held for review, never confirmed, never cohort`, ...opts, fn: async () => {
     await reset()
     const before = await cohortSnapshot()
     const id = await register()
@@ -333,28 +316,30 @@ for (const [label, extra, note] of [
   } })
 }
 
-Deno.test({ name: 'test-signed event claiming the live domain is refused', ...v10, fn: async () => {
+Deno.test({ name: 'test-signed event claiming the live domain is refused', ...opts, fn: async () => {
   await reset()
   const before = await cohortSnapshot()
   const id = await register()
   const reference = await start(id)
   const r = await deliver(charge(reference), TEST)
-  assertEquals([r.workshop, r.outcome, r.applied], [true, 'mode_mismatch', false])
+  assertEquals(r.applied, false)
+  assert(/Refused/.test((await lastEvent()).match_note))
   assertEquals((await reg(id)).status, 'pending_payment')
   await assertCohortUntouched(before)
 } })
 
-Deno.test({ name: 'test reference on a live charge is refused', ...v10, fn: async () => {
+Deno.test({ name: 'test reference on a live charge is refused', ...opts, fn: async () => {
   await reset()
   const before = await cohortSnapshot()
   const id = await register()
   const reference = await start(id, 'test')
   const r = await deliver(charge(reference))
-  assertEquals([r.workshop, r.outcome], [true, 'mode_mismatch'])
+  assertEquals(r.applied, false)
+  assert(/Refused/.test((await lastEvent()).match_note))
   await assertCohortUntouched(before)
 } })
 
-Deno.test({ name: 'test-mode workshop charge settles its test registration only', ...v10, fn: async () => {
+Deno.test({ name: 'test-mode workshop charge settles its test registration only', ...opts, fn: async () => {
   await reset()
   const before = await cohortSnapshot()
   const id = await register()
@@ -364,26 +349,27 @@ Deno.test({ name: 'test-mode workshop charge settles its test registration only'
   await assertCohortUntouched(before)
 } })
 
-Deno.test({ name: 'unknown BPA-WEB- reference stays unmatched and never reaches email matching', ...v10, fn: async () => {
+Deno.test({ name: 'unknown BPA-WEB- reference stays unmatched and never reaches email matching', ...opts, fn: async () => {
   await reset()
   const before = await cohortSnapshot()
   const r = await deliver(charge('BPA-WEB-2026-ZZZZZZZZZZ'))
-  assertEquals([r.workshop, r.outcome, r.applied], [true, 'unknown_reference', false])
+  assertEquals([r.outcome, r.applied], ['unknown_reference', false])
   const ev = await lastEvent()
-  assertEquals([ev.matched, ev.enrollment_id], [false, null])
+  assertEquals(ev.matched, false)
   assert(String(ev.match_note).includes('no matching payment attempt'))
   await assertCohortUntouched(before)
 } })
 
-Deno.test({ name: 'workshop metadata with a foreign reference is isolated too', ...v10, fn: async () => {
+Deno.test({ name: 'a charge without a webinar reference is recorded only', ...opts, fn: async () => {
   await reset()
   const before = await cohortSnapshot()
   const r = await deliver(charge('T836219907499', 15000, { metadata: { app: 'bulletproof-training-workshops' } }))
-  assertEquals([r.workshop, r.outcome], [true, 'unknown_reference'])
+  assertEquals(r.applied, false)
+  assert(/Not a webinar reference/.test((await lastEvent()).match_note))
   await assertCohortUntouched(before)
 } })
 
-Deno.test({ name: 'workshop charge without a customer email is still applied (and still isolated)', ...v10, fn: async () => {
+Deno.test({ name: 'workshop charge without a customer email is still applied (and still isolated)', ...opts, fn: async () => {
   await reset()
   const before = await cohortSnapshot()
   const id = await register()
@@ -395,7 +381,7 @@ Deno.test({ name: 'workshop charge without a customer email is still applied (an
   await assertCohortUntouched(before)
 } })
 
-Deno.test({ name: 'database failure in the workshop RPC answers 503; the retry applies exactly once', ...v10, fn: async () => {
+Deno.test({ name: 'database failure in the workshop RPC answers 503; the retry applies exactly once', ...opts, fn: async () => {
   await reset()
   const before = await cohortSnapshot()
   const id = await register()
@@ -411,21 +397,7 @@ Deno.test({ name: 'database failure in the workshop RPC answers 503; the retry a
   await assertCohortUntouched(before)
 } })
 
-Deno.test({ name: 'non-workshop charges never touch the workshop tables, even if they are unreachable', ...v10, fn: async () => {
-  await reset()
-  failAttemptLookup = true // any read of workshop_payment_attempts would now fail
-  failRpc = true           // and so would any workshop RPC
-  // A cohort installment charge is applied exactly as v9 applies it.
-  const r = await deliver(charge('BPA-CAB-2026-INSTAL2', 35000))
-  assertEquals([r.status, r.applied, r.workshop], [200, true, undefined])
-  const e = (await select('select * from public.enrollments where id = $1', [ENR]))[0]
-  assertEquals(Number(e.amount_paid_ghs), 750)
-  // A Bulletproof Scheduling charge is still stopped by the existing guard.
-  const sched = await deliver(charge('BPS-LIVE-2026-APPT0010', 225000, { metadata: { app: 'bulletproof-scheduling' } }))
-  assertEquals([sched.status, sched.scheduling], [200, true])
-} })
-
-Deno.test({ name: 'late payment after the hold expired, session full: payment_received_review', ...v10, fn: async () => {
+Deno.test({ name: 'late payment after the hold expired, session full: payment_received_review', ...opts, fn: async () => {
   await reset({ capacity: 1 })
   const before = await cohortSnapshot()
   const late = await register('late@example.com')
@@ -452,14 +424,14 @@ Deno.test({ name: 'late payment after the hold expired, session full: payment_re
   await assertCohortUntouched(before)
 } })
 
-Deno.test({ name: 'late payment after the hold expired, seat still free: confirmed', ...v10, fn: async () => {
+Deno.test({ name: 'late payment after the hold expired, seat still free: confirmed', ...opts, fn: async () => {
   await reset({ capacity: 5 })
   const id = await register()
   const r = await deliver(charge(await staleAttempt(id)))
   assertEquals(r.outcome, 'confirmed')
 } })
 
-Deno.test({ name: 'payment for a cancelled session is held for review, not confirmed', ...v10, fn: async () => {
+Deno.test({ name: 'payment for a cancelled session is held for review, not confirmed', ...opts, fn: async () => {
   await reset()
   const id = await register()
   const reference = await start(id)
@@ -470,7 +442,7 @@ Deno.test({ name: 'payment for a cancelled session is held for review, not confi
   assertEquals(await count(`select 1 from public.workshop_meta_events where registration_id = $1 and event_name = 'Purchase'`, [id]), 0)
 } })
 
-Deno.test({ name: 'review then refund: refund_pending until refund.processed releases the seat', ...v10, fn: async () => {
+Deno.test({ name: 'review then refund: refund_pending until refund.processed releases the seat', ...opts, fn: async () => {
   await reset({ capacity: 1 })
   const late = await register('late@example.com')
   const reference = await staleAttempt(late)
@@ -485,7 +457,7 @@ Deno.test({ name: 'review then refund: refund_pending until refund.processed rel
   assertEquals([g.status, g.payment_status, Number(g.amount_paid_minor)], ['refunded', 'refunded', 0])
 } })
 
-Deno.test({ name: 'partial workshop refund; replay does not reverse twice; cohort untouched', ...v10, fn: async () => {
+Deno.test({ name: 'partial workshop refund; replay does not reverse twice; cohort untouched', ...opts, fn: async () => {
   await reset()
   const before = await cohortSnapshot()
   const id = await register()
@@ -499,7 +471,7 @@ Deno.test({ name: 'partial workshop refund; replay does not reverse twice; cohor
   await assertCohortUntouched(before)
 } })
 
-Deno.test({ name: 'refund larger than received is clamped and recorded', ...v10, fn: async () => {
+Deno.test({ name: 'refund larger than received is clamped and recorded', ...opts, fn: async () => {
   await reset()
   const id = await register()
   const reference = await start(id)
@@ -509,7 +481,7 @@ Deno.test({ name: 'refund larger than received is clamped and recorded', ...v10,
   assert(String((await lastEvent()).match_note).includes('CLAMPED'))
 } })
 
-Deno.test({ name: 'cross-product: a cohort refund never touches a workshop registration', ...v10, fn: async () => {
+Deno.test({ name: 'cross-product: a cohort refund never touches a workshop registration', ...opts, fn: async () => {
   await reset()
   const id = await register()
   await deliver(charge(await start(id)))
@@ -518,27 +490,49 @@ Deno.test({ name: 'cross-product: a cohort refund never touches a workshop regis
   assertEquals([g.status, g.payment_status], ['confirmed', 'paid'])
 } })
 
-Deno.test({ name: 'cohort charges keep working on v10 with the workshop tables present', ...v10, fn: async () => {
-  await reset()
-  const r = await deliver(charge('BPA-CAB-2026-INSTAL2', 35000))
-  assertEquals([r.applied, r.workshop], [true, undefined])
-  const e = (await select('select * from public.enrollments where id = $1', [ENR]))[0]
-  assertEquals(Number(e.amount_paid_ghs), 750)
-} })
-
-Deno.test({ name: 'Bulletproof Scheduling charges are still excluded on v10', ...v10, fn: async () => {
-  await reset()
-  const before = await cohortSnapshot()
-  const r = await deliver(charge('BPS-LIVE-2026-APPT0009', 225000, { metadata: { app: 'bulletproof-scheduling' } }))
-  assertEquals([r.scheduling, r.applied], [true, false])
-  await assertCohortUntouched(before)
-} })
-
-Deno.test({ name: 'no ad consent: payment confirms but no Meta event is queued', ...v10, fn: async () => {
+Deno.test({ name: 'no ad consent: payment confirms but no Meta event is queued', ...opts, fn: async () => {
   await reset()
   const id = await register(EMAIL, { consent: false })
   await deliver(charge(await start(id)))
   assertEquals(await count(`select 1 from public.workshop_meta_events where registration_id = $1`, [id]), 0)
   const g = await reg(id)
   assertEquals([g.utm_campaign, g.fbp], ['1200001', null]) // UTMs kept, Meta identifiers not
+} })
+
+// --- separation from the training business and Bulletproof Scheduling --------------------
+
+Deno.test({ name: 'cohort and Scheduling references sent here are recorded only, never credited anywhere', ...opts, fn: async () => {
+  await reset()
+  const before = await cohortSnapshot()
+  for (const ev of [
+    charge('BPA-CAB-2026-INSTAL2', 35000),                                                   // a cohort installment reference
+    charge('BPA-CAB-2026-ENROLL1', 105000),                                                  // a cohort enrollment reference
+    charge('BPS-LIVE-2026-APPT0001', 225000, { metadata: { app: 'bulletproof-scheduling' } }), // a Scheduling payment
+    refund('BPA-CAB-2026-ENROLL1', 40000, 8801),                                              // a cohort refund
+  ]) {
+    const r = await deliver(ev)
+    assertEquals([r.status, r.applied], [200, false])
+    assert(/Not a webinar reference/.test((await lastEvent()).match_note))
+  }
+  await assertCohortUntouched(before)
+  assertEquals(await count('select 1 from public.workshop_registrations'), 0)
+} })
+
+Deno.test({ name: 'an event signed with a TRAINING business key is rejected as unsigned', ...opts, fn: async () => {
+  await reset()
+  const before = await cohortSnapshot()
+  const id = await register()
+  const reference = await start(id)
+  const r = await deliver(charge(reference), TRAINING_LIVE)
+  assertEquals([r.status, r.applied, r.signature_valid], [200, false, false])
+  assertEquals((await reg(id)).status, 'pending_payment')
+  await assertCohortUntouched(before)
+} })
+
+Deno.test({ name: 'key guard: the webhook refuses to run with a training key or a wrong key type', ...opts, fn: () => {
+  assertEquals(keysProblem(LIVE, TEST, [TRAINING_LIVE, TRAINING_TEST]), null)
+  assert(keysProblem(TRAINING_LIVE, TEST, [TRAINING_LIVE, TRAINING_TEST])!.includes('not a separate Paystack business'))
+  assert(keysProblem(LIVE, TRAINING_TEST, [TRAINING_LIVE, TRAINING_TEST])!.includes('not a separate Paystack business'))
+  assert(keysProblem(TEST, '', [])!.includes('not a live secret key'))
+  assert(keysProblem('', '', [])!.includes('no webinar Paystack key'))
 } })

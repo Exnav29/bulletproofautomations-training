@@ -5,7 +5,7 @@
 -- are untouched (the migration never altered them).
 --
 -- BEFORE RUNNING: export workshop_registrations, workshop_payment_attempts and
--- the payment_events rows they point at (workshop_payment_attempts.payment_event_id). Those rows are the
+-- workshop_payment_events. Those rows are the
 -- evidence for money received; dropping them without an export loses it.
 -- Unschedule the dispatcher first if it was created:
 --   select cron.unschedule('workshop-dispatch');
@@ -29,6 +29,7 @@ drop function if exists public.workshop_note_event(uuid,uuid,boolean,text);
 drop function if exists public.workshop_enqueue_meta(public.workshop_registrations,text,text,numeric);
 
 drop table if exists public.workshop_dispatch_config;
+drop table if exists public.workshop_payment_events;
 drop table if exists public.workshop_meta_events;
 drop table if exists public.workshop_notifications;
 drop table if exists public.workshop_payment_attempts;

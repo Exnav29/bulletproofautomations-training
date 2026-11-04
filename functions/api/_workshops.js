@@ -6,30 +6,45 @@
  */
 
 import { rpc } from "./_shared.js";
-import { paystackMode } from "./_paystack.js";
 import { sendMail, esc, MAILBOX } from "./_mail.js";
 import { sendConversions, metaConfigured } from "./_meta.js";
 
 export const WORKSHOP_APP = "bulletproof-training-workshops";
 
 /* ---------------------------------------------------------------------------
-   Paystack calls for workshops ONLY. Deliberately separate from
-   functions/api/_paystack.js, which cohort enrollment and installments use and
-   which this feature leaves byte-for-byte unchanged. Only paystackMode() (a
-   read of the key prefix) is shared.
+   Paystack for webinars uses a SEPARATE Paystack business, "Bulletproof
+   Automations Webinars", with its own keys and its own webhook
+   (supabase/functions/workshop-paystack-webhook). Webinar charges therefore
+   never reach the training webhook (v9), cohort enrollments, installments or
+   Bulletproof Scheduling. Nothing here imports functions/api/_paystack.js.
 
-   Same host rule as _paystack.js: PAYSTACK_API_BASE is honoured only under a
-   test key, so a live key always talks to api.paystack.co.
+   WORKSHOP_PAYSTACK_SECRET_KEY is the webinar business's secret key. It is
+   refused (checkout stays off) when it is missing, malformed, or identical to
+   the training business's PAYSTACK_SECRET_KEY, because the same key would mean
+   the same Paystack business and therefore the training webhook.
    --------------------------------------------------------------------------- */
+export function workshopKey(env) {
+  const key = String((env && env.WORKSHOP_PAYSTACK_SECRET_KEY) || "");
+  if (!/^sk_(test|live)_[A-Za-z0-9_]{8,}$/.test(key)) return null;
+  if (env.PAYSTACK_SECRET_KEY && key === env.PAYSTACK_SECRET_KEY) return null;
+  return key;
+}
+export function workshopMode(env) {
+  const key = workshopKey(env);
+  return key ? (key.indexOf("sk_live_") === 0 ? "live" : "test") : "off";
+}
+
+/* WORKSHOP_PAYSTACK_API_BASE (local testing) is honoured only under a test
+   key: a live key always talks to api.paystack.co. */
 function paystackBase(env) {
-  return paystackMode(env) === "test" && typeof env.PAYSTACK_API_BASE === "string" && env.PAYSTACK_API_BASE
-    ? env.PAYSTACK_API_BASE.replace(/\/+$/, "")
+  return workshopMode(env) === "test" && typeof env.WORKSHOP_PAYSTACK_API_BASE === "string" && env.WORKSHOP_PAYSTACK_API_BASE
+    ? env.WORKSHOP_PAYSTACK_API_BASE.replace(/\/+$/, "")
     : "https://api.paystack.co";
 }
 
 /* Amount in pesewas from the caller (taken from the database attempt row). */
 export async function initializeWorkshopCheckout(env, o) {
-  const secret = env.PAYSTACK_SECRET_KEY;
+  const secret = workshopKey(env);
   if (!secret) return { ok: false, reason: "paystack-not-configured" };
   let res;
   try {
@@ -57,7 +72,7 @@ export async function initializeWorkshopCheckout(env, o) {
 }
 
 export async function verifyWorkshopTransaction(env, reference) {
-  const secret = env.PAYSTACK_SECRET_KEY;
+  const secret = workshopKey(env);
   if (!secret) return { ok: false, reason: "paystack-not-configured" };
   let res;
   try {
@@ -111,14 +126,15 @@ export function looksLikeReference(value) {
 /* Which checkout, if any, this request may reach.
  *
  *   live key  -> "live" only when WORKSHOP_PAID_CHECKOUT=on. That switch is set
- *                after webhook v10 is deployed: before it, production v9 would
- *                credit a webinar payment to a same-email cohort enrollment.
+ *                by the owner after the webinar business's webhook
+ *                (workshop-paystack-webhook) is deployed and validated.
+ *   (The key here is ALWAYS the webinar business's: see workshopKey().)
  *   test key  -> "test" only for a request that opted in (?paystack=test),
  *                the same rule as the cohort page. Nobody reaches a test
  *                checkout by accident.
  *   otherwise -> null: the registration is recorded and payment is not taken. */
 export function checkoutMode(env, testOptIn) {
-  const mode = paystackMode(env);
+  const mode = workshopMode(env);
   if (mode === "live") return env.WORKSHOP_PAID_CHECKOUT === "on" ? "live" : null;
   if (mode === "test") return testOptIn === true ? "test" : null;
   return null;
@@ -175,7 +191,7 @@ export function rest(env, path, init) {
    --------------------------------------------------------------------------- */
 export async function verifyAndApply(env, reference) {
   if (!looksLikeReference(reference)) return null;
-  if (paystackMode(env) === "off") return null;
+  if (workshopMode(env) === "off") return null;
   const claim = await rpc(env, "workshop_claim_verify", { p_reference: reference });
   if (!claim.ok || claim.data !== true) return null;
   const v = await verifyWorkshopTransaction(env, reference);
@@ -330,7 +346,7 @@ export async function processOutbox(env, origin, limits) {
 
   // 1. Reconcile started checkouts the webhook has not settled (missed or late
   //    webhook). Paystack is asked directly; the RPC applies at most once.
-  if (max.reconcile > 0 && paystackMode(env) !== "off") {
+  if (max.reconcile > 0 && workshopMode(env) !== "off") {
     const since = new Date(Date.now() - 48 * 3600000).toISOString();
     const older = new Date(Date.now() - 10 * 60000).toISOString();
     const res = await rest(env, "workshop_payment_attempts?select=reference&status=eq.initialized" +

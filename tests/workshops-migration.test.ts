@@ -51,7 +51,7 @@ Deno.test('up, down, up: the migration is reversible and leaves the ledger intac
   const cols = async () => (await q(`select column_name from information_schema.columns where table_name = 'payment_events' order by ordinal_position`)).map((r) => r.column_name).join(',')
   assertEquals(await cols(), ledgerBefore)
   await pg.exec(UP)
-  assertEquals((await q(`select count(*)::int n from information_schema.tables where table_name like 'workshop%'`))[0].n, 7)
+  assertEquals((await q(`select count(*)::int n from information_schema.tables where table_name like 'workshop%'`))[0].n, 8)
 })
 
 Deno.test('free session: registration is confirmed at once and a confirmation is queued', async () => {
