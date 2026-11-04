@@ -4,6 +4,16 @@ _Updated 4 November 2026, after the frontend was built and checked. Nothing in t
 been run against production._
 
 Product contract: `docs/PRD-WEBINARS-WORKSHOPS.md` (PR #59). Approved design: `docs/workshops-design.md`.
+Non-regression record (shared components, why each change is needed, rollback, alternatives):
+`docs/workshops-shared-changes.md`. **Read it before any production step.**
+
+## Release paths
+
+- **Option A, free webinars first (recommended start).** Do steps 0, 1, 4 and 6 only. Skip step 2,
+  so production keeps webhook v9, and leave `WORKSHOP_PAID_CHECKOUT` unset. No shared payment
+  component changes.
+- **Paid webinars** (option B or C in the shared-changes record). Run all steps, step 5 in
+  particular, and only after the owner decides between a separate Paystack account and v10.
 
 ## What exists on the branch
 
@@ -11,7 +21,7 @@ Product contract: `docs/PRD-WEBINARS-WORKSHOPS.md` (PR #59). Approved design: `d
 |---|---|---|
 | Schema, RPCs, RLS | `supabase/migrations/20261103120000_workshops.sql` | **Not applied** |
 | Rollback | `supabase/migrations/rollback/20261103120000_workshops_down.sql` | Not applied |
-| Webhook v10 candidate | `supabase/releases/paystack-webhook-v10/index.ts` (v9 plus 137 lines, none removed) | **Not deployed.** Production is still v9 |
+| Webhook v10 candidate | `supabase/releases/paystack-webhook-v10/index.ts` (v9 plus 128 lines, none removed; string checks only for non-workshop traffic) | **Not deployed.** Production is still v9 |
 | The same change on `main`'s webhook | `supabase/functions/paystack-webhook/index.ts` | Not deployed |
 | Pages Functions | `functions/api/workshops/*`, `functions/api/admin/workshops.js`, `_workshops.js`, `_mail.js`, `_meta.js` | Deploy with the site on merge. Inert until the tables exist |
 | Public pages | `scripts/workshops.js` generates `/workshops`, `/workshops/<slug>` and `/workshops/registered` from `content/workshops/*.json` | **Nothing published**, so on merge no route, nav item or sitemap entry ships |
@@ -26,9 +36,9 @@ Product contract: `docs/PRD-WEBINARS-WORKSHOPS.md` (PR #59). Approved design: `d
    `tests/paystack-webhook-workshops.test.ts` shows GHS 150 of webinar money landing on a cohort
    student's balance. **Live paid checkout must not open until v10 is deployed.**
    `WORKSHOP_PAID_CHECKOUT=on` is the switch, and the code refuses live checkout without it.
-2. **v10 is safe before or after the migration.** Without the tables, v10's attempt lookup gets
-   PostgREST's `PGRST205` and treats it as "not a workshop", so cohort payments keep flowing.
-   Prefix- and metadata-marked workshop events are still isolated. Prefer migration first.
+2. **v10 does not depend on the migration.** It classifies workshop transactions by reference
+   prefix and metadata only, with no database call, so non-workshop traffic behaves exactly as on v9
+   whether or not the workshop tables exist.
 3. **The site can merge before any of this.** With no session published, the merged site is
    unchanged apart from the admin view. Publishing a session is a separate, later step.
 

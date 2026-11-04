@@ -248,7 +248,8 @@ Deno.test({ name: 'verified workshop charge confirms the registration and touche
   assertEquals([g.status, g.payment_status, Number(g.amount_paid_minor)], ['confirmed', 'paid', 15000])
   assertEquals((await attempt(reference)).status, 'succeeded')
   const ev = await lastEvent()
-  assertEquals([ev.matched, ev.workshop_registration_id, ev.enrollment_id], [true, id, null])
+  assertEquals([ev.matched, ev.enrollment_id], [true, null])
+  assertEquals((await attempt(reference)).payment_event_id, ev.id) // linked from the workshop side only
   assertEquals(await count(`select 1 from public.workshop_notifications where registration_id = $1 and kind = 'confirmation'`, [id]), 1)
   assertEquals(await count(`select 1 from public.workshop_meta_events where event_id = $1`, ['pu_' + id]), 1)
   await assertCohortUntouched(before)
@@ -410,13 +411,18 @@ Deno.test({ name: 'database failure in the workshop RPC answers 503; the retry a
   await assertCohortUntouched(before)
 } })
 
-Deno.test({ name: 'attempt-table lookup failure answers 503 instead of guessing (cohort code not reached)', ...v10, fn: async () => {
+Deno.test({ name: 'non-workshop charges never touch the workshop tables, even if they are unreachable', ...v10, fn: async () => {
   await reset()
-  const before = await cohortSnapshot()
-  failAttemptLookup = true
-  const r = await deliver(charge('T836219907500'))
-  assertEquals(r.status, 503)
-  await assertCohortUntouched(before)
+  failAttemptLookup = true // any read of workshop_payment_attempts would now fail
+  failRpc = true           // and so would any workshop RPC
+  // A cohort installment charge is applied exactly as v9 applies it.
+  const r = await deliver(charge('BPA-CAB-2026-INSTAL2', 35000))
+  assertEquals([r.status, r.applied, r.workshop], [200, true, undefined])
+  const e = (await select('select * from public.enrollments where id = $1', [ENR]))[0]
+  assertEquals(Number(e.amount_paid_ghs), 750)
+  // A Bulletproof Scheduling charge is still stopped by the existing guard.
+  const sched = await deliver(charge('BPS-LIVE-2026-APPT0010', 225000, { metadata: { app: 'bulletproof-scheduling' } }))
+  assertEquals([sched.status, sched.scheduling], [200, true])
 } })
 
 Deno.test({ name: 'late payment after the hold expired, session full: payment_received_review', ...v10, fn: async () => {

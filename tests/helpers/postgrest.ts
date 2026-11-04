@@ -98,7 +98,10 @@ export function serveDatabase(pg: PGlite, port: number): StandIn {
       const rows = (await pg.query<{ j: Row }>(`select row_to_json(x) as j from (select ${cols} from public.${table}${w}${by}${limit}) x`, wv)).rows
       return Response.json(rows.map((r) => r.j))
     } catch (err) {
-      return Response.json({ message: String((err as Error).message) }, { status: 400 })
+      // PostgREST answers a unique violation (23505) with 409 Conflict, which callers
+      // such as /api/enroll rely on; every other failed statement is a 400.
+      const code = (err as { code?: string }).code
+      return Response.json({ code, message: String((err as Error).message) }, { status: code === '23505' ? 409 : 400 })
     }
   })
   return { url: `http://127.0.0.1:${port}`, fail }

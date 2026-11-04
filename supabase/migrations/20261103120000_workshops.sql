@@ -9,8 +9,8 @@
 -- Rollback: supabase/migrations/rollback/20261103120000_workshops_down.sql
 --
 -- Design rules (docs/PRD-WEBINARS-WORKSHOPS.md and the 3 November review):
---   * Additive only. enrollments, payment_plan_installments and their triggers
---     are not altered. payment_events gains ONE nullable column.
+--   * Additive only: new objects only. enrollments, payment_plan_installments,
+--     payment_events and their triggers are not altered in any way.
 --   * No anon privilege on any object here. Public writes go through Cloudflare
 --     Pages Functions holding the service key, which call the RPCs below.
 --   * The authenticated admin (same email allowlist as enrollments) may READ
@@ -200,13 +200,6 @@ create table if not exists public.workshop_meta_events (
 );
 
 -- ---------------------------------------------------------------------------
--- payment_events: one additive nullable column. enrollment_id is untouched.
--- ---------------------------------------------------------------------------
-alter table public.payment_events
-  add column if not exists workshop_registration_id uuid
-  references public.workshop_registrations(id) on delete set null;
-
--- ---------------------------------------------------------------------------
 -- Helpers
 -- ---------------------------------------------------------------------------
 
@@ -243,11 +236,14 @@ begin
   end if;
 end $$;
 
+-- Writes the same two columns the webhook already writes on every event
+-- (matched, match_note). payment_events gains NO column: a workshop event is
+-- linked from workshop_payment_attempts.payment_event_id instead, so the shared
+-- ledger's schema is unchanged. p_reg is kept for readability at call sites.
 create or replace function public.workshop_note_event(p_event_id uuid, p_reg uuid, p_matched boolean, p_note text)
 returns void language sql set search_path = '' as $$
   update public.payment_events
-     set workshop_registration_id = coalesce(p_reg, workshop_registration_id),
-         matched = p_matched,
+     set matched = p_matched,
          match_note = p_note
    where id = p_event_id
 $$;

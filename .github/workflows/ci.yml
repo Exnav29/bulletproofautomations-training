@@ -111,6 +111,38 @@ jobs:
         run: |
           echo "0d1255d065a03ccf44391394132b224ea2320c6f9c435de87acd95c75a2acb10  supabase/deployed/paystack-webhook-v9/index.ts" | sha256sum -c -
 
+  # Existing production behaviour, measured with main's own tests and code, must be
+  # unchanged by this branch. See docs/workshops-shared-changes.md.
+  baseline:
+    name: Baseline regression (main vs this branch)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.5.4
+      - name: Check out main alongside
+        run: git worktree add --detach "$RUNNER_TEMP/main" origin/main
+      - name: main's own webhook tests (cohort, installments, Scheduling) against v9, v10 and this branch
+        run: |
+          T="$RUNNER_TEMP/main/tests/paystack-webhook.test.ts"
+          WEBHOOK_MODULE=$PWD/supabase/deployed/paystack-webhook-v9/index.ts deno test --node-modules-dir=none --allow-net --allow-env --allow-read "$T"
+          WEBHOOK_MODULE=$PWD/supabase/releases/paystack-webhook-v10/index.ts deno test --node-modules-dir=none --allow-net --allow-env --allow-read "$T"
+          WEBHOOK_MODULE=$PWD/supabase/functions/paystack-webhook/index.ts deno test --node-modules-dir=none --allow-net --allow-env --allow-read "$T"
+      - name: Cohort enrollment and installment endpoints, main's code then this branch's
+        run: |
+          FUNCTIONS_ROOT="$RUNNER_TEMP/main/functions" deno test --node-modules-dir=none --allow-net --allow-env --allow-read tests/baseline/cohort-functions.test.ts
+          deno test --node-modules-dir=none --allow-net --allow-env --allow-read tests/baseline/cohort-functions.test.ts
+      - name: Shared payment helper is byte-identical to main
+        run: git diff --exit-code origin/main -- functions/api/_paystack.js functions/api/enroll.js functions/api/_installments.js functions/api/installment.js functions/api/installment-scheduler.js functions/api/_regions.js functions/_middleware.js
+      - name: Built site identical to main except the reviewed list
+        run: tests/baseline/compare-site.sh "$RUNNER_TEMP/main"
+
   link-check:
     name: Link check
     runs-on: ubuntu-latest

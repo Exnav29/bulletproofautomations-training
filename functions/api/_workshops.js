@@ -6,11 +6,74 @@
  */
 
 import { rpc } from "./_shared.js";
-import { paystackMode, verifyTransaction } from "./_paystack.js";
+import { paystackMode } from "./_paystack.js";
 import { sendMail, esc, MAILBOX } from "./_mail.js";
 import { sendConversions, metaConfigured } from "./_meta.js";
 
 export const WORKSHOP_APP = "bulletproof-training-workshops";
+
+/* ---------------------------------------------------------------------------
+   Paystack calls for workshops ONLY. Deliberately separate from
+   functions/api/_paystack.js, which cohort enrollment and installments use and
+   which this feature leaves byte-for-byte unchanged. Only paystackMode() (a
+   read of the key prefix) is shared.
+
+   Same host rule as _paystack.js: PAYSTACK_API_BASE is honoured only under a
+   test key, so a live key always talks to api.paystack.co.
+   --------------------------------------------------------------------------- */
+function paystackBase(env) {
+  return paystackMode(env) === "test" && typeof env.PAYSTACK_API_BASE === "string" && env.PAYSTACK_API_BASE
+    ? env.PAYSTACK_API_BASE.replace(/\/+$/, "")
+    : "https://api.paystack.co";
+}
+
+/* Amount in pesewas from the caller (taken from the database attempt row). */
+export async function initializeWorkshopCheckout(env, o) {
+  const secret = env.PAYSTACK_SECRET_KEY;
+  if (!secret) return { ok: false, reason: "paystack-not-configured" };
+  let res;
+  try {
+    res = await fetch(paystackBase(env) + "/transaction/initialize", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + secret, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: o.email,
+        amount: o.amountMinor,
+        currency: "GHS",
+        reference: o.reference,
+        callback_url: o.callbackUrl,
+        channels: o.channels,
+        metadata: o.metadata
+      })
+    });
+  } catch (err) {
+    return { ok: false, reason: "paystack-unreachable" };
+  }
+  const data = await res.json().catch(function () { return null; });
+  if (!res.ok || !data || data.status !== true || !data.data || !data.data.authorization_url) {
+    return { ok: false, reason: "paystack-" + res.status + ": " + String((data && data.message) || "").slice(0, 200) };
+  }
+  return { ok: true, url: data.data.authorization_url };
+}
+
+export async function verifyWorkshopTransaction(env, reference) {
+  const secret = env.PAYSTACK_SECRET_KEY;
+  if (!secret) return { ok: false, reason: "paystack-not-configured" };
+  let res;
+  try {
+    res = await fetch(paystackBase(env) + "/transaction/verify/" + encodeURIComponent(reference), {
+      headers: { Authorization: "Bearer " + secret }
+    });
+  } catch (err) {
+    return { ok: false, reason: "paystack-unreachable" };
+  }
+  const data = await res.json().catch(function () { return null; });
+  if (!res.ok || !data || data.status !== true || !data.data) return { ok: false, reason: "paystack-verify-" + res.status };
+  const t = data.data;
+  return { ok: true, status: t.status, reference: t.reference,
+    amountMinor: typeof t.amount === "number" ? Math.round(t.amount) : null,
+    currency: t.currency || null, domain: t.domain || null, paidAt: t.paid_at || t.paidAt || null };
+}
 export const TERMS_VERSION = "2026-11-03";
 
 const ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
@@ -115,7 +178,7 @@ export async function verifyAndApply(env, reference) {
   if (paystackMode(env) === "off") return null;
   const claim = await rpc(env, "workshop_claim_verify", { p_reference: reference });
   if (!claim.ok || claim.data !== true) return null;
-  const v = await verifyTransaction(env, reference);
+  const v = await verifyWorkshopTransaction(env, reference);
   if (!v.ok || v.status !== "success" || v.reference !== reference) return null;
   const applied = await rpc(env, "workshop_apply_charge", {
     p_reference: reference,

@@ -1,17 +1,16 @@
 -- Rollback for 20261103120000_workshops.sql. NOT APPLIED.
 --
 -- Run only if the workshop feature is being withdrawn. It is destructive for
--- workshop data alone: enrollments, payment_plan_installments and existing
--- payment_events rows are untouched (only the added nullable column goes).
+-- workshop data alone: enrollments, payment_plan_installments and payment_events
+-- are untouched (the migration never altered them).
 --
 -- BEFORE RUNNING: export workshop_registrations, workshop_payment_attempts and
--- any payment_events rows with workshop_registration_id set. Those rows are the
+-- the payment_events rows they point at (workshop_payment_attempts.payment_event_id). Those rows are the
 -- evidence for money received; dropping them without an export loses it.
 -- Unschedule the dispatcher first if it was created:
 --   select cron.unschedule('workshop-dispatch');
 
 begin;
-alter table public.payment_events drop column if exists workshop_registration_id;
 
 drop function if exists public.workshop_admin_action(text,uuid,text,text,text);
 drop function if exists public.workshop_finish_meta_event(uuid,boolean,text);

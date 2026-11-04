@@ -142,8 +142,9 @@ function sameSecret(a: string, b: string): boolean {
  * A transaction is a workshop transaction if ANY of these holds:
  *   - a reference starting BPA-WEB- (live) or BPA-WTEST- (test), on any field
  *     a charge or refund carries one;
- *   - metadata.app = "bulletproof-training-workshops";
- *   - its reference exists in workshop_payment_attempts.
+ *   - metadata.app = "bulletproof-training-workshops".
+ * Both are set on every workshop checkout (functions/api/workshops/register.js),
+ * so no database lookup is needed and non-workshop traffic is not touched.
  * Once classified, the workshop branch ALWAYS returns. Unknown reference,
  * mode or amount mismatch, missing reference and database failure each end
  * there; none falls through to the cohort matching.
@@ -161,27 +162,6 @@ function workshopMarked(data: Record<string, any>, txnReference: string | null):
   const refs = [txnReference, data?.reference, data?.transaction_reference, data?.transaction?.reference]
   if (refs.some((r) => workshopReferenceMode(r) !== null)) return true
   return [data?.metadata, data?.transaction?.metadata].some((m) => metadataApp(m) === WORKSHOP_APP)
-}
-
-/** true / false, or null when the lookup could not run (caller answers 503). */
-async function workshopAttemptExists(reference: string): Promise<boolean | null> {
-  let res: Response
-  try {
-    res = await db(`workshop_payment_attempts?select=id&reference=eq.${encodeURIComponent(reference)}&limit=1`)
-  } catch (_) {
-    return null
-  }
-  if (res.ok) {
-    const rows = await res.json().catch(() => null)
-    return Array.isArray(rows) ? rows.length > 0 : null
-  }
-  /* Before the workshop migration is applied the table does not exist and
-   * PostgREST answers 404 (PGRST205) or 400 (42P01). That is "no workshop
-   * attempt", not an outage, so cohort payments keep flowing. Anything else
-   * is treated as an outage. */
-  const text = await res.text().catch(() => '')
-  if ((res.status === 404 || res.status === 400) && /PGRST205|42P01|workshop_payment_attempts/.test(text)) return false
-  return null
 }
 
 const workshopJson = (body: Record<string, unknown>, status = 200) =>
@@ -264,13 +244,11 @@ async function routeWorkshop(
 ): Promise<Response | null> {
   const isRefund = event === 'refund.processed'
   if (!valid || (event !== 'charge.success' && !isRefund)) return null
-  let workshop = workshopMarked(data, txnReference)
-  if (!workshop && txnReference) {
-    const exists = await workshopAttemptExists(txnReference)
-    if (exists === null) return workshopJson({ ok: false, error: 'workshop-lookup-failed' }, 503)
-    workshop = exists
-  }
-  return workshop ? await handleWorkshop(data, eventRow, txnReference, isRefund, signedBy) : null
+  /* Pure string checks: no database call. For every transaction that is not a
+   * workshop's (cohort, installment, Bulletproof Scheduling, anything else)
+   * this returns null without I/O, and the request continues through exactly
+   * the code v9 runs. */
+  return workshopMarked(data, txnReference) ? await handleWorkshop(data, eventRow, txnReference, isRefund, signedBy) : null
 }
 
 serve(async (req) => {

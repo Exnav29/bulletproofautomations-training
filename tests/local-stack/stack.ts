@@ -115,8 +115,8 @@ Deno.serve({ port: 54352, hostname: '127.0.0.1', onListen() {} }, async () => {
   const q = async (sql: string) => (await pg.query<Row>(sql)).rows
   return Response.json({
     registrations: await q(`select id, email_normalized, status, payment_status, review_reason, amount_paid_minor, utm_campaign, utm_content, ad_consent from public.workshop_registrations order by created_at`),
-    attempts: await q(`select registration_id, reference, status, amount_minor, received_minor, mode, verified_via from public.workshop_payment_attempts order by created_at`),
-    payment_events: await q(`select event, reference, signature_valid, matched, match_note, enrollment_id, workshop_registration_id from public.payment_events order by received_at`),
+    attempts: await q(`select registration_id, reference, status, amount_minor, received_minor, mode, verified_via, payment_event_id from public.workshop_payment_attempts order by created_at`),
+    payment_events: await q(`select event, reference, signature_valid, matched, match_note, enrollment_id, id from public.payment_events order by received_at`),
     notifications: await q(`select registration_id, kind, status, attempts, error from public.workshop_notifications order by created_at`),
     meta_events: await q(`select registration_id, event_name, event_id, value_ghs, status from public.workshop_meta_events order by created_at`),
     cohort: await q(`select id, email, amount_paid_ghs, payment_status, paystack_reference from public.enrollments`),

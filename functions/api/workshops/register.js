@@ -16,11 +16,10 @@
  * (none is echoed), plus a status token for THIS browser. */
 
 import { json, refuse, readJson, str, rpc } from "../_shared.js";
-import { initializeTransaction } from "../_paystack.js";
 import { resolveTier, channelsFor } from "../_regions.js";
 import {
   WORKSHOP_APP, TERMS_VERSION, mintWorkshopReference, newToken, sha256Hex,
-  checkoutMode, cleanAttribution, eventIds, processOutbox
+  checkoutMode, cleanAttribution, eventIds, processOutbox, initializeWorkshopCheckout
 } from "../_workshops.js";
 
 function looksLikeEmail(value) {
@@ -121,9 +120,9 @@ export async function onRequestPost(context) {
   if (s.outcome !== "started") return json(Object.assign(base, { state: "needs_attention" }));
 
   const region = resolveTier(request, env, body.declared_country);
-  const init = await initializeTransaction(env, {
+  const init = await initializeWorkshopCheckout(env, {
     email: email,
-    amountGhs: Number(s.amount_minor) / 100,
+    amountMinor: Number(s.amount_minor),
     reference: reference,
     callbackUrl: origin + "/workshops/registered/?session=" + encodeURIComponent(slug),
     channels: channelsFor(region.tier),

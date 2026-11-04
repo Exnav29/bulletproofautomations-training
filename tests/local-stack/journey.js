@@ -45,7 +45,8 @@ async function register(page, slug, email, query) {
   check("paid: registration confirmed and paid", reg.status === "confirmed" && reg.payment_status === "paid" && Number(reg.amount_paid_minor) === 15000, reg);
   const ev = s.payment_events.find((e) => e.event === "charge.success");
   check("paid: webhook logged, signed, matched to the workshop row, not to an enrollment",
-    ev && ev.signature_valid && ev.matched && ev.workshop_registration_id === reg.id && ev.enrollment_id === null, ev);
+    ev && ev.signature_valid && ev.matched && ev.enrollment_id === null &&
+    s.attempts.some((a) => a.registration_id === reg.id && a.payment_event_id === ev.id), ev);
   check("paid: cohort enrollment with the same email unchanged", JSON.stringify(s.cohort) === JSON.stringify(before.cohort), s.cohort);
   check("paid: cohort installment unchanged", JSON.stringify(s.installments) === JSON.stringify(before.installments), s.installments);
   check("paid: confirmation email queued", s.notifications.some((n) => n.registration_id === reg.id && n.kind === "confirmation"), s.notifications);

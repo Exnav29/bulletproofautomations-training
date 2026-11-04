@@ -40,12 +40,16 @@ const start = (id: string, ref: string) =>
   j(`public.workshop_start_attempt(p_registration_id => $1, p_reference => $2, p_mode => 'live')`, [id, ref])
 
 Deno.test('up, down, up: the migration is reversible and leaves the ledger intact', async () => {
+  const ledgerBefore = (await q(`select column_name from information_schema.columns where table_name = 'payment_events' order by ordinal_position`)).map((r) => r.column_name).join(',')
   await pg.exec(UP)
+  const ledgerDuring = (await q(`select column_name from information_schema.columns where table_name = 'payment_events' order by ordinal_position`)).map((r) => r.column_name).join(',')
+  assertEquals(ledgerDuring, ledgerBefore, 'migration must not alter payment_events')
   await pg.exec(DOWN)
   const left = await q(`select table_name from information_schema.tables where table_name like 'workshop%'`)
   assertEquals(left.length, 0)
-  const col = await q(`select 1 from information_schema.columns where table_name = 'payment_events' and column_name = 'workshop_registration_id'`)
-  assertEquals(col.length, 0)
+  // The shared ledger's schema is identical before, during and after: the migration never alters it.
+  const cols = async () => (await q(`select column_name from information_schema.columns where table_name = 'payment_events' order by ordinal_position`)).map((r) => r.column_name).join(',')
+  assertEquals(await cols(), ledgerBefore)
   await pg.exec(UP)
   assertEquals((await q(`select count(*)::int n from information_schema.tables where table_name like 'workshop%'`))[0].n, 7)
 })
