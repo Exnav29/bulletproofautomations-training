@@ -261,8 +261,8 @@ if (visualPreviewBranch) {
     let html = fs.readFileSync(pageFile, "utf8");
     html = html.replace('<script src="/assets/js/workshop-tracking.js" defer></script>', "")
       .replace('<script src="/assets/js/workshops.js" defer></script>', "")
-      .replace("</head>", '<meta name="robots" content="noindex,nofollow">\\n</head>')
-      .replace('<body class="ws-body">', '<body class="ws-body">\\n' + banner)
+      .replace("</head>", '<meta name="robots" content="noindex,nofollow"></head>')
+      .replace('<body class="ws-body">', '<body class="ws-body">' + banner)
       .replace('type="submit" data-ws-submit', 'type="button" data-ws-submit disabled aria-disabled="true"')
       .replace('<form class="ws-form" data-ws-form novalidate>', '<form class="ws-form" data-ws-form novalidate><p class="ws-note" role="note">This is a design preview. The registration form is visible for review but cannot submit.</p>')
       .replace('Checking your registration', 'Example confirmation screen')
