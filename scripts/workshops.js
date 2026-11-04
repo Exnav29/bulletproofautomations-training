@@ -121,7 +121,6 @@ function cta(s) { return s.price_ghs === 0 ? "Register for free" : "Register and
 function head(title, description, canonical) {
   return '<!-- include: head.html title="' + esc(title) + '" description="' + esc(description) + '" canonical="' + esc(canonical) + '" -->\n' +
     '<link rel="preload" href="/assets/fonts/eb-garamond-600.woff2" as="font" type="font/woff2" crossorigin>\n' +
-    '<link rel="preload" href="/assets/fonts/bpa-reading-400.woff2" as="font" type="font/woff2" crossorigin>\n' +
     '<link rel="stylesheet" href="/assets/css/workshops.css">\n' +
     '<script src="/assets/js/workshop-tracking.js" defer></script>\n' +
     '<script src="/assets/js/workshops.js" defer></script>';
