@@ -241,10 +241,36 @@ for (const item of publicPaths) {
 const workshops = require("./workshops.js");
 // WORKSHOP_CONTENT_DIR lets local QA and CI render the test fixtures. It is
 // ignored on Cloudflare Pages, so a fixture can never reach production.
-const workshopDir = process.env.WORKSHOP_CONTENT_DIR && !process.env.CF_PAGES
-  ? path.resolve(root, process.env.WORKSHOP_CONTENT_DIR)
-  : path.join(root, "content", "workshops");
+// This standalone review branch previews the webinar design without any data
+// or payment services. Only this exact Cloudflare branch can render the examples.
+const visualPreviewBranch = process.env.CF_PAGES_BRANCH === "webinar-visual-demo";
+const workshopDir = visualPreviewBranch
+  ? path.join(root, "preview", "workshops")
+  : process.env.WORKSHOP_CONTENT_DIR && !process.env.CF_PAGES
+    ? path.resolve(root, process.env.WORKSHOP_CONTENT_DIR)
+    : path.join(root, "content", "workshops");
 const workshopPaths = workshops.render(workshops.loadSessions(workshopDir), dist);
+// Preview pages show the actual built design but NEVER contact Supabase or
+// Paystack. Registration is visibly disabled; no user-entered details leave
+// the browser. The ordinary feature branch and production builds are unchanged.
+if (visualPreviewBranch) {
+  const banner = '<div role="status" style="position:relative;z-index:1000;padding:13px 20px;text-align:center;background:#fff2cf;color:#442d08;border-bottom:2px solid #b47e17;font:700 14px/1.45 system-ui,sans-serif">VISUAL DEMO ONLY · Dates and prices are illustrative · Registration and payments disabled</div>';
+  for (const route of workshopPaths.concat(["/workshops/registered"])) {
+    const pageFile = path.join(dist, route.slice(1), "index.html");
+    if (!fs.existsSync(pageFile)) continue;
+    let html = fs.readFileSync(pageFile, "utf8");
+    html = html.replace('<script src="/assets/js/workshop-tracking.js" defer></script>', "")
+      .replace('<script src="/assets/js/workshops.js" defer></script>', "")
+      .replace("</head>", '<meta name="robots" content="noindex,nofollow"></head>')
+      .replace('<body class="ws-body">', '<body class="ws-body">' + banner)
+      .replace('type="submit" data-ws-submit', 'type="button" data-ws-submit disabled aria-disabled="true"')
+      .replace('<form class="ws-form" data-ws-form novalidate>', '<form class="ws-form" data-ws-form novalidate><fieldset disabled style="border:0;padding:0;margin:0;min-width:0"><p class="ws-note" role="note">This is a design preview. The registration form is visible for review but cannot submit.</p>')
+      .replace('</form>', '</fieldset></form>')
+      .replace('Checking your registration', 'Example confirmation screen')
+      .replace('One moment while we confirm with our records.', 'This is an example of the confirmation page. No registration or payment occurred.');
+    fs.writeFileSync(pageFile, html);
+  }
+}
 const navItem = workshopPaths.length
   ? '<li><a href="/workshops" aria-current="{{n_workshops}}">Webinars and workshops</a></li>' : "";
 const footItem = workshopPaths.length ? '<li><a href="/workshops">Webinars and workshops</a></li>' : "";

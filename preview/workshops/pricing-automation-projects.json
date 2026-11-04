@@ -1,0 +1,63 @@
+{
+  "slug": "pricing-automation-projects",
+  "status": "published",
+  "kind": "workshop",
+  "title": "Price Your Automation Projects for Real Business Value",
+  "summary": "Build a practical pricing method that starts with the value your automation creates for a client, while protecting your own minimum sustainable rate.",
+  "directory_line": "Learn to price by client value, with a sustainable floor and a clear proposal.",
+  "description": "Visual preview only. This is an illustrative workshop, not a scheduled class.",
+  "starts_at": "2026-12-05T11:00:00Z",
+  "time_zone": "Africa/Accra",
+  "duration_minutes": 180,
+  "format": "live online workshop",
+  "price_ghs": 250,
+  "capacity": 25,
+  "audience": "Freelancers, automation developers and consultants who want to quote projects confidently",
+  "leave_with": [
+    "A calculator for your minimum sustainable project price.",
+    "A framework to estimate the client's value from time saved, errors reduced or faster collections.",
+    "Three defensible price options for a single automation proposal.",
+    "A one-page offer you can adapt for your next client."
+  ],
+  "run_of_show": [
+    {
+      "at": "0:00",
+      "title": "Start with what the client needs",
+      "detail": "Choose a narrowly defined business outcome"
+    },
+    {
+      "at": "0:35",
+      "title": "Know your financial floor",
+      "detail": "Costs, capacity and margin"
+    },
+    {
+      "at": "1:15",
+      "title": "Estimate value to the client",
+      "detail": "Use conservative, testable assumptions"
+    },
+    {
+      "at": "2:00",
+      "title": "Prepare a real offer",
+      "detail": "Packages, scope and maintenance"
+    },
+    {
+      "at": "2:35",
+      "title": "Live pricing clinic",
+      "detail": "Review the offers and pressure-test assumptions"
+    }
+  ],
+  "good_fit": "You can build or maintain a workflow but want to be clearer about scoping and charging for it.",
+  "not_fit": "You are looking for a guaranteed income formula or a certification issued for attending.",
+  "bring": "a laptop, a calculator or spreadsheet and an example workflow to price.",
+  "instructor": "johnathan",
+  "faq": [
+    {
+      "q": "Is this for beginners?",
+      "a": "The pricing framework is accessible to beginners, but examples assume some familiarity with automation workflows."
+    },
+    {
+      "q": "Do I get a certificate?",
+      "a": "No. Workshop attendance is practical training, not certification."
+    }
+  ]
+}
