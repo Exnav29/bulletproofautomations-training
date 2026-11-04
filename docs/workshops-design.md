@@ -15,19 +15,21 @@ The alternative, "Run trace" across the whole page, was declined. Its payment tr
 
 ## Type
 
+Revised after visual review on 4 November 2026: the rounded Andika-based
+"BPA Reading" body face looked too casual, similar to Comic Sans. Use the
+established Bulletproof Automations site typography instead.
+
 | Role | Face | Why |
 |---|---|---|
-| Headings, dates, fees | EB Garamond 600 (`assets/fonts/eb-garamond-600.woff2`) | The voice of a certificate. One weight. |
-| Everything read or filled in | "BPA Reading", a renamed subset of Andika by SIL (`bpa-reading-400/700.woff2`) | Designed for literacy in African languages; clear on low-cost phone screens |
+| Headings, dates and fees | EB Garamond 600 (`assets/fonts/eb-garamond-600.woff2`) | Formal editorial contrast, retained from the approved layout |
+| Body copy, buttons, labels and forms | Archivo variable (`assets/fonts/archivo-latin-variable.woff2`) | Consistent with the existing training site and more professional |
 
-- **Glyph coverage:** both faces cover Akan and Ewe letters (Ɔ ɔ Ɛ ɛ Ɖ ɖ Ŋ ŋ), Yoruba tone-marked
-  vowels, and the cedi (₵) and naira (₦) signs. The site's Archivo subset covers none of these.
-- **Rejected candidates:** Overpass and Merriweather were tested and dropped, because they misplace
-  the Yoruba low-tone mark.
-- **Licence:** Andika's reserved name is the reason for the rename. See `assets/fonts/FONTS-README.txt`.
-- **Weight:** about 125KB, loaded only on `/workshops` pages.
-- **Rest of the site:** still uses Archivo, including the shared header and footer. Moving those to
-  this pair is a separate decision.
+- Archivo is already loaded by the shared `site.css`; no additional body font download.
+- The subset lacks some Akan, Ewe and Yoruba characters, so fallback to the system
+  font for unsupported glyphs must be inspected during final language QA.
+- Andika font files remain in the repository but are no longer referenced by
+  the workshop pages; any later removal should retain required OFL notices.
+- The rest of the site is unchanged.
 
 ## Rules these pages keep
 
