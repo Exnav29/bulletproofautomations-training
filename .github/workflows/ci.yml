@@ -21,6 +21,15 @@ jobs:
         run: npm run build
       - name: Validate HTML
         run: npx --yes html-validate "dist/**/*.html"
+      # Webinar pages render only from published content, and none is published yet,
+      # so build the test fixtures separately to validate the generated markup.
+      - name: Validate generated webinar pages (test fixtures, never deployed)
+        run: |
+          WORKSHOP_CONTENT_DIR=tests/fixtures/workshops npm run build
+          test -f dist/workshops/sample-webinar/index.html
+          npx --yes html-validate "dist/workshops/**/*.html"
+          npm run build
+          test ! -e dist/workshops
       - name: Check admin JavaScript and certificate archive
         run: |
           node --check assets/js/admin-console.js
@@ -29,6 +38,11 @@ jobs:
           node --check assets/js/admin-archives.js
           node --check assets/js/admin-previews.js
           node --check assets/js/shell.js
+          node --check assets/js/admin-workshops.js
+          node --check assets/js/workshop-tracking.js
+          node --check assets/js/workshops.js
+          node --check scripts/workshops.js
+          for f in functions/api/*.js functions/api/workshops/*.js functions/api/admin/*.js; do node --check "$f"; done
           node --test tests/*.test.js
 
   certificate-renderer:
@@ -51,6 +65,7 @@ jobs:
           node tests/studio-ui.test.mjs
           npm run build
           node tests/admin-console.test.mjs
+          node tests/workshop-tracking.test.mjs
       - name: Render real PDFs and reject invalid inputs
         run: deno test --node-modules-dir=none --allow-net --allow-read --allow-env tests/certificate-renderer.test.ts
 
@@ -71,10 +86,54 @@ jobs:
         run: deno test --node-modules-dir=none --allow-net --allow-env --allow-read tests/paystack-webhook.test.ts
         env:
           WEBHOOK_MODULE: ${{ github.workspace }}/supabase/deployed/paystack-webhook-v9/index.ts
+      # The webinar Paystack business has its own webhook. Every case also asserts the
+      # same-email cohort rows are unchanged and nothing is written to payment_events.
+      - name: Webinar webhook (separate Paystack business) isolation suite
+        run: deno test --node-modules-dir=none --allow-net --allow-env --allow-read tests/workshop-webhook.test.ts
+      - name: Workshop migration rolls back and re-applies
+        run: deno test --node-modules-dir=none --allow-read tests/workshops-migration.test.ts
+      - name: Workshop API end to end (registration, payment states, privacy, outbox)
+        run: deno test --node-modules-dir=none --allow-net --allow-read --allow-env tests/workshops-api.test.ts
       # The deployed snapshot must stay byte-identical to what production runs.
       - name: Production snapshot checksum
         run: |
           echo "0d1255d065a03ccf44391394132b224ea2320c6f9c435de87acd95c75a2acb10  supabase/deployed/paystack-webhook-v9/index.ts" | sha256sum -c -
+
+  # Existing production behaviour, measured with main's own tests and code, must be
+  # unchanged by this branch. See docs/workshops-shared-changes.md.
+  baseline:
+    name: Baseline regression (main vs this branch)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.5.4
+      - name: Check out main alongside
+        run: git worktree add --detach "$RUNNER_TEMP/main" origin/main
+      - name: main's own webhook tests (cohort, installments, Scheduling) against production v9 and this branch
+        run: |
+          T="$RUNNER_TEMP/main/tests/paystack-webhook.test.ts"
+          WEBHOOK_MODULE=$PWD/supabase/deployed/paystack-webhook-v9/index.ts deno test --node-modules-dir=none --allow-net --allow-env --allow-read "$T"
+          WEBHOOK_MODULE=$PWD/supabase/functions/paystack-webhook/index.ts deno test --node-modules-dir=none --allow-net --allow-env --allow-read "$T"
+      - name: Cohort enrollment and installment endpoints, main's code then this branch's
+        run: |
+          FUNCTIONS_ROOT="$RUNNER_TEMP/main/functions" deno test --node-modules-dir=none --allow-net --allow-env --allow-read tests/baseline/cohort-functions.test.ts
+          deno test --node-modules-dir=none --allow-net --allow-env --allow-read tests/baseline/cohort-functions.test.ts
+      - name: Shared payment code, the training webhook and its tests are byte-identical to main
+        run: >-
+          git diff --exit-code origin/main --
+          functions/api/_paystack.js functions/api/enroll.js functions/api/_installments.js
+          functions/api/installment.js functions/api/installment-scheduler.js functions/api/_regions.js
+          functions/_middleware.js supabase/functions/paystack-webhook supabase/deployed tests/paystack-webhook.test.ts
+          tests/fixtures/payment-ledger.sql
+      - name: Built site identical to main except the reviewed list
+        run: tests/baseline/compare-site.sh "$RUNNER_TEMP/main"
 
   link-check:
     name: Link check
@@ -89,8 +148,13 @@ jobs:
       - name: Check links
         uses: lycheeverse/lychee-action@v2
         with:
+          # Root-relative links resolve against the BUILT site, not production. Against
+          # production a link to a route this PR adds (e.g. /admin/workshops/) fails
+          # until merge, and a route production happens to serve passes even if this
+          # build dropped it. External links are still checked online.
           args: >-
-            --base-url https://training.bulletproofautomations.com
+            --root-dir ${{ github.workspace }}/dist
+            --index-files index.html
             --verbose
             --no-progress
             --max-retries 3

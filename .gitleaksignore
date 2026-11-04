@@ -1,0 +1,9 @@
+# Reviewed false positives only. Each entry is an exact gitleaks fingerprint
+# (commit:file:rule:line), so it cannot hide a new or different finding.
+#
+# 383a079, assets/js/workshop-tracking.js line 31: the localStorage name used for
+# the visitor's ad-measurement choice (a key NAME, not a credential). The
+# generic-api-key rule matched on the identifier. The constant was
+# renamed CONSENT_STORAGE in a later commit, so current code no longer matches;
+# this entry only covers the historical commit that gitleaks still scans.
+383a079c0f27e5dcc65dd0e642a5509bd4ae3828:assets/js/workshop-tracking.js:generic-api-key:31

@@ -17,9 +17,12 @@ create table public.credentials(id uuid primary key default gen_random_uuid(),cr
 create function public.verify_credential(p_id text default null,p_name text default null) returns setof public.credentials language sql as $$select * from public.credentials c where c.publish_consent and (c.credential_id=p_id or c.holder_name=p_name)$$;
 create function public.verify_credentials_for(p_normalised text) returns setof public.credentials language sql as $$select * from public.credentials c where c.publish_consent and c.holder_name_normalised=p_normalised$$;`);
 await pg.exec(fs.readFileSync("supabase/certificate-processing.sql", "utf8"));
+// Only Certificate Studio migrations belong on this stub schema. Others (for
+// example 20261103120000_workshops.sql, which extends public.payment_events)
+// need production's ledger and are tested against it in their own suites.
 for (const file of fs
   .readdirSync("supabase/migrations")
-  .filter((f) => f.endsWith(".sql"))
+  .filter((f) => f.endsWith(".sql") && /_(certificate|studio)_/.test(f))
   .sort())
   await pg.exec(fs.readFileSync("supabase/migrations/" + file, "utf8"));
 const actor = "00000000-0000-0000-0000-000000000001";

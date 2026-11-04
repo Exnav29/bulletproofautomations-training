@@ -306,7 +306,7 @@
 }
 
 </style>
-<link rel="stylesheet" href="/assets/css/admin-console.css?v=20261017-b">
+<link rel="stylesheet" href="/assets/css/admin-console.css?v=20261103-a">
 </head>
 <body>
 
@@ -346,6 +346,7 @@
         <a data-ops-link="credentials" href="/admin/credentials/"><span aria-hidden="true">▣</span> Credentials</a>
         <a data-ops-link="studio" href="/admin/studio/"><span aria-hidden="true">✧</span> Certificate Studio</a>
         <a data-ops-link="verification" href="/admin/verification/"><span aria-hidden="true">⌕</span> Verification activity</a>
+        <a data-ops-link="workshops" href="/admin/workshops/"><span aria-hidden="true">▦</span> Webinars &amp; workshops</a>
       </nav>
       <div class="ops-sidebar__foot">Official training records<br><span>Private administrator workspace</span></div>
     </aside>
@@ -656,6 +657,74 @@
   </div>
 
   <!-- Verification enquiries ---------------------------------------------- -->
+  <!-- Webinars and workshops ----------------------------------------- -->
+  <section class="sec-gap ops-view" data-ops-view="workshops" aria-labelledby="ws-title">
+    <h2 class="panel__title" id="ws-title">Webinars &amp; workshops &mdash; <span id="ws-count">0</span> registrations</h2>
+    <p class="sec-gap__lede">Registrations for standalone sessions, kept apart from the cohort roll. Money is only ever
+      marked received by the Paystack webhook or a server-side verification. Refunds are issued in the Paystack
+      dashboard; a seat is released only when the refund is processed.</p>
+    <p class="msg msg--bad" id="ws-error" role="alert" hidden></p>
+    <p class="msg" id="ws-message" role="status" hidden></p>
+
+    <section class="panel" aria-labelledby="ws-attn-title">
+      <h3 class="panel__title" id="ws-attn-title">Needs resolution &mdash; <span id="ws-attn-count">0</span></h3>
+      <div id="ws-attention"><p class="msg msg--empty">Nothing waiting.</p></div>
+    </section>
+
+    <div class="filters">
+      <label class="vh" for="ws-session">Session</label>
+      <select id="ws-session"><option value="">All sessions</option></select>
+      <label class="vh" for="ws-status">Registration status</label>
+      <select id="ws-status"><option value="">All registration states</option></select>
+      <label class="vh" for="ws-payment">Payment status</label>
+      <select id="ws-payment"><option value="">All payment states</option></select>
+      <label class="vh" for="ws-attendance">Attendance</label>
+      <select id="ws-attendance"><option value="">All attendance</option></select>
+      <label class="vh" for="ws-q">Search name, email or campaign</label>
+      <input type="search" id="ws-q" placeholder="Search name, email, campaign">
+      <button class="mini" type="button" id="ws-csv">Export CSV</button>
+    </div>
+
+    <div class="roll-wrap">
+      <table class="roll">
+        <caption class="vh">Webinar and workshop registrations</caption>
+        <thead>
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col">Session</th>
+            <th scope="col">Registration</th>
+            <th scope="col">Payment</th>
+            <th scope="col" class="num">Paid</th>
+            <th scope="col">Attendance</th>
+            <th scope="col">Campaign / ad</th>
+            <th scope="col">Registered</th>
+            <th scope="col"><span class="vh">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody id="ws-rows"></tbody>
+      </table>
+    </div>
+
+    <section class="panel" aria-labelledby="ws-camp-title">
+      <h3 class="panel__title" id="ws-camp-title">Results by campaign</h3>
+      <p class="sec-gap__lede">Grouped by <code>utm_campaign</code> and <code>utm_content</code> from the ad URL, for the
+        current filters. Confirmed paid means a confirmed registration with a payment Paystack verified: the same
+        definition Meta receives as a Purchase. Payments held for review are counted separately until admitted, and
+        refunds come off revenue. Enter the spend from Ads Manager for the same period to
+        see the cost per paid registration; it is calculated here and not stored.</p>
+      <label for="ws-spend">Ad spend for this selection (GHS)</label>
+      <input id="ws-spend" type="number" min="0" step="0.01" inputmode="decimal">
+      <div class="roll-wrap">
+        <table class="roll">
+          <caption class="vh">Registrations and verified payments by campaign</caption>
+          <thead><tr><th scope="col">Campaign</th><th scope="col">Ad</th><th scope="col" class="num">Registrations</th>
+            <th scope="col" class="num">Confirmed paid</th><th scope="col" class="num">Held for review</th><th scope="col" class="num">Revenue (GHS)</th></tr></thead>
+          <tbody id="ws-camp-rows"></tbody>
+          <tfoot><tr><th scope="row" colspan="3">Cost per confirmed paid enrollment</th><td class="num" id="ws-cac">&mdash;</td><td></td><td></td></tr></tfoot>
+        </table>
+      </div>
+    </section>
+  </section>
   <section class="sec-gap ops-view" data-ops-view="verification" aria-labelledby="enq-title">
     <h2 class="panel__title" id="enq-title">Verification enquiries &mdash; <span id="enq-count">0</span></h2>
     <p class="sec-gap__lede">Everyone who identified themselves to use the lookup. The ones marked
@@ -774,11 +843,12 @@
     <pre class="raw" id="pdrawer-raw"></pre>
   </div>
 </div>
-<script src="/assets/js/admin-console.js?v=20261017-a" defer></script>
+<script src="/assets/js/admin-console.js?v=20261103-a" defer></script>
 <script src="/assets/js/admin.js?v=20261017-b" defer></script>
 <script src="/assets/js/admin-archives.js?v=20261016-auto2" defer></script>
 <script src="/assets/js/admin-previews.js?v=20261016-auto1" defer></script>
 <script src="/assets/js/admin-payments.js" defer></script>
 <script src="/assets/js/admin-studio.js?v=20261017-a" defer></script>
+<script src="/assets/js/admin-workshops.js?v=20261103-a" defer></script>
 </body>
 </html>
