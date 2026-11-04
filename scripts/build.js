@@ -264,7 +264,8 @@ if (visualPreviewBranch) {
       .replace("</head>", '<meta name="robots" content="noindex,nofollow"></head>')
       .replace('<body class="ws-body">', '<body class="ws-body">' + banner)
       .replace('type="submit" data-ws-submit', 'type="button" data-ws-submit disabled aria-disabled="true"')
-      .replace('<form class="ws-form" data-ws-form novalidate>', '<form class="ws-form" data-ws-form novalidate><p class="ws-note" role="note">This is a design preview. The registration form is visible for review but cannot submit.</p>')
+      .replace('<form class="ws-form" data-ws-form novalidate>', '<form class="ws-form" data-ws-form novalidate><fieldset disabled style="border:0;padding:0;margin:0;min-width:0"><p class="ws-note" role="note">This is a design preview. The registration form is visible for review but cannot submit.</p>')
+      .replace('</form>', '</fieldset></form>')
       .replace('Checking your registration', 'Example confirmation screen')
       .replace('One moment while we confirm with our records.', 'This is an example of the confirmation page. No registration or payment occurred.');
     fs.writeFileSync(pageFile, html);
