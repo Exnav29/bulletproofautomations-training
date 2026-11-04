@@ -4,11 +4,10 @@
  * Loaded only on /workshops pages, after site.css. Everything is scoped under
  * .ws (the <main>) or .ws-body, so no other page changes.
  *
- *   Type   EB Garamond 600 for headings, dates and fees: the voice of a
- *          certificate. "BPA Reading" (Andika by SIL, renamed under its OFL
- *          reserved-name clause) for everything people read and fill in. Both
- *          cover Akan, Ewe and Yoruba letters and the cedi and naira signs,
- *          which the site's Archivo subset does not.
+ *   Type   EB Garamond 600 for editorial headings, dates and fees.
+ *          Archivo (the main training site's existing variable face) for
+ *          body copy, labels, forms and buttons. Professional and consistent.
+ *          System fallback provides glyphs absent from Archivo's Latin subset.
  *   Colour Site tokens: sand ground (training), ink text, verified green for
  *          actions, marigold only for time-sensitive facts, failed red only
  *          for a failure.
@@ -18,12 +17,10 @@
  */
 
 @font-face { font-family: "EB Garamond"; src: url("/assets/fonts/eb-garamond-600.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }
-@font-face { font-family: "BPA Reading"; src: url("/assets/fonts/bpa-reading-400.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
-@font-face { font-family: "BPA Reading"; src: url("/assets/fonts/bpa-reading-700.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
 
 .ws-body {
   --ws-display: "EB Garamond", Garamond, "Times New Roman", serif;
-  --ws-text: "BPA Reading", "Segoe UI", system-ui, sans-serif;
+  --ws-text: var(--face, "Archivo", "Segoe UI", system-ui, sans-serif);
   --ws-ground: var(--sand, #f3eee6);
   --ws-line: var(--sand-rule, #e2d9cb);
   --ws-soft: var(--sand-muted, #6b6154);
