@@ -708,7 +708,9 @@
     <section class="panel" aria-labelledby="ws-camp-title">
       <h3 class="panel__title" id="ws-camp-title">Results by campaign</h3>
       <p class="sec-gap__lede">Grouped by <code>utm_campaign</code> and <code>utm_content</code> from the ad URL, for the
-        current filters. Paid means money verified by Paystack. Enter the spend from Ads Manager for the same period to
+        current filters. Confirmed paid means a confirmed registration with a payment Paystack verified: the same
+        definition Meta receives as a Purchase. Payments held for review are counted separately until admitted, and
+        refunds come off revenue. Enter the spend from Ads Manager for the same period to
         see the cost per paid registration; it is calculated here and not stored.</p>
       <label for="ws-spend">Ad spend for this selection (GHS)</label>
       <input id="ws-spend" type="number" min="0" step="0.01" inputmode="decimal">
@@ -716,9 +718,9 @@
         <table class="roll">
           <caption class="vh">Registrations and verified payments by campaign</caption>
           <thead><tr><th scope="col">Campaign</th><th scope="col">Ad</th><th scope="col" class="num">Registrations</th>
-            <th scope="col" class="num">Paid</th><th scope="col" class="num">Revenue (GHS)</th></tr></thead>
+            <th scope="col" class="num">Confirmed paid</th><th scope="col" class="num">Held for review</th><th scope="col" class="num">Revenue (GHS)</th></tr></thead>
           <tbody id="ws-camp-rows"></tbody>
-          <tfoot><tr><th scope="row" colspan="3">Cost per paid registration</th><td class="num" id="ws-cac">&mdash;</td><td></td></tr></tfoot>
+          <tfoot><tr><th scope="row" colspan="3">Cost per confirmed paid enrollment</th><td class="num" id="ws-cac">&mdash;</td><td></td><td></td></tr></tfoot>
         </table>
       </div>
     </section>

@@ -173,22 +173,35 @@
     campaigns(rows);
   }
 
-  function isPaid(r) { return ["paid", "needs_review", "partially_refunded"].indexOf(r.payment_status) !== -1 && Number(r.amount_paid_minor) > 0; }
+  /* ONE definition of a paid webinar enrollment, shared with Meta:
+   * a CONFIRMED registration with a payment Paystack verified (the attempt in
+   * status "succeeded"). Its value is that attempt, net of refunds; duplicate
+   * payments never add to it. Money held for review is shown separately and
+   * is not counted until an admin admits it — the moment the Conversions API
+   * Purchase is sent. Mirrors workshop_apply_charge / workshop_admin_action
+   * and /api/workshops/status. */
+  function verifiedMinor(r) {
+    var primary = (ws.attempts[r.id] || []).filter(function (a) { return a.status === "succeeded"; })[0];
+    return primary ? Math.max(0, Number(primary.received_minor || 0) - Number(primary.refunded_minor || 0)) : 0;
+  }
+  function isConfirmedPaid(r) { return r.status === "confirmed" && verifiedMinor(r) > 0; }
+  function isHeldForReview(r) { return r.status === "payment_received_review" && verifiedMinor(r) > 0; }
 
   function campaigns(rows) {
     var groups = {};
     rows.forEach(function (r) {
       if ((ws.attempts[r.id] || []).some(function (a) { return a.mode === "test"; })) return; // test checkouts never count
       var key = (r.utm_campaign || "(none)") + "\u0000" + (r.utm_content || "");
-      var g = groups[key] = groups[key] || { c: r.utm_campaign || "(no campaign)", a: r.utm_content || "", n: 0, paid: 0, rev: 0 };
+      var g = groups[key] = groups[key] || { c: r.utm_campaign || "(no campaign)", a: r.utm_content || "", n: 0, paid: 0, held: 0, rev: 0 };
       g.n += 1;
-      if (isPaid(r)) { g.paid += 1; g.rev += Number(r.amount_paid_minor || 0); }
+      if (isConfirmedPaid(r)) { g.paid += 1; g.rev += verifiedMinor(r); }
+      else if (isHeldForReview(r)) g.held += 1;
     });
     var list = Object.keys(groups).map(function (k) { return groups[k]; }).sort(function (x, y) { return y.paid - x.paid || y.n - x.n; });
     $("ws-camp-rows").innerHTML = list.map(function (g) {
       return "<tr><td>" + esc(g.c) + "</td><td>" + esc(g.a || "—") + '</td><td class="num">' + g.n + '</td><td class="num">' + g.paid +
-        '</td><td class="num">' + ghs(g.rev) + "</td></tr>";
-    }).join("") || '<tr><td colspan="5">No live registrations yet.</td></tr>';
+        '</td><td class="num">' + g.held + '</td><td class="num">' + ghs(g.rev) + "</td></tr>";
+    }).join("") || '<tr><td colspan="6">No live registrations yet.</td></tr>';
     var paid = list.reduce(function (t, g) { return t + g.paid; }, 0);
     var spend = Number($("ws-spend").value);
     $("ws-cac").textContent = spend > 0 && paid > 0 ? "GHS " + (spend / paid).toLocaleString("en-GB", { maximumFractionDigits: 2 }) : "—";
@@ -196,12 +209,12 @@
 
   function csv() {
     var cols = ["registered_at", "session", "full_name", "email", "whatsapp", "whatsapp_consent", "status", "payment_status",
-      "review_reason", "paid_ghs", "attendance", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "references"];
+      "review_reason", "confirmed_paid", "verified_paid_ghs", "attendance", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "references"];
     var cell = function (v) { var s = String(v == null ? "" : v); return /[",\n]/.test(s) || /^[=+\-@]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
     var lines = [cols.join(",")].concat(filtered().map(function (r) {
       var s = ws.sessions[r.session_id] || {};
       return [r.created_at, s.slug, r.full_name, r.email_normalized, r.whatsapp, r.whatsapp_consent, r.status, r.payment_status,
-        r.review_reason, Number(r.amount_paid_minor || 0) / 100, r.attendance, r.utm_source, r.utm_medium, r.utm_campaign,
+        r.review_reason, isConfirmedPaid(r) ? "yes" : "no", verifiedMinor(r) / 100, r.attendance, r.utm_source, r.utm_medium, r.utm_campaign,
         r.utm_content, r.utm_term, (ws.attempts[r.id] || []).map(function (a) { return a.reference + ":" + a.status; }).join(" ")].map(cell).join(",");
     }));
     var blob = new Blob([lines.join("\n")], { type: "text/csv" });

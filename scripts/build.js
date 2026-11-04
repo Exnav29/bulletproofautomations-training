@@ -189,7 +189,11 @@ const injected = {
   // Meta Pixel ID for the webinar/workshop pages. Public by nature, OPTIONAL:
   // empty means assets/js/workshop-tracking.js never loads the Pixel at all.
   // Accepted only if it is all digits, so a mistyped value cannot inject markup.
-  __META_PIXEL_ID__: /^[0-9]{6,20}$/.test(process.env.META_PIXEL_ID || "") ? process.env.META_PIXEL_ID : ""
+  __META_PIXEL_ID__: /^[0-9]{6,20}$/.test(process.env.META_PIXEL_ID || "") ? process.env.META_PIXEL_ID : "",
+  // Optional, owner-verified support WhatsApp in international format. Empty
+  // means the webinar pages point people to email instead of a phone number.
+  __WORKSHOP_SUPPORT_WHATSAPP__: /^\+[1-9][0-9]{7,14}$/.test((process.env.WORKSHOP_SUPPORT_WHATSAPP || "").replace(/[\s-]/g, ""))
+    ? process.env.WORKSHOP_SUPPORT_WHATSAPP.replace(/[\s-]/g, "") : ""
 };
 
 function injectEnv(text) {
@@ -313,8 +317,11 @@ const TOKEN_TO_ENV = {
   __SUPABASE_ANON_KEY__: "SUPABASE_ANON_KEY",
   __TURNSTILE_SITE_KEY__: "TURNSTILE_SITE_KEY"
 };
+// Optional tokens: empty is a valid, deliberate state (no Pixel, no published
+// WhatsApp number), so they must never fail a Cloudflare build.
+const OPTIONAL_TOKENS = new Set(["__META_PIXEL_ID__", "__WORKSHOP_SUPPORT_WHATSAPP__"]);
 const missingEnv = Object.keys(injected)
-  .filter((key) => !injected[key])
+  .filter((key) => !injected[key] && !OPTIONAL_TOKENS.has(key))
   .map((key) => TOKEN_TO_ENV[key] || key);
 if (missingEnv.length) {
   const message =

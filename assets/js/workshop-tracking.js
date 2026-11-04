@@ -28,9 +28,9 @@
 
   var PIXEL_ID = "__META_PIXEL_ID__";
   var pixelId = /^[0-9]{6,20}$/.test(PIXEL_ID) ? PIXEL_ID : "";
-  var CONSENT_KEY = "bpa_ad_consent_v1";   // localStorage: "granted" | "denied"
-  var ATTR_KEY = "bpa_attribution_v1";     // sessionStorage
-  var FIRED_KEY = "bpa_pixel_fired_v1";    // localStorage: event ids already sent
+  var CONSENT_STORAGE = "bpa_ad_consent_v1";   // localStorage: "granted" | "denied"
+  var ATTR_STORAGE = "bpa_attribution_v1";     // sessionStorage
+  var FIRED_STORAGE = "bpa_pixel_fired_v1";    // localStorage: event ids already sent
 
   function store(kind) {
     try { return window[kind]; } catch (e) { return null; }
@@ -48,7 +48,7 @@
      overwrite the campaign that brought the visitor. */
   function captureAttribution() {
     var existing = null;
-    try { existing = JSON.parse(get("sessionStorage", ATTR_KEY) || "null"); } catch (e) { existing = null; }
+    try { existing = JSON.parse(get("sessionStorage", ATTR_STORAGE) || "null"); } catch (e) { existing = null; }
     var params = new URLSearchParams(window.location.search);
     var a = existing && typeof existing === "object" ? existing : {};
     if (!a.landing_path) {
@@ -65,7 +65,7 @@
     // Held in memory only until consent; never written before then.
     var fbclid = params.get("fbclid");
     if (fbclid && /^[A-Za-z0-9_-]{8,500}$/.test(fbclid)) a._fbclid_pending = fbclid;
-    set("sessionStorage", ATTR_KEY, JSON.stringify(stripPending(a)));
+    set("sessionStorage", ATTR_STORAGE, JSON.stringify(stripPending(a)));
     return a;
   }
   function stripPending(a) {
@@ -77,7 +77,7 @@
   var attr = captureAttribution();
 
   function consent() {
-    var v = get("localStorage", CONSENT_KEY);
+    var v = get("localStorage", CONSENT_STORAGE);
     return v === "granted" || v === "denied" ? v : null;
   }
 
@@ -109,7 +109,7 @@
   }
 
   function fired() {
-    try { return JSON.parse(get("localStorage", FIRED_KEY) || "[]"); } catch (e) { return []; }
+    try { return JSON.parse(get("localStorage", FIRED_STORAGE) || "[]"); } catch (e) { return []; }
   }
 
   /* Send one event at most once per browser per id. Before consent it is held
@@ -127,17 +127,17 @@
       });
     }
     window.fbq("track", name, clean, eventId ? { eventID: eventId } : undefined);
-    if (eventId) set("localStorage", FIRED_KEY, JSON.stringify(ids.concat(eventId).slice(-50)));
+    if (eventId) set("localStorage", FIRED_STORAGE, JSON.stringify(ids.concat(eventId).slice(-50)));
   }
 
   function allow() {
-    set("localStorage", CONSENT_KEY, "granted");
+    set("localStorage", CONSENT_STORAGE, "granted");
     if (attr._fbclid_pending) attr.fbclid = attr._fbclid_pending;
     hideBar();
     loadPixel();
   }
   function deny() {
-    set("localStorage", CONSENT_KEY, "denied");
+    set("localStorage", CONSENT_STORAGE, "denied");
     queue.length = 0;
     delete attr._fbclid_pending;
     hideBar();

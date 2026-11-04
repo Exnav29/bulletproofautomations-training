@@ -432,12 +432,17 @@ Deno.test({ name: 'late payment after the hold expired, session full: payment_re
   const g = await reg(late)
   assertEquals([g.status, g.payment_status, g.review_reason], ['payment_received_review', 'paid', 'capacity'])
   assertEquals(await count(`select 1 from public.workshop_notifications where registration_id = $1 and kind = 'payment_review'`, [late]), 1)
+  // Money held for review is NOT a confirmed paid enrollment: no Purchase yet.
+  assertEquals(await count(`select 1 from public.workshop_meta_events where registration_id = $1 and event_name = 'Purchase'`, [late]), 0)
   // An admin admits over capacity: confirmed, and the admitted email is queued.
   const admit = await pg.query<{ j: Row }>(
     `select public.workshop_admin_action('johnathan@bulletproofautomations.com', $1, 'admit') as j`, [late])
   assertEquals(admit.rows[0].j.ok, true)
   assertEquals((await reg(late)).status, 'confirmed')
   assertEquals(await count(`select 1 from public.workshop_notifications where registration_id = $1 and kind = 'admitted'`, [late]), 1)
+  // Admitted: now it is a confirmed paid enrollment, reported once at the verified amount.
+  const purchases = await select(`select event_id, value_ghs from public.workshop_meta_events where registration_id = $1 and event_name = 'Purchase'`, [late])
+  assertEquals(purchases.map((p) => [p.event_id, Number(p.value_ghs)]), [['pu_' + late, 150]])
   await assertCohortUntouched(before)
 } })
 
@@ -456,6 +461,7 @@ Deno.test({ name: 'payment for a cancelled session is held for review, not confi
   const r = await deliver(charge(reference))
   assertEquals(r.outcome, 'review')
   assertEquals((await reg(id)).review_reason, 'session_unavailable')
+  assertEquals(await count(`select 1 from public.workshop_meta_events where registration_id = $1 and event_name = 'Purchase'`, [id]), 0)
 } })
 
 Deno.test({ name: 'review then refund: refund_pending until refund.processed releases the seat', ...v10, fn: async () => {

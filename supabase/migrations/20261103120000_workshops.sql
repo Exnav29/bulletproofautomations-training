@@ -567,7 +567,14 @@ begin
   end if;
   r := public.workshop_recompute_payment(r.id);
 
-  perform public.workshop_enqueue_meta(r, 'Purchase', 'pu_' || r.id, p_amount_minor / 100.0);
+  /* PURCHASE = A CONFIRMED PAID ENROLLMENT, and nothing else. Money held for
+     review is not yet an enrollment: it may be refunded. It becomes a Purchase
+     only if an admin admits it (workshop_admin_action 'admit'), with the same
+     event id. The browser Pixel (status endpoint) and the admin campaign report
+     use this same definition. */
+  if outcome = 'confirmed' then
+    perform public.workshop_enqueue_meta(r, 'Purchase', 'pu_' || r.id, p_amount_minor / 100.0);
+  end if;
   if p_payment_event_id is not null then
     perform public.workshop_note_event(p_payment_event_id, r.id, true, note);
   end if;
@@ -662,6 +669,10 @@ begin
     'payment_status', r.payment_status,
     'review_reason', case when r.review_reason in ('capacity', 'session_unavailable', 'registration_cancelled') then r.review_reason end,
     'attempt_status', att.status,
+    -- Whether a confirmation (or admitted) email has actually been delivered to
+    -- the mail service, so the page never claims an email it has not sent.
+    'email_sent', exists (select 1 from public.workshop_notifications n
+                           where n.registration_id = r.id and n.kind in ('confirmation', 'admitted') and n.status = 'sent'),
     'attempt_mode', att.mode,
     'last_verify_at', att.last_verify_at,
     'amount_ghs', r.amount_ghs,
@@ -760,8 +771,13 @@ begin
   if p_action = 'admit' then
     if r.status <> 'payment_received_review' then return jsonb_build_object('ok', false, 'error', 'not_in_review'); end if;
     update public.workshop_registrations set status = 'confirmed', review_reason = null,
-      admin_notes = concat_ws(E'\n', admin_notes, stamp) where id = r.id;
+      admin_notes = concat_ws(E'\n', admin_notes, stamp) where id = r.id returning * into r;
     insert into public.workshop_notifications (registration_id, kind) values (r.id, 'admitted') on conflict do nothing;
+    -- Admitted money is now a confirmed paid enrollment: report it once, valued
+    -- at the verified payment (never a duplicate's).
+    perform public.workshop_enqueue_meta(r, 'Purchase', 'pu_' || r.id,
+      (select received_minor / 100.0 from public.workshop_payment_attempts
+        where registration_id = r.id and status = 'succeeded' limit 1));
   elsif p_action = 'request_refund' then
     if r.status not in ('payment_received_review', 'confirmed') or r.payment_status not in ('paid', 'needs_review', 'partially_refunded') then
       return jsonb_build_object('ok', false, 'error', 'nothing_to_refund');

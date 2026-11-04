@@ -57,9 +57,13 @@ export async function onRequestPost(context) {
   const ids = eventIds(s.registration_id);
   const paid = s.payment_status === "paid" || s.payment_status === "needs_review" || s.payment_status === "partially_refunded";
   const events = {};
-  // Purchase is offered to the browser ONLY when the database records verified
-  // money. A return from Paystack on its own never produces one.
-  if (paid && (state === "confirmed" || state === "payment_review")) {
+  /* Purchase = a CONFIRMED PAID ENROLLMENT: confirmed, with money Paystack
+     verified. A return from Paystack on its own never produces one, and nor
+     does money held for review: that may still be refunded, and is reported
+     only if an admin admits it. Same definition as the Conversions API outbox
+     (workshop_apply_charge / workshop_admin_action) and the admin campaign
+     report, with the same event id, so Meta counts each enrollment once. */
+  if (paid && state === "confirmed" && Number(s.amount_ghs) > 0) {
     events.purchase = { id: ids.purchase, value: Number(s.amount_ghs), currency: "GHS" };
   }
   if (state === "confirmed" && Number(s.amount_ghs) === 0) events.complete_registration = { id: ids.complete_registration };
@@ -69,6 +73,7 @@ export async function onRequestPost(context) {
     state: state,
     test: s.attempt_mode === "test",
     review_reason: s.review_reason || null,
+    email_sent: s.email_sent === true,
     amount_ghs: Number(s.amount_ghs),
     session: s.session,
     events: events

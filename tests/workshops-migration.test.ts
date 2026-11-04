@@ -117,6 +117,7 @@ Deno.test('status token: reveals state and session only; wrong token and wrong r
   await start(r.registration_id, 'BPA-WEB-2026-EEEEEEEEEE')
   const good = await j(`public.workshop_status_for_token($1, $2)`, [hash(9), 'BPA-WEB-2026-EEEEEEEEEE'])
   assertEquals([good.state, good.status, good.session.slug], ['known', 'pending_payment', 'test-session'])
+  assertEquals(good.email_sent, false) // nothing delivered yet, so the page must not say it was
   const text = JSON.stringify(good)
   assert(!text.includes('t@example.com') && !text.includes('Test Person'), 'PII leaked')
   const wrongToken = await j(`public.workshop_status_for_token($1, $2)`, [hash(10), 'BPA-WEB-2026-EEEEEEEEEE'])

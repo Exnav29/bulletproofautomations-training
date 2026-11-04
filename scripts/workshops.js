@@ -264,8 +264,8 @@ function registeredPage() {
     '  <h1 data-done-title>Checking your registration</h1>\n' +
     '  <p class="ws-lede" data-done-lede>One moment while we confirm with our records.</p>\n' +
     '  <div data-done-body></div>\n' +
-    '  <noscript><p class="ws-lede">Your confirmation email has your joining details. If it has not arrived within ten minutes, check spam, then WhatsApp +233 54 652 7779.</p></noscript>\n' +
-    '  <p class="ws-small">Questions? WhatsApp <a href="https://wa.me/233546527779">+233 54 652 7779</a> or email <a href="mailto:info@bulletproofautomations.com">info@bulletproofautomations.com</a>.</p>\n' +
+    '  <noscript><p class="ws-lede">Your confirmation email has your joining details. If it has not arrived within ten minutes, check spam, then email info@bulletproofautomations.com.</p></noscript>\n' +
+    '  <p class="ws-small">Questions? Reply to your confirmation email, or email <a href="mailto:info@bulletproofautomations.com">info@bulletproofautomations.com</a>.</p>\n' +
     '</div>\n</main>';
   return page("Your registration — Bulletproof Automations Training",
     "Registration status for a Bulletproof Automations webinar or workshop.",

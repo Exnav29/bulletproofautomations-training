@@ -124,8 +124,13 @@ jobs:
       - name: Check links
         uses: lycheeverse/lychee-action@v2
         with:
+          # Root-relative links resolve against the BUILT site, not production. Against
+          # production a link to a route this PR adds (e.g. /admin/workshops/) fails
+          # until merge, and a route production happens to serve passes even if this
+          # build dropped it. External links are still checked online.
           args: >-
-            --base-url https://training.bulletproofautomations.com
+            --root-dir ${{ github.workspace }}/dist
+            --index-files index.html
             --verbose
             --no-progress
             --max-retries 3

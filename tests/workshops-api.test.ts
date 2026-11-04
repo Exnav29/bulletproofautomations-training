@@ -216,6 +216,15 @@ Deno.test('status: a valid token cannot read or verify somebody else\'s referenc
   assertEquals((await rows(`select status from public.workshop_payment_attempts where reference = $1`, [b.json.reference]))[0].status, 'initialized')
 })
 
+Deno.test('status: money held for review is not offered to the Pixel as a Purchase', opts, async () => {
+  await reset({ capacity: 1 })
+  const r = await call(register, '/api/workshops/register', form({ testOptIn: true }))
+  await pg.query(`update public.workshop_registrations set status = 'payment_received_review', payment_status = 'paid',
+    review_reason = 'capacity', amount_paid_minor = 15000`)
+  const s = await call(status, '/api/workshops/status', { token: r.json.token })
+  assertEquals([s.json.state, s.json.events.purchase], ['payment_review', undefined])
+})
+
 Deno.test('status: an underpaid verify result is held for review, never confirmed', opts, async () => {
   await reset()
   const r = await call(register, '/api/workshops/register', form({ testOptIn: true }))

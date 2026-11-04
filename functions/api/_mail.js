@@ -10,8 +10,16 @@
 export const MAILBOX = "johnathan@bulletproofautomations.com";
 export const FROM_NAME = "Bulletproof Automations Training";
 
-async function mailboxId(token) {
-  const res = await fetch("https://api.mail.hostinger.com/api/v1/me", {
+/* MAIL_API_BASE is for local, non-production testing only: it is honoured
+   solely when it points at 127.0.0.1 or localhost, so no configuration mistake
+   can send real email through another host. */
+function apiBase(env) {
+  const b = String((env && env.MAIL_API_BASE) || "");
+  return /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(b) ? b : "https://api.mail.hostinger.com";
+}
+
+async function mailboxId(env, token) {
+  const res = await fetch(apiBase(env) + "/api/v1/me", {
     headers: { Authorization: "Bearer " + token }
   });
   if (!res.ok) return null;
@@ -26,9 +34,9 @@ export async function sendMail(env, message) {
   const token = env.HOSTINGER_MAIL_API_TOKEN;
   if (!token) return { ok: false, code: "mail_not_configured" };
   try {
-    const box = await mailboxId(token);
+    const box = await mailboxId(env, token);
     if (!box) return { ok: false, code: "mailbox_not_found" };
-    const res = await fetch("https://api.mail.hostinger.com/api/v1/mailboxes/" + encodeURIComponent(box) + "/send", {
+    const res = await fetch(apiBase(env) + "/api/v1/mailboxes/" + encodeURIComponent(box) + "/send", {
       method: "POST",
       headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
       body: JSON.stringify({

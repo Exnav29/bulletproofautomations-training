@@ -15,7 +15,11 @@
   var main = document.querySelector("main.ws");
   if (!main) return;
   var kind = main.getAttribute("data-ws-page");
-  var WHATSAPP = "+233 54 652 7779";
+  /* Support contact. WhatsApp appears only when WORKSHOP_SUPPORT_WHATSAPP was
+     set at build time (owner-verified); otherwise people are pointed to email. */
+  var SUPPORT_WA = "__WORKSHOP_SUPPORT_WHATSAPP__";
+  var WHATSAPP = /^\+[1-9][0-9]{7,14}$/.test(SUPPORT_WA) ? SUPPORT_WA : "";
+  function contact() { return WHATSAPP ? "WhatsApp " + WHATSAPP : "email info@bulletproofautomations.com"; }
 
   /* ---------- small helpers ---------- */
   function $(sel, root) { return (root || document).querySelector(sel); }
@@ -165,7 +169,7 @@
         submit.textContent = "Try payment again";
         submit.disabled = false;
         label = "Try payment again";
-        showError("Still stuck? WhatsApp " + WHATSAPP + " and quote your email address.");
+        showError("Still stuck? " + contact().charAt(0).toUpperCase() + contact().slice(1) + " and quote your email address.");
       } else {
         setStep(trace, "pay", "wait", "Online payment isn't open for this session yet. We'll email you to arrange payment. You haven't been charged.");
         form.hidden = true;
@@ -203,7 +207,7 @@
           };
           if (codes[r.code]) return closeForm(codes[r.code][0], codes[r.code][1], [{ href: "/workshops", text: "See other sessions", quiet: true }]);
           if (r._status === 400) return showError("Check your details and try again.");
-          return showError("We couldn't save your registration just now. Nothing has been charged. Try again, or WhatsApp " + WHATSAPP + ".");
+          return showError("We couldn't save your registration just now. Nothing has been charged. Try again, or " + contact() + ".");
         }
         if (r.state === "confirmed" || r.state === "payment_review") {
           if (r.events && r.events.complete_registration) track("CompleteRegistration", r.events.complete_registration, { content_ids: [slug], content_name: title });
@@ -222,11 +226,11 @@
         }
         if (r.state === "needs_attention") {
           busy(false);
-          return closeForm("We need to check an earlier payment", "There's a payment on this registration that we need to review. Please don't pay again. We'll email you, or WhatsApp " + WHATSAPP + ".");
+          return closeForm("We need to check an earlier payment", "There's a payment on this registration that we need to review. Please don't pay again. We'll email you, or you can " + contact() + ".");
         }
         if (r.state === "pending_payment") { busy(false); return failPayment(r.retry === true); }
         busy(false);
-        showError("We couldn't complete that. Nothing has been charged. WhatsApp " + WHATSAPP + " and we'll help.");
+        showError("We couldn't complete that. Nothing has been charged. Please " + contact() + " and we'll help.");
       }).catch(function () {
         busy(false);
         showError("No connection. Nothing has been charged. Check your data or Wi-Fi and try again.");
@@ -249,7 +253,7 @@
 
     function noAccess() {
       titleEl.textContent = "Check your email";
-      ledeEl.textContent = "We can't show this registration on this device. Your confirmation email has your joining details once your place is confirmed. If it hasn't arrived within ten minutes, check spam, then WhatsApp " + WHATSAPP + ".";
+      ledeEl.textContent = "We can't show this registration on this device. Your confirmation email has your joining details once your place is confirmed. If it hasn't arrived within ten minutes, check spam, then " + contact() + ".";
     }
     if (!access || !access.token) { noAccess(); return; }
 
@@ -282,7 +286,9 @@
         titleEl.textContent = "You're registered";
         ledeEl.textContent = (s.session ? s.session.title + ". " : "") + (paidSession ? "Paystack confirmed your payment of " + ghs(s.amount_ghs) + "." : "");
         if (paidSession) setStep(list, "pay", "done", "Confirmed by Paystack");
-        setStep(list, "email", "done", "Sent with your joining link. Check spam if it isn't there in ten minutes.");
+        // Only claim the email went out when the server says it did.
+        if (s.email_sent) setStep(list, "email", "done", "Sent with your joining link. Check spam if it isn't there in ten minutes.");
+        else setStep(list, "email", "active", "We're sending your joining link to the email you registered with. Check spam if it isn't there in ten minutes.");
         setStep(list, "join", "active", joinText + ". Join five minutes early.");
         var actions = el("div", { class: "ws-actions" });
         actions.appendChild(el("a", { class: "ws-btn", href: "/api/workshops/calendar?t=" + encodeURIComponent(access.token) }, "Add to calendar"));
@@ -297,7 +303,7 @@
         ledeEl.textContent = "You don't need to pay again.";
         setStep(list, "pay", "done", "Confirmed by Paystack");
         setStep(list, "email", "wait", "The session filled or changed while you were paying. We'll email you to confirm your place or arrange a refund.");
-        if (s.events && s.events.purchase) track("Purchase", s.events.purchase.id, { content_ids: [session], currency: "GHS", value: s.events.purchase.value });
+        // No Purchase here: money held for review is not a confirmed enrollment.
         return;
       }
       if (s.state === "pending_payment") {
@@ -324,12 +330,12 @@
       }
       if (s.state === "needs_attention") {
         titleEl.textContent = "We need to check your payment";
-        ledeEl.textContent = "Something about the payment didn't match what we expected. Please don't pay again. We'll email you, or WhatsApp " + WHATSAPP + ".";
+        ledeEl.textContent = "Something about the payment didn't match what we expected. Please don't pay again. We'll email you, or you can " + contact() + ".";
         setStep(list, "pay", "wait", "Being checked by our team");
         return;
       }
       titleEl.textContent = s.state === "refunded" ? "This registration was refunded" : "This registration isn't active";
-      ledeEl.textContent = "If that's unexpected, WhatsApp " + WHATSAPP + ".";
+      ledeEl.textContent = "If that's unexpected, please " + contact() + ".";
     }
 
     function check() {

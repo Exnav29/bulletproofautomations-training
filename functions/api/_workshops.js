@@ -139,7 +139,11 @@ export function formatWhen(session) {
   const time = new Intl.DateTimeFormat("en-GB", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: tz }).format(start);
   const gmt = new Intl.DateTimeFormat("en-GB", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "UTC" }).format(start);
   const zoneLabel = tz === "Africa/Accra" ? "GMT" : tz + " (" + gmt + " GMT)";
-  return { date: date, time: time.toUpperCase().replace(/\s/g, " "), zone: zoneLabel };
+  const clock = { hour: "numeric", minute: "2-digit", hour12: true };
+  const accra = new Intl.DateTimeFormat("en-GB", Object.assign({ timeZone: "Africa/Accra" }, clock)).format(start).toUpperCase();
+  const lagos = new Intl.DateTimeFormat("en-GB", Object.assign({ timeZone: "Africa/Lagos" }, clock)).format(start).toUpperCase();
+  // Same wording as the pages: both audiences' clocks from the one stored instant.
+  return { date: date, time: time.toUpperCase().replace(/\s/g, " "), zone: zoneLabel, both: accra + " in Accra, " + lagos + " in Lagos" };
 }
 
 function money(minorOrGhs, isMinor) {
@@ -174,12 +178,21 @@ export function calendarFile(session, origin) {
    payment under review is never described as a confirmed place, and no
    response time is promised unless the business has set one.
    --------------------------------------------------------------------------- */
+/* The support WhatsApp number is NOT hardcoded. It appears only when
+   WORKSHOP_SUPPORT_WHATSAPP is set (international format, e.g. +233546527779)
+   after the owner has verified it; otherwise people are told to reply to the
+   email, which reaches the Bulletproof Automations mailbox it was sent from. */
+export function supportWhatsApp(env) {
+  const raw = String((env && env.WORKSHOP_SUPPORT_WHATSAPP) || "").replace(/[\s-]/g, "");
+  return /^\+[1-9][0-9]{7,14}$/.test(raw) ? raw : null;
+}
+
 export function emailFor(kind, registration, session, links, env) {
   const first = String(registration.full_name || "there").trim().split(/\s+/)[0] || "there";
   const when = formatWhen(session);
   const facts = [
     ["Date", when.date],
-    ["Time", when.time + " " + when.zone],
+    ["Time", when.both],
     ["Duration", session.duration_minutes + " minutes"],
     ["Format", session.format]
   ];
@@ -190,6 +203,8 @@ export function emailFor(kind, registration, session, links, env) {
     ? " within " + env.WORKSHOP_REVIEW_RESPONSE_DAYS + " business days"
     : "";
 
+  const wa = supportWhatsApp(env);
+  const help = "Questions? Reply to this email" + (wa ? " or WhatsApp " + wa : "") + ".";
   let subject, lead, body, showJoin;
   if (kind === "confirmation" || kind === "admitted") {
     subject = "You're registered: " + session.title;
@@ -229,7 +244,7 @@ export function emailFor(kind, registration, session, links, env) {
     (showJoin ? '<div style="padding:16px;background:#f3efe5;border-radius:10px;font-size:15px;line-height:1.55;margin-bottom:18px">' +
       '<strong>How to join</strong><br>' + esc(join).replace(/\n/g, "<br>") + "</div>" : "") +
     (showJoin && links.calendar ? '<a href="' + esc(links.calendar) + '" style="display:inline-block;background:#116149;color:#fff;text-decoration:none;padding:12px 16px;border-radius:10px;font-weight:700">Add to calendar</a>' : "") +
-    '<p style="font-size:13px;line-height:1.5;color:#52615b;margin:22px 0 0">Questions? Reply to this email or WhatsApp +233 54 652 7779.</p>' +
+    '<p style="font-size:13px;line-height:1.5;color:#52615b;margin:22px 0 0">' + esc(help) + '</p>' +
     "</div>" +
     '<p style="font-size:12px;line-height:1.5;color:#65736d;margin:16px 4px 0">Bulletproof Automations is an independent training provider based in Jacksonville, Florida. ' +
     "Attending a webinar or workshop is not a certification. Bulletproof Automations is not affiliated with or endorsed by n8n GmbH.</p>" +
@@ -237,7 +252,7 @@ export function emailFor(kind, registration, session, links, env) {
   const text = lead + "\n\n" + session.title + "\n" + facts.map(function (f) { return f[0] + ": " + f[1]; }).join("\n") +
     "\n\n" + body + (showJoin ? "\n\nHow to join:\n" + join : "") +
     (showJoin && links.calendar ? "\n\nAdd to calendar: " + links.calendar : "") +
-    "\n\nQuestions? Reply to this email or WhatsApp +233 54 652 7779.\n\nBulletproof Automations Training";
+    "\n\n" + help + "\n\nBulletproof Automations Training";
   return { subject: subject, html: html, text: text };
 }
 
