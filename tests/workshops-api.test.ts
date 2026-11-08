@@ -285,6 +285,31 @@ Deno.test('dispatch: refuses without the secret; reconciles a missed webhook; se
   assertEquals([reg.client_ip, reg.client_user_agent], [null, null]) // cleared once Purchase was sent
 })
 
+Deno.test('dispatch: webhook-confirmed payments get their confirmation emails in one run, and only once', opts, async () => {
+  await reset()
+  const secret = 'dispatch-secret-for-tests'
+  const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(secret))))
+    .map((b) => b.toString(16).padStart(2, '0')).join('')
+  await pg.query(`insert into public.workshop_dispatch_config (secret_hash) values ($1)`, [hash])
+  // Two students pay; the webhook confirms both before either returns to the site,
+  // so neither page visit sends the email. Only the dispatcher can.
+  for (const email of ['ama@example.com', 'kofi@example.com']) {
+    const r = await call(register, '/api/workshops/register', form({ testOptIn: true, email }))
+    await pg.query(`select public.workshop_apply_charge(p_reference => $1, p_amount_minor => 15000, p_currency => 'GHS',
+      p_domain => 'test', p_paid_at => now(), p_via => 'webhook')`, [r.json.reference])
+  }
+  assertEquals(mail.length, 0)
+  const first = await call(dispatch, '/api/workshops/dispatch', {}, ENV, { 'x-workshop-dispatch': secret })
+  assertEquals(first.status, 200, first.text)
+  assertEquals(first.json.report.emails.sent, 2)
+  assertEquals(mail.map((m) => m.to[0]).sort(), ['ama@example.com', 'kofi@example.com'])
+  assertEquals((await rows(`select status from public.workshop_notifications order by created_at`)).map((r) => r.status), ['sent', 'sent'])
+  // The next run finds nothing to send: nobody gets a second copy.
+  const second = await call(dispatch, '/api/workshops/dispatch', {}, ENV, { 'x-workshop-dispatch': secret })
+  assertEquals(second.json.report.emails.sent, 0)
+  assertEquals(mail.length, 2)
+})
+
 Deno.test('Meta not configured: events stay queued and nothing is sent', opts, async () => {
   await reset({ price_ghs: 0 })
   await call(register, '/api/workshops/register', form({ ad_consent: true }))

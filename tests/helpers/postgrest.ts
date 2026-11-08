@@ -61,10 +61,15 @@ export function serveDatabase(pg: PGlite, port: number): StandIn {
         const name = ident(path.slice(4))
         const args = await req.json()
         const keys = Object.keys(args).map(ident)
-        const set = (await pg.query<{ s: boolean }>(
-          `select proretset as s from pg_proc where proname = $1 and pronamespace = 'public'::regnamespace limit 1`, [name])).rows[0]
+        const set = (await pg.query<{ s: boolean; v: boolean }>(
+          `select proretset as s, prorettype = 'void'::regtype as v from pg_proc where proname = $1 and pronamespace = 'public'::regnamespace limit 1`, [name])).rows[0]
         if (!set) return Response.json({ code: 'PGRST202' }, { status: 404 })
         const call = `public.${name}(${keys.map((k, i) => `${k} => $${i + 1}`).join(', ')})`
+        // A void function answers 204 with no body, as real PostgREST does; parsing it as JSON is a bug.
+        if (set.v) {
+          await pg.query(`select ${call}`, keys.map((k) => param(args[k])))
+          return new Response(null, { status: 204 })
+        }
         const rows = (await pg.query<{ j: unknown }>(`select to_jsonb(x) as j from ${call} x`, keys.map((k) => param(args[k])))).rows
         const out = set.s ? rows.map((r) => r.j) : rows[0]?.j ?? null
         // Single-column scalar wrappers come back as {name: value}; unwrap them.
