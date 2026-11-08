@@ -21,7 +21,7 @@ test("the real content publishes exactly one bookable session: Get Paid for Auto
   assert.deepEqual([s.starts_at, s.duration_minutes, s.price_ghs, s.capacity, s.kind, s.time_zone],
     ["2026-12-12T11:30:00Z", 180, 350, 25, "workshop", "Africa/Accra"]);
   // 25 general places + 5 reserved for graduates = 30. GHS 280 with a Foundations certificate; graduates free.
-  assert.deepEqual([s.reserved_graduate_seats, s.foundations_discount_pct, s.graduate_free, s.admission], [5, 20, true, "invite"]);
+  assert.deepEqual([s.reserved_graduate_seats, s.foundations_discount_pct, s.graduate_free, s.referral_discount_ghs, s.admission], [5, 20, true, 50, "invite"]);
   assert.equal(ws.when(s).accra, "11:30 AM");
   assert.equal(ws.when(s).lagos, "12:30 PM");
 });

@@ -16,11 +16,17 @@ import { processOutbox } from "../_workshops.js";
 
 const ACTIONS = new Set(["admit", "request_refund", "resolve_duplicate", "cancel", "attendance", "note"]);
 const ADMISSION = new Set(["mark_invited", "mark_removed", "set_attend_email"]);
-const REFERRAL = new Set(["create_referrer", "suspend_referrer", "activate_referrer", "record_payout"]);
+const REFERRAL = new Set(["create_referrer", "suspend_referrer", "activate_referrer", "record_payout", "void_commission",
+  "grant_email", "revoke_grant"]);
 const REFERRAL_ERRORS = {
   not_eligible_graduate: "That certificate is not an eligible Intermediate graduate: it must be valid and issued, with an active entitlement and training fees paid in full.",
-  not_qualifying: "Only a confirmed, fully paid, non-complimentary registration that arrived with a referral code earns a commission.",
+  not_qualifying: "No commission is payable: it needs a confirmed registration, paid once in full and not refunded, with a valid referral, not voided and not complimentary.",
   reference_required: "Enter the MoMo or bank reference for the payout.",
+  reason_required: "Give a reason (at least five characters).",
+  bad_code: "A code is 4 to 16 letters and digits, and must not contain the certificate number.",
+  code_taken: "That code is already in use.",
+  bad_email: "Enter a valid email address.",
+  not_eligible: "That certificate is not currently eligible for any workshop benefit.",
   not_found: "Not found."
 };
 const ADMISSION_ERRORS = {
@@ -44,13 +50,17 @@ export async function onRequestPost(context) {
   const id = body && typeof body.registration_id === "string" && /^[0-9a-f-]{36}$/.test(body.registration_id) ? body.registration_id : "";
   const action = body && typeof body.action === "string" ? body.action : "";
   if (REFERRAL.has(action)) {
-    const credential = body && typeof body.credential_id === "string" ? body.credential_id.slice(0, 40) : null;
-    const reference = body && typeof body.reference === "string" ? body.reference.slice(0, 120) : null;
-    if (action === "record_payout" && !id) return result({ ok: false, error: "A registration is required." }, 400);
-    if (action !== "record_payout" && !credential) return result({ ok: false, error: "A certificate ID is required." }, 400);
+    const text = function (k, n) { return body && typeof body[k] === "string" ? body[k].slice(0, n) : null; };
+    const credential = text("credential_id", 40);
+    const grant = body && typeof body.grant_id === "string" && /^[0-9a-f-]{36}$/.test(body.grant_id) ? body.grant_id : null;
+    const needsRegistration = action === "record_payout" || action === "void_commission";
+    if (needsRegistration && !id) return result({ ok: false, error: "A registration is required." }, 400);
+    if (action === "revoke_grant" && !grant) return result({ ok: false, error: "A grant is required." }, 400);
+    if (!needsRegistration && action !== "revoke_grant" && !credential) return result({ ok: false, error: "A certificate ID is required." }, 400);
     const done = await rpc(env, "workshop_admin_referral", {
       p_actor_email: String(admin.email).toLowerCase(), p_action: action, p_credential_id: credential,
-      p_registration_id: id || null, p_reference: reference
+      p_registration_id: id || null, p_value: text("value", 300), p_email: text("email", 160),
+      p_session_slug: text("session", 80), p_grant_id: grant
     });
     if (!done.ok) return result({ ok: false, error: "The action could not be recorded." }, 502);
     if (!done.data || done.data.ok !== true) {

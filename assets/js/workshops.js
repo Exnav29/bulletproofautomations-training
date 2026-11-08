@@ -30,18 +30,18 @@
     return n;
   }
   function store() { try { return window.localStorage; } catch (e) { return null; } }
-  /* A referrer's code from their link (?ref=XXXXXXXX), kept for this tab so it
+  /* A referrer's code from their link (?ref=CODE), kept for this tab so it
      survives moving between workshop pages. The server ignores any code that is
      not an active referrer's, so this only ever carries a hint. */
   function referralCode() {
     var fromUrl = "";
     try { fromUrl = new URLSearchParams(window.location.search).get("ref") || ""; } catch (e) { /* old browser */ }
-    var ok = /^[A-Za-z2-9]{8}$/.test(fromUrl);
+    var ok = /^[A-Za-z0-9]{4,16}$/.test(fromUrl);
     try {
       if (ok) window.sessionStorage.setItem("bpa_ws_ref", fromUrl.toUpperCase());
       else fromUrl = window.sessionStorage.getItem("bpa_ws_ref") || "";
     } catch (e) { /* storage blocked */ }
-    return /^[A-Za-z2-9]{8}$/.test(fromUrl) ? fromUrl.toUpperCase() : "";
+    return /^[A-Za-z0-9]{4,16}$/.test(fromUrl) ? fromUrl.toUpperCase() : "";
   }
   referralCode();
   function saveAccess(slug, value) {
@@ -136,6 +136,93 @@
       });
     }
 
+    /* Price before checkout. The server computes it (the same database
+       function registration uses); the page only shows it, and sends back the
+       figure it showed so a changed price is never charged unseen. */
+    var refInput = form && form.elements.ref;
+    var quoteLine = $("[data-ws-quote]");
+    var benefit = { token: "", tier: "" };
+    var quoted = price;
+    var quoteOk = true;
+    var graduatesOnly = false;
+    var ghsText = function (n) { return n === 0 ? "nothing" : "GHS " + Number(n).toLocaleString("en-GB"); };
+    if (refInput && !refInput.value) refInput.value = referralCode();
+
+    function setPrice(n, note) {
+      quoted = n;
+      label = n === 0 ? "Register for free" : "Register and pay " + ghsText(n);
+      if (!submit.disabled) submit.textContent = label;
+      if (quoteLine) quoteLine.textContent = note;
+    }
+    function requote() {
+      if (!quoteLine) return;
+      var ref = refInput ? refInput.value.trim() : "";
+      if (!ref && !benefit.token) { quoteOk = true; setPrice(price, "You pay " + ghsText(price) + "."); return; }
+      post("/api/workshops/quote", { slug: slug, email: form.elements.email.value.trim(), ref: ref, verification: benefit.token })
+        .then(function (q) {
+          if (!q.ok) {
+            quoteOk = false;
+            if (q.code === "referral_invalid") {
+              if (refInput) refInput.setAttribute("aria-invalid", "true");
+              quoteLine.textContent = "That referral code isn't valid. Check it, or clear it to pay " + ghsText(price) + ".";
+            } else if (q.code === "benefit_not_valid" || q.code === "benefit_already_used") {
+              benefit = { token: "", tier: "" };
+              quoteLine.textContent = "Your certificate confirmation has expired or was already used. Confirm it again, or register at the standard fee.";
+            } else {
+              quoteLine.textContent = "We couldn't work out your price just now. Try again in a moment.";
+            }
+            return;
+          }
+          quoteOk = true;
+          if (refInput) refInput.setAttribute("aria-invalid", "false");
+          var why = { referral: "referral discount", foundations: "Foundations certificate price", graduate: "complimentary graduate place" }[q.discount_kind];
+          setPrice(q.price_ghs, q.discount_kind
+            ? "Advertised " + ghsText(q.list_price_ghs) + ". " + (q.discount_kind === "graduate" ? "Complimentary graduate place" : "Less " + ghsText(q.discount_ghs) + ", " + why) +
+              ". You pay " + ghsText(q.price_ghs) + "." + (q.referral && q.discount_kind === "foundations" ? " Discounts don't combine; your referral is still recorded." : "")
+            : "You pay " + ghsText(q.price_ghs) + ".");
+        })
+        .catch(function () { quoteOk = false; quoteLine.textContent = "We couldn't work out your price just now. Try again in a moment."; });
+    }
+    if (refInput) refInput.addEventListener("change", requote);
+    // A code filled in from a referral link is priced straight away.
+    if (refInput && refInput.value) requote();
+    if (form) form.elements.email.addEventListener("change", function () {
+      if (benefit.token) { benefit = { token: "", tier: "" }; certStatus("Your email changed, so confirm your certificate again."); }
+      requote();
+    });
+
+    // Certificate confirmation: a one-time code sent to the certificate's own email.
+    var certBox = $("[data-ws-cert]");
+    var certStatusEl = $("[data-ws-cert-status]");
+    function certStatus(text) { if (certStatusEl) certStatusEl.textContent = text; }
+    if (certBox) {
+      var certInput = form.elements.certificate_id;
+      var codeBox = $("[data-ws-cert-code]");
+      certInput.addEventListener("change", function () { if (benefit.token) { benefit = { token: "", tier: "" }; requote(); } codeBox.hidden = true; certStatus(""); });
+      $("[data-ws-cert-send]").addEventListener("click", function () {
+        var email = form.elements.email.value.trim();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || certInput.value.trim().length < 6) {
+          certStatus("Enter your email and certificate ID first.");
+          return;
+        }
+        post("/api/workshops/benefit", { step: "request", slug: slug, email: email, certificate_id: certInput.value.trim() }).then(function () {
+          codeBox.hidden = false;
+          certStatus("If that certificate is eligible and registered to this email, we have sent a 6-digit code to it. Check spam if it isn't there in two minutes.");
+          form.elements.cert_code.focus();
+        }).catch(function () { certStatus("We couldn't send a code just now. Try again in a moment."); });
+      });
+      $("[data-ws-cert-confirm]").addEventListener("click", function () {
+        post("/api/workshops/benefit", { step: "confirm", slug: slug, email: form.elements.email.value.trim(),
+          certificate_id: certInput.value.trim(), code: form.elements.cert_code.value.trim() }).then(function (r) {
+          if (!r.ok) { certStatus(r.remaining > 0 ? "That code didn't match. " + r.remaining + " tries left." : "That code can't be used. Send a new one."); return; }
+          benefit = { token: r.verification, tier: r.tier };
+          codeBox.hidden = true;
+          certStatus(r.tier === "graduate" ? "Certificate confirmed: a complimentary reserved place." : "Certificate confirmed: the Foundations certificate price.");
+          requote();
+        }).catch(function () { certStatus("We couldn't check the code just now. Try again in a moment."); });
+      });
+    }
+
     // The database's view of the session. If the page is stale, nobody pays.
     fetch("/api/workshops/session?slug=" + encodeURIComponent(slug))
       .then(function (r) { return r.status === 404 ? { notOpen: true } : r.ok ? r.json() : null; })
@@ -153,6 +240,14 @@
           banner.textContent = "The details on this page have changed. Refresh to see the current date and fee before you register.";
           banner.hidden = false;
           submit.disabled = true;
+          return;
+        }
+        // General places are taken but a reserved graduate place is free: the
+        // form stays open for a confirmed Intermediate graduate certificate only.
+        if (d.status === "graduates_only") {
+          graduatesOnly = true;
+          banner.textContent = "The open places are taken. Places reserved for Intermediate graduates are still available: confirm your certificate below to claim one.";
+          banner.hidden = false;
           return;
         }
         if (d.status === "full") closeForm("This session is full", "No payment was taken. Other dates are listed on the webinars page.", [{ href: "/workshops", text: "See other sessions", quiet: true }]);
@@ -181,6 +276,8 @@
       if (!phoneOk) bad.push(form.elements.whatsapp);
       if (bad.length) { showError("Check the highlighted details: your name, a working email address" + (form.elements.attend_email ? ", the Google account you will join with" : "") + (phoneOk ? "" : ", and a full WhatsApp number") + "."); bad[0].focus(); return false; }
       if (!form.elements.ack_terms.checked) { showError(price > 0 ? "Tick the box to agree to the privacy notice and refund policy." : "Tick the box to agree to the privacy notice."); form.elements.ack_terms.focus(); return false; }
+      if (graduatesOnly && benefit.tier !== "graduate") { showError("Only the reserved Intermediate graduate places are left. Confirm your graduate certificate above to claim one."); return false; }
+      if (!quoteOk) { showError(quoteLine ? quoteLine.textContent : "Check your referral code."); return false; }
       showError("");
       return true;
     }
@@ -215,8 +312,9 @@
         full_name: form.elements.full_name.value.trim(),
         email: form.elements.email.value.trim(),
         attend_email: form.elements.attend_email ? form.elements.attend_email.value.trim() : "",
-        certificate_id: form.elements.certificate_id ? form.elements.certificate_id.value.trim() : "",
-        ref: referralCode(),
+        ref: refInput ? refInput.value.trim() : referralCode(),
+        verification: benefit.token,
+        expected_price: quoted,
         whatsapp: form.elements.whatsapp.value.trim(),
         whatsapp_consent: form.elements.whatsapp_consent ? form.elements.whatsapp_consent.checked : false,
         ack_terms: form.elements.ack_terms.checked,
@@ -237,11 +335,14 @@
             not_found: ["Registration isn't open", "This session isn't taking registrations. Nothing has been charged."]
           };
           if (r.code === "attend_email_required") return showError("Add the Google account you will join with. Only that account can get into the meeting.");
-          if (r.code === "benefit_not_matched") {
-            if (form.elements.certificate_id) { form.elements.certificate_id.setAttribute("aria-invalid", "true"); form.elements.certificate_id.focus(); }
-            return showError("We could not match that certificate ID to the email above, or the certificate is not currently eligible. Check both, or clear the certificate ID to register at the standard fee. Nothing has been charged.");
+          if (r.code === "price_changed") { requote(); return showError("Your price has changed to " + ghsText(r.price_ghs) + ". Check it, then register again. Nothing has been charged."); }
+          if (r.code === "referral_invalid") { requote(); return showError("That referral code isn't valid. Check it, or clear it to register at " + ghsText(price) + ". Nothing has been charged."); }
+          if (r.code === "benefit_not_valid" || r.code === "benefit_already_used") {
+            benefit = { token: "", tier: "" }; requote();
+            return showError(r.code === "benefit_already_used"
+              ? "That certificate has already been used for this workshop. Nothing has been charged."
+              : "Your certificate confirmation has expired or is no longer valid. Confirm it again, or register at the standard fee. Nothing has been charged.");
           }
-          if (r.code === "benefit_not_available") return showError("That certificate does not carry a benefit for this session. Clear the certificate ID to register at the standard fee. Nothing has been charged.");
           if (codes[r.code]) return closeForm(codes[r.code][0], codes[r.code][1], [{ href: "/workshops", text: "See other sessions", quiet: true }]);
           if (r._status === 400) return showError("Check your details and try again.");
           return showError("We couldn't save your registration just now. Nothing has been charged. Try again, or " + contact() + ".");

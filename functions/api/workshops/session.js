@@ -23,6 +23,18 @@ export async function onRequestGet({ request, env }) {
     const used = await rpc(env, "workshop_seats_in_use", { p_session_id: row.id, p_except: null });
     full = used.ok && Number(used.data) >= Number(row.capacity);
   }
+  // Reserved Intermediate graduate places are separate from the general ones,
+  // so a session can be full for everyone else and still open to a graduate.
+  // A database without the release 2 columns simply has none.
+  let graduateOpen = false;
+  if (open) {
+    const g = await rest(env, "workshop_sessions?select=reserved_graduate_seats,graduate_free&id=eq." + encodeURIComponent(row.id) + "&limit=1");
+    const gr = g.ok ? (await g.json().catch(function () { return []; }))[0] : (await g.text(), null);
+    if (gr && gr.graduate_free === true && Number(gr.reserved_graduate_seats) > 0) {
+      const usedG = await rpc(env, "workshop_graduate_seats_in_use", { p_session_id: row.id });
+      graduateOpen = usedG.ok && Number(usedG.data) < Number(gr.reserved_graduate_seats);
+    }
+  }
   return json({
     ok: true,
     session: {
@@ -30,8 +42,11 @@ export async function onRequestGet({ request, env }) {
       duration_minutes: row.duration_minutes, time_zone: row.time_zone, format: row.format,
       price_ghs: Number(row.price_ghs)
     },
-    open: open && !full,
-    full: full,
-    status: open ? (full ? "full" : "open") : row.status === "published" ? "started" : row.status
+    open: open && (!full || graduateOpen),
+    full: full && !graduateOpen,
+    // Yes/no only: there is deliberately no "places left" counter.
+    general_full: open && full,
+    graduate_places_open: graduateOpen,
+    status: open ? (full ? (graduateOpen ? "graduates_only" : "full") : "open") : row.status === "published" ? "started" : row.status
   });
 }

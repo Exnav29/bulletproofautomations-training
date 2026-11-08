@@ -98,44 +98,59 @@ Record the results in the PR before opening registration.
 
 ## Prices, certificate benefits, reserved places and referrals
 
-Part 2 of migration `20261109120000_workshop_admission_benefits.sql`. The database decides every price; the page
-only describes it.
+Part 2 of migration `20261109120000_workshop_admission_benefits.sql`. One database function,
+`workshop_price`, computes every price. The page's quote and registration both use it, and the page sends back
+the figure it showed, so a changed price is refused rather than charged.
 
-| Who | Price | Checked against |
-|---|---|---|
-| Anyone | `price_ghs` (GHS 350) | — |
-| Foundations certificate holder | `price_ghs` less `foundations_discount_pct` (20%: GHS 280) | `public.credentials`: `foundations`, valid, issued, not expired, `holder_email` = registration email |
-| Intermediate graduate | Free when `graduate_free`, in one of `reserved_graduate_seats` | PR #54's `private.studio_graduate_webinar_entitlements_by_certificate` = `active`, credential valid and issued, `holder_email` = registration email, and the training enrollment paid in full with no installment owing |
+| Registration | Customer pays | Referrer commission | Retained before fees |
+|---|---:|---:|---:|
+| Standard | GHS 350 | 0 | 350 |
+| Standard with a graduate's referral | GHS 300 | GHS 50 | 250 |
+| Valid Foundations certificate | GHS 280 | 0 | 280 |
+| Foundations certificate and a referral | GHS 280 | GHS 50 | 230 |
+| Eligible Intermediate graduate | Free, reserved place | 0 | 0 |
 
-- **The certificate ID and the email must both match.** Certificate IDs are public (LinkedIn), so an ID alone proves nothing. A claim that does not match registers nobody and charges nothing (`benefit_not_matched`).
-- **Places:** `capacity` is the **general** places (25). Graduates count only against `reserved_graduate_seats` (5), so the total is 30. Unused reserved places are not released to general registrants.
-- **Checkout** charges the price stored on the registration when it was created. A payment of any other amount is held as a mismatch, never confirmed.
-- **Invitations:** a complimentary graduate place is invited exactly like a paid one. The graduate is re-checked against the certificate register and entitlement at the moment of invitation.
-- **Referrals:** codes are issued from `/admin/workshops/` only to eligible graduates, one each (eight characters, A–Z and 2–9).
-  - A link is `/workshops/?ref=CODE` and is remembered for the browser tab.
-  - A code counts only when it is active, is not the referrer's own registration, and is not a complimentary place.
-  - Commission is `referral_commission_ghs` (GHS 50) on a confirmed, fully paid registration. It is **derived**, not stored as owed.
-  - The admin pays by MoMo, then records the reference. Each registration can be paid once.
-  - A refund after payout shows as "review"; nothing is clawed back automatically. No Paystack split or subaccount is used.
-- Verified read-only on 9 November 2026: the rules match exactly the **2** active graduate entitlements and **10** valid Foundations certificates.
+- **Discounts never stack.** The customer gets the larger one. A valid referral is still recorded, and still earns its commission, when the Foundations discount wins.
+- **Certificate benefits need a one-time code**, emailed only to the address on the certificate, or to an address the admin authorised. The steps:
+  1. The code expires in 10 minutes and allows 5 tries.
+  2. A correct code gives a 30-minute, single-use token bound to that email and session.
+  3. Registration spends the token in the same transaction.
+
+  The page gives the same answer whether or not anything matched, and allows 3 codes an hour per certificate and per address. Each certificate can be redeemed once per session (cancelled and refunded registrations release it).
+- **Eligibility** is read from the certificate register and PR #54's entitlement view, and re-checked when the token is spent and again when a graduate is invited:
+  - **Foundations:** a valid, issued certificate.
+  - **Graduate:** an active entitlement, a valid issued certificate, and training fees and every installment paid.
+- **Recovery for a changed email:** "Authorise another email for a certificate" in `/admin/workshops/`. Verify the person yourself first. The authorisation covers one certificate, one session and 7 days, with the reason recorded. The holder then asks for their code at the new address.
+- **Referral codes and links:** one per eligible graduate, issued from `/admin/workshops/`. You choose the code (4–16 letters and digits) or one is generated. A code is refused if it contains the certificate number.
+  - The link is `/workshops/<slug>?ref=CODE`, which fills in the code; a customer can also type it.
+  - Unknown, suspended or expired codes are refused, as is a code whose graduate is no longer eligible. So is the referrer's own email, which reads as "invalid" so the owner of a code can't be looked up.
+- **Places:** `capacity` is the 25 general places; graduates count only against `reserved_graduate_seats` (5). Both are checked while the session row is locked. When the general places are gone, the page stays open for a confirmed graduate only. The API reports yes/no, never a count. Reserved places are never released.
+- **Commission** is derived, not stored as owed (`workshop_commission_payable`). It is payable only on a confirmed registration paid once, in full, with no refund, duplicate or mismatch, a valid referral, not voided and not complimentary.
+  - Pay by MoMo yourself, then record the reference: once per registration.
+  - A refund after payout shows "review"; there is no automatic clawback.
+  - "Void" removes a fraudulent or mistaken sale's commission, with a reason.
+  - Test-mode payments never show as due.
+- **Admin reporting** shows the advertised price, discount and its kind, customer payment, commission and net retained separately, with totals, plus general and reserved places used.
+- Verified read-only on 9 November 2026: the eligibility rules match exactly the **2** active graduate entitlements and **10** valid Foundations certificates.
+
 
 ## Go-live: Get Paid for Automation, workshop 01
 
 Each line needs owner approval. Order matters: the row opens registration, so it goes last.
 
-1. **Google Meet.** On the host account, confirm it is a Google One plan of **2 TB or more**. Google's help says those plans host group calls of up to 100 people for up to 24 hours; 100 GB Basic and free accounts stop at 60 minutes. Then run the access test above, with a real call of three or more people past 60 minutes.
+1. **Google Meet (operational checks on the owner's paid account, configured for restricted admission).** Run the access test above: an invited account gets in, an uninvited or signed-out one does not, a removed account no longer does. Also run a call of three or more people past 60 minutes, hosted by the account that owns the events.
 2. **Refund policy: legal review, then approval.** In `content/workshops/refund-policy.json` set `"legal_review": "complete"`, `"approved": true` and `"version"` to the effective date. Set `TERMS_VERSION` in `functions/api/_workshops.js` to the same date, in the same commit. The build refuses approval without the legal review, and a test fails if the versions differ.
 3. **Back up**, then **apply `20261109120000_workshop_admission_benefits.sql`**. It is additive: new columns with defaults, two new tables, new functions, and three workshop functions replaced in place with unchanged signatures. Rollback is `rollback/20261109120000_workshop_admission_benefits_down.sql`, which restores those three functions verbatim. Check afterwards: the 19 protected checks are unchanged, and the cohort `paystack-webhook` checksum is unchanged.
 4. **Configure workshop 01** (the row is `draft`; its price is already 350):
    ```sql
    update public.workshop_sessions
       set admission = 'invite', calendar_event_id = '<event id>', capacity = 25, reserved_graduate_seats = 5,
-          foundations_discount_pct = 20, graduate_free = true, referral_commission_ghs = 50
+          foundations_discount_pct = 20, graduate_free = true, referral_discount_ghs = 50, referral_commission_ghs = 50
     where slug = 'what-to-charge-for-automation' and status = 'draft';
    ```
    **This must happen before registration opens.** Without it, emails fall back to printing the joining link.
 5. **Rehearsal (test mode, recommended).** Merge this branch into `webinar-e2e-test` and configure the test session the same way. Then:
-   - Register once at the standard price, once with a Foundations certificate, and once as a graduate (with your own records), paying with Paystack test MoMo.
+   - Register at each price: standard (350), with a referral code (300), with a Foundations certificate (280, using the emailed code), Foundations and referral (280), and as a graduate (free), paying with Paystack test MoMo. Check each email and the admin reporting.
    - Add the accounts from `/admin/workshops/` to a **test** Calendar event.
    - Set the test session back to `draft`.
 6. **Merge PR #61.** This publishes `/workshops` with registration still closed.

@@ -88,7 +88,7 @@
     show("ws-error", "");
     return Promise.all([
       // admission and calendar_event_id arrive with migration 20261109120000; without it the page still loads.
-      getJson("/rest/v1/workshop_sessions?select=id,slug,kind,title,starts_at,status,price_ghs,capacity,admission,calendar_event_id&order=starts_at.desc")
+      getJson("/rest/v1/workshop_sessions?select=id,slug,kind,title,starts_at,status,price_ghs,capacity,admission,calendar_event_id,reserved_graduate_seats&order=starts_at.desc")
         .catch(function () { return getJson("/rest/v1/workshop_sessions?select=id,slug,kind,title,starts_at,status,price_ghs,capacity&order=starts_at.desc"); }),
       getJson("/rest/v1/workshop_registrations?select=*&order=created_at.desc"),
       getJson("/rest/v1/workshop_payment_attempts?select=registration_id,reference,status,amount_minor,received_minor,refunded_minor,mode,verified_via,created_at&order=created_at.asc"),
@@ -241,59 +241,111 @@
     referrals();
   }
 
-  /* Commission is derived, never stored as owed:
-   *   due        confirmed, paid, not complimentary, arrived with a code, not yet paid out
-   *   paid       a payout is recorded
-   *   review     paid out, but the registration has since been refunded or cancelled
-   * Test checkouts never earn a commission. */
-  function commissionState(r) {
-    var test = (ws.attempts[r.id] || []).some(function (a) { return a.mode === "test"; });
-    var qualifies = !test && r.status === "confirmed" && r.payment_status === "paid" && r.price_tier !== "graduate" && Number(r.amount_paid_minor) > 0;
-    if (ws.payouts[r.id]) return qualifies ? "paid" : "review";
-    return qualifies ? "due" : "none";
+  /* Commission is derived, never stored as owed. Mirrors
+   * workshop_commission_payable: confirmed, paid once in full (no refund,
+   * duplicate or mismatch), valid referral, not voided, not complimentary.
+   * Test checkouts never earn one.
+   *   due     payable, not yet paid out
+   *   paid    payable and paid out
+   *   review  paid out, but no longer payable (refunded, cancelled, voided): manual review, no automatic clawback */
+  function payable(r) {
+    var atts = ws.attempts[r.id] || [];
+    if (atts.some(function (a) { return a.mode === "test"; })) return false;
+    return Number(r.commission_ghs) > 0 && !!r.referrer_id && r.price_tier !== "graduate" && !r.commission_voided_at &&
+      r.status === "confirmed" && r.payment_status === "paid" && Number(r.amount_paid_minor) === Math.round(Number(r.amount_ghs) * 100) &&
+      atts.some(function (a) { return a.status === "succeeded"; }) &&
+      !atts.some(function (a) { return a.status === "duplicate_payment" || a.status === "mismatch"; });
   }
+  function commissionState(r) {
+    var ok = payable(r);
+    if (ws.payouts[r.id]) return ok ? "paid" : "review";
+    return ok ? "due" : "none";
+  }
+  var cedis = function (n) { return "GHS " + Number(n || 0).toLocaleString("en-GB", { maximumFractionDigits: 2 }); };
+  var DISCOUNT = { referral: "Referral", foundations: "Foundations", graduate: "Complimentary" };
 
   function referrals() {
-    var due = 0;
-    $("ws-referrals").innerHTML = ws.referrers.length ? ws.referrers.map(function (x) {
-      var mine = ws.rows.filter(function (r) { return r.referral_code === x.code; });
-      var lines = mine.map(function (r) {
-        var st = commissionState(r), s = ws.sessions[r.session_id] || {};
-        var amount = ws.commission[r.session_id] || 0;
-        if (st === "due") due += 1;
-        var label = { due: "Due: GHS " + amount, paid: "Paid (" + esc(ws.payouts[r.id].payout_reference) + ")",
-          review: "Paid, but the registration was refunded or cancelled: review", none: "Not earned (" + esc(STATUS[r.status] || r.status) + ")" }[st];
-        return "<li>" + esc(r.full_name) + ", " + esc(s.title || "") + ": " + label +
-          (st === "due" ? ' <button class="mini" type="button" data-ws-payout="' + esc(r.id) + '">Record payout</button>' : "") + "</li>";
-      }).join("");
-      return '<div class="ws-inv"><h4>' + esc(x.code) + " &mdash; " + esc(x.credential_id) + " (" + esc(x.status) + ")</h4>" +
-        "<p><small>Link: " + esc(location.origin) + "/workshops/?ref=" + esc(x.code) + "</small> " +
+    var due = 0, totals = { list: 0, discount: 0, paid: 0, commission: 0 };
+    var rows = ws.rows.filter(function (r) { return r.referral_code; });
+    var table = rows.map(function (r) {
+      var st = commissionState(r), s = ws.sessions[r.session_id] || {};
+      var paid = Number(r.amount_paid_minor || 0) / 100;
+      var commission = st === "due" || st === "paid" ? Number(r.commission_ghs) : 0;
+      if (st === "due") due += 1;
+      if (st !== "none") {
+        totals.list += Number(r.list_price_ghs || 0); totals.discount += Number(r.discount_ghs || 0);
+        totals.paid += paid; totals.commission += commission;
+      }
+      var label = { due: "Due", paid: "Paid (" + esc(ws.payouts[r.id] ? ws.payouts[r.id].payout_reference : "") + ")",
+        review: "Paid out, but no longer payable: review", none: r.commission_voided_at ? "Voided: " + esc(r.commission_void_reason || "") : "Not earned (" + esc(STATUS[r.status] || r.status) + ")" }[st];
+      return "<tr><td>" + esc(r.full_name) + "<br><small>" + esc(s.title || "") + "</small></td><td>" + esc(r.referral_code) + "</td>" +
+        '<td class="num">' + cedis(r.list_price_ghs) + '</td><td>' + esc(DISCOUNT[r.discount_kind] || "None") + " " + cedis(r.discount_ghs) +
+        '</td><td class="num">' + cedis(paid) + '</td><td class="num">' + cedis(commission) + '</td><td class="num">' + cedis(paid - commission) +
+        "</td><td>" + label +
+        (st === "due" ? ' <button class="mini" type="button" data-ws-payout="' + esc(r.id) + '">Record payout</button>' : "") +
+        (st === "due" || st === "paid" ? ' <button class="mini" type="button" data-ws-void="' + esc(r.id) + '">Void</button>' : "") + "</td></tr>";
+    }).join("");
+    var codes = ws.referrers.map(function (x) {
+      return "<li><strong>" + esc(x.code) + "</strong> &mdash; " + esc(x.credential_id) + " (" + esc(x.status) +
+        (x.expires_at ? ", expires " + esc(when(x.expires_at)) : "") + ")<br><small>Link: " + esc(location.origin) + "/workshops/?ref=" + esc(x.code) + "</small> " +
         '<button class="mini" type="button" data-ws-ref-toggle="' + esc(x.credential_id) + '" data-to="' + (x.status === "active" ? "suspend_referrer" : "activate_referrer") + '">' +
-        (x.status === "active" ? "Suspend" : "Reactivate") + "</button></p>" +
-        (lines ? "<ul>" + lines + "</ul>" : '<p class="msg msg--empty">No registrations with this code yet.</p>') + "</div>";
-    }).join("") : '<p class="msg msg--empty">No referral codes issued.</p>';
+        (x.status === "active" ? "Suspend" : "Reactivate") + "</button></li>";
+    }).join("");
+    $("ws-referrals").innerHTML = (codes ? "<ul>" + codes + "</ul>" : '<p class="msg msg--empty">No referral codes issued.</p>') +
+      (table ? '<div class="roll-wrap"><table class="roll"><caption class="vh">Referred registrations</caption><thead><tr>' +
+        '<th scope="col">Registration</th><th scope="col">Code</th><th scope="col" class="num">Advertised</th><th scope="col">Discount</th>' +
+        '<th scope="col" class="num">Customer paid</th><th scope="col" class="num">Commission</th><th scope="col" class="num">Net retained</th><th scope="col">Commission state</th>' +
+        "</tr></thead><tbody>" + table + "</tbody><tfoot><tr><th scope=\"row\" colspan=\"2\">Payable and paid (live payments)</th>" +
+        '<td class="num">' + cedis(totals.list) + "</td><td>" + cedis(totals.discount) + '</td><td class="num">' + cedis(totals.paid) +
+        '</td><td class="num">' + cedis(totals.commission) + '</td><td class="num">' + cedis(totals.paid - totals.commission) + "</td><td>Before Paystack fees</td></tr></tfoot></table></div>" : "");
     $("ws-ref-due").textContent = due;
+
+    // Places, the same split the database enforces: general and reserved graduate.
+    $("ws-places").innerHTML = Object.keys(ws.sessions).map(function (id) {
+      var s = ws.sessions[id];
+      if (!s.capacity) return "";
+      var mine = ws.rows.filter(function (r) { return r.session_id === id && ["confirmed", "payment_received_review", "refund_pending"].indexOf(r.status) !== -1; });
+      var grad = mine.filter(function (r) { return r.price_tier === "graduate"; }).length;
+      return "<li>" + esc(s.title) + ": general " + (mine.length - grad) + " of " + s.capacity +
+        (s.reserved_graduate_seats ? ", reserved graduate " + grad + " of " + s.reserved_graduate_seats : "") + "</li>";
+    }).join("");
   }
 
   document.addEventListener("click", function (e) {
     var pay = e.target.closest && e.target.closest("[data-ws-payout]");
     var toggle = e.target.closest && e.target.closest("[data-ws-ref-toggle]");
+    var voided = e.target.closest && e.target.closest("[data-ws-void]");
+    var done = function (msg) { return function (j) { show("ws-message", j && j.already ? "Already recorded." : msg); return load(); }; };
+    var fail = function (err) { show("ws-error", err.message); };
     if (pay) {
       var reference = window.prompt("Paid the commission by hand? Enter the MoMo or bank reference to record it. A registration can be paid once.");
-      if (!reference) return;
-      apiPost({ registration_id: pay.getAttribute("data-ws-payout"), action: "record_payout", reference: reference.trim() })
-        .then(function (j) { show("ws-message", j.already ? "Already recorded." : "Payout recorded."); return load(); })
-        .catch(function (err) { show("ws-error", err.message); });
+      if (reference) apiPost({ registration_id: pay.getAttribute("data-ws-payout"), action: "record_payout", value: reference.trim() }).then(done("Payout recorded.")).catch(fail);
+    } else if (voided) {
+      var reason = window.prompt("Why is this commission void (for example, a fraudulent or mistaken sale)? This is recorded.");
+      if (reason) apiPost({ registration_id: voided.getAttribute("data-ws-void"), action: "void_commission", value: reason.trim() }).then(done("Commission voided.")).catch(fail);
     } else if (toggle) {
-      apiPost({ action: toggle.getAttribute("data-to"), credential_id: toggle.getAttribute("data-ws-ref-toggle") })
-        .then(function () { show("ws-message", "Saved."); return load(); })
-        .catch(function (err) { show("ws-error", err.message); });
+      apiPost({ action: toggle.getAttribute("data-to"), credential_id: toggle.getAttribute("data-ws-ref-toggle") }).then(done("Saved.")).catch(fail);
     }
+  });
+  // Recovery for a holder whose recorded email changed: verify them yourself first.
+  $("ws-grant-new").addEventListener("click", function () {
+    var credential = window.prompt("Certificate ID of the holder you have verified yourself:");
+    if (!credential) return;
+    var email = window.prompt("The holder's new email. It can claim this certificate once, for one session, for 7 days:");
+    if (!email) return;
+    var session = window.prompt("Workshop slug (for example what-to-charge-for-automation):");
+    if (!session) return;
+    var reason = window.prompt("How did you verify them? This is recorded.");
+    if (!reason) return;
+    apiPost({ action: "grant_email", credential_id: credential.trim(), email: email.trim(), session: session.trim(), value: reason.trim() })
+      .then(function () { show("ws-message", "Authorised for 7 days. They now request their code at that email."); return load(); })
+      .catch(function (err) { show("ws-error", err.message); });
   });
   $("ws-ref-new").addEventListener("click", function () {
     var credential = window.prompt("Intermediate certificate ID of the graduate (the code is issued only if the certificate is valid, the entitlement is active and training fees are paid):");
     if (!credential) return;
-    apiPost({ action: "create_referrer", credential_id: credential.trim() })
+    apiPost({ action: "create_referrer", credential_id: credential.trim(),
+      value: (window.prompt("Code to issue (4 to 16 letters and digits, never the certificate number). Leave blank to generate one:") || "").trim() })
       .then(function (j) { show("ws-message", (j.already ? "Already issued: " : "Issued: ") + j.code + ". Not shared with anyone yet."); return load(); })
       .catch(function (err) { show("ws-error", err.message); });
   });

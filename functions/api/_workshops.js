@@ -387,7 +387,7 @@ export function emailFor(kind, registration, session, links, env) {
     lead = kind === "admitted" ? first + ", your place is confirmed." : first + ", you're registered.";
     body = Number(registration.amount_paid_minor || 0) > 0
       ? "We have received your payment of " + money(registration.amount_paid_minor, true) +
-        (registration.price_tier === "foundations" ? ", the Foundations certificate price" : "") + ". Keep this email: it has your joining details."
+        (registration.discount_kind === "foundations" || (!registration.discount_kind && registration.price_tier === "foundations") ? ", the Foundations certificate price" : registration.discount_kind === "referral" ? ", with a " + money(registration.discount_ghs, false) + " referral discount" : "") + ". Keep this email: it has your joining details."
       : registration.price_tier === "graduate"
         ? "Your place is complimentary, as an Intermediate graduate. Keep this email: it has your joining details."
         : "Keep this email: it has your joining details.";

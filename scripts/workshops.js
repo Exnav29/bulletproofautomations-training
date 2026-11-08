@@ -86,6 +86,7 @@ function validate(s, file, now) {
   if (s.reserved_graduate_seats !== undefined && !(Number.isInteger(s.reserved_graduate_seats) && s.reserved_graduate_seats >= 0)) problems.push("reserved_graduate_seats must be a whole number");
   if (s.graduate_free !== undefined && typeof s.graduate_free !== "boolean") problems.push("graduate_free must be true or false");
   if (s.graduate_free && !s.reserved_graduate_seats) problems.push("graduate_free needs reserved_graduate_seats");
+  if (s.referral_discount_ghs !== undefined && !(typeof s.referral_discount_ghs === "number" && s.referral_discount_ghs >= 0 && s.referral_discount_ghs < (s.price_ghs || 0))) problems.push("referral_discount_ghs must be a number below price_ghs");
   problems.push.apply(problems, privateProblems(s));
   if (s.status === "published") {
     walkStrings(s, function (text) {
@@ -262,6 +263,7 @@ function foundationsFee(s) {
   return "GHS\u00a0" + (Math.round(s.price_ghs * (100 - s.foundations_discount_pct)) / 100).toLocaleString("en-GB");
 }
 function hasBenefits(s) { return s.price_ghs > 0 && (s.foundations_discount_pct > 0 || s.graduate_free === true); }
+function referralFee(s) { return "GHS " + (s.price_ghs - s.referral_discount_ghs).toLocaleString("en-GB"); }
 function kindLabel(s) { return s.kind === "workshop" ? "Workshop" : "Webinar"; }
 function cta(s) { return s.price_ghs === 0 ? "Register for free" : "Register and pay " + fee(s); }
 
@@ -295,6 +297,7 @@ function factsList(s, w) {
     '  <dt>When</dt><dd><span class="ws-date">' + esc(w.long) + '</span><small>' + esc(w.accra) + ' in Accra<br>' + esc(w.lagos) + ' in Lagos</small></dd>\n' +
     '  <dt>Length</dt><dd>' + esc(duration(s.duration_minutes)) + ', ' + esc(s.format) + '</dd>\n' +
     '  <dt>Fee</dt><dd>' + esc(fee(s)) + (s.price_ghs > 0 ? '<small>MoMo or card, through Paystack</small>' : '') +
+      (s.referral_discount_ghs > 0 ? '<small>' + esc(referralFee(s)) + ' with a graduate\'s referral code</small>' : '') +
       (s.foundations_discount_pct > 0 ? '<small>' + esc(foundationsFee(s)) + ' with a Foundations certificate</small>' : '') +
       (s.graduate_free ? '<small>Free for eligible Intermediate graduates</small>' : '') + '</dd>\n' +
     (s.capacity ? '  <dt>Places</dt><dd>' + esc(s.capacity + (s.reserved_graduate_seats || 0)) + ' people' +
@@ -330,11 +333,21 @@ function form(s, policy) {
     (s.admission === "invite"
       ? '  <div class="ws-field"><label for="ws-attend">Google account to join with <span class="ws-hint">Only this account can get into the meeting. It can differ from the email above</span></label><input id="ws-attend" name="attend_email" type="email" autocomplete="email" inputmode="email" required maxlength="160"></div>\n'
       : '') +
+    (s.referral_discount_ghs > 0
+      ? '  <div class="ws-field"><label for="ws-ref">Referral code <span class="ws-hint">Optional. From an Intermediate graduate\'s link or code: ' + esc(referralFee(s)) + '</span></label>' +
+        '<input id="ws-ref" name="ref" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="16" data-ws-ref></div>\n'
+      : '') +
     (hasBenefits(s)
-      ? '  <div class="ws-field"><label for="ws-cert">Certificate ID <span class="ws-hint">Optional. ' +
+      ? '  <div class="ws-field" data-ws-cert><label for="ws-cert">Certificate ID <span class="ws-hint">Optional. ' +
         (s.foundations_discount_pct > 0 ? 'Foundations certificate: ' + esc(foundationsFee(s)) + '. ' : '') +
-        (s.graduate_free ? 'Intermediate graduates: free. ' : '') +
-        'It must be issued to the email above</span></label><input id="ws-cert" name="certificate_id" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="40" placeholder="BPA-"></div>\n'
+        (s.graduate_free ? 'Intermediate graduates: free, in a reserved place. ' : '') +
+        'We email a code to the address on your certificate</span></label>' +
+        '<input id="ws-cert" name="certificate_id" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="40" placeholder="BPA-">' +
+        '<button class="ws-btn ws-btn--small ws-btn--quiet" type="button" data-ws-cert-send>Send me a code</button>' +
+        '<div data-ws-cert-code hidden><label for="ws-cert-code">Code from the email <span class="ws-hint">6 digits, valid for 10 minutes</span></label>' +
+        '<input id="ws-cert-code" name="cert_code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6">' +
+        '<button class="ws-btn ws-btn--small" type="button" data-ws-cert-confirm>Confirm code</button></div>' +
+        '<p class="ws-hint" data-ws-cert-status role="status"></p></div>\n'
       : '') +
     '  <div class="ws-field"><label for="ws-wa">WhatsApp <span class="ws-hint">Optional</span></label><input id="ws-wa" name="whatsapp" type="tel" autocomplete="tel" inputmode="tel" maxlength="40" placeholder="+233"></div>\n' +
     '  <label class="ws-check" data-wa-consent hidden><input type="checkbox" name="whatsapp_consent"> <span>Send me session reminders on WhatsApp.</span></label>\n' +
@@ -342,6 +355,7 @@ function form(s, policy) {
     (s.price_ghs > 0 ? ' and the <a href="' + policyHref(policy) + '">refund policy</a>' : '') + '.</span></label>\n' +
     '  <div class="ws-hp" aria-hidden="true"><label for="ws-company">Company website</label><input id="ws-company" name="company_website" type="text" tabindex="-1" autocomplete="off"></div>\n' +
     '  <p class="ws-error" data-ws-error role="alert" hidden></p>\n' +
+    (s.referral_discount_ghs > 0 || hasBenefits(s) ? '  <p class="ws-note" data-ws-quote aria-live="polite">You pay ' + esc(fee(s)) + '.</p>\n' : '') +
     '  <button class="ws-btn ws-btn--block" type="submit" data-ws-submit>' + esc(cta(s)) + '</button>\n' +
     (s.price_ghs > 0 ? '  <p class="ws-note">You pay on Paystack\'s secure page. Your place is confirmed once Paystack confirms the payment.</p>\n' : '') +
     '</form>';

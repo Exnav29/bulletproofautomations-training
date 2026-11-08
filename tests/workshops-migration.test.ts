@@ -198,21 +198,22 @@ Deno.test('release 2 (admission + benefits): additive, idempotent, reversible to
   }
   await pg.exec(UP2)
   await pg.exec(UP2) // idempotent
-  for (const c of ['admission', 'calendar_event_id', 'foundations_discount_pct', 'graduate_free', 'reserved_graduate_seats', 'referral_commission_ghs']) {
+  for (const c of ['admission', 'calendar_event_id', 'foundations_discount_pct', 'graduate_free', 'reserved_graduate_seats', 'referral_discount_ghs', 'referral_commission_ghs']) {
     assert((await cols('workshop_sessions')).split(',').includes(c), c)
   }
-  for (const c of ['attend_email', 'invited_email', 'price_tier', 'benefit_credential_id', 'referral_code']) {
+  for (const c of ['attend_email', 'invited_email', 'price_tier', 'benefit_credential_id', 'list_price_ghs', 'discount_kind', 'discount_ghs', 'referral_code', 'referrer_id', 'commission_ghs']) {
     assert((await cols('workshop_registrations')).split(',').includes(c), c)
   }
   assertEquals([await cols('payment_events'), await cols('enrollments'), await cols('credentials')], [before.p, before.e, before.c],
     'the training ledger, enrollments and the certificate register are untouched')
-  for (const fn of ['workshop_set_attend_email(uuid,text)', 'workshop_admin_admission(text,uuid,text,text)', 'workshop_benefit_tier(text,text)',
-    'workshop_obligations_met(uuid)', 'workshop_admin_referral(text,text,text,uuid,text)', 'workshop_register(text,text,text,text,boolean,text,text,jsonb,boolean,numeric,timestamptz)']) {
+  for (const fn of ['workshop_set_attend_email(uuid,text)', 'workshop_admin_admission(text,uuid,text,text)', 'workshop_credential_tier(text)', 'workshop_email_may_claim(text,text,uuid)', 'workshop_benefit_request(text,text,text,text)',
+    'workshop_benefit_confirm(text,text,text,text,text)', 'workshop_price(uuid,text,text,text)', 'workshop_quote(text,text,text,text)',
+    'workshop_obligations_met(uuid)', 'workshop_admin_referral(text,text,text,uuid,text,text,text,uuid)', 'workshop_register(text,text,text,text,boolean,text,text,jsonb,boolean,numeric,timestamptz)']) {
     for (const role of ['anon', 'authenticated']) {
       assertEquals((await q(`select has_function_privilege($1, $2, 'execute') ok`, [role, 'public.' + fn]))[0].ok, false, role + ' ' + fn)
     }
   }
-  for (const t of ['workshop_referrers', 'workshop_referral_payouts']) {
+  for (const t of ['workshop_referrers', 'workshop_referral_payouts', 'workshop_benefit_verifications', 'workshop_benefit_email_grants']) {
     assertEquals((await q(`select has_table_privilege('anon', $1, 'select') ok`, ['public.' + t]))[0].ok, false, t)
   }
   // Defaults leave every existing session exactly as it behaved.

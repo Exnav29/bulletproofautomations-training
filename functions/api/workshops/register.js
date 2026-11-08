@@ -18,7 +18,7 @@
 import { json, refuse, readJson, str, rpc } from "../_shared.js";
 import { resolveTier, channelsFor } from "../_regions.js";
 import {
-  WORKSHOP_APP, TERMS_VERSION, mintWorkshopReference, newToken, sha256Hex,
+  WORKSHOP_APP, TERMS_VERSION, mintWorkshopReference, newToken, sha256Hex, looksLikeToken,
   checkoutMode, cleanAttribution, eventIds, processOutbox, initializeWorkshopCheckout, rpcVoid, sessionAdmission
 } from "../_workshops.js";
 
@@ -55,14 +55,17 @@ export async function onRequestPost(context) {
   // the payment email. Required for an invitation-only session.
   const attendEmail = str(body.attend_email, 160).toLowerCase();
   if (attendEmail && !looksLikeEmail(attendEmail)) return refuse("attend-email-invalid");
-  // A Foundations or Intermediate certificate ID claims a benefit. The database
-  // decides: it must belong to the registration email in the certificate
-  // register, so a certificate ID alone (they are public) proves nothing.
-  const certificateId = str(body.certificate_id, 40).toUpperCase();
-  if (certificateId && !/^[A-Z0-9][A-Z0-9-]{5,39}$/.test(certificateId)) return refuse("certificate-id-invalid");
-  // A referrer's code, from the link they shared. Unknown or inactive codes
-  // are dropped by the database, never refused, so a stale link still works.
-  const referralCode = /^[A-Za-z2-9]{8}$/.test(str(body.ref, 16)) ? str(body.ref, 16).toUpperCase() : "";
+  // A certificate benefit is claimed with the single-use token from
+  // /api/workshops/benefit (a code emailed to the certificate's own address),
+  // never with a certificate ID alone: those are public.
+  const verification = typeof body.verification === "string" && looksLikeToken(body.verification) ? body.verification : "";
+  // A referrer's code, typed or filled in from their link. The database
+  // validates it and refuses an invalid one, so the price shown is never wrong.
+  const referralCode = str(body.ref, 16).toUpperCase();
+  if (referralCode && !/^[A-Z0-9]{4,16}$/.test(referralCode)) return json({ ok: false, code: "referral_invalid" }, 409);
+  // The final price the page showed. If the database computes anything else,
+  // nobody is registered and the page re-quotes.
+  const expectedPrice = typeof body.expected_price === "number" && isFinite(body.expected_price) ? body.expected_price : null;
 
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return refuse("supabase-not-configured", 503);
   if (!attendEmail && await sessionAdmission(env, slug) === "invite") {
@@ -84,7 +87,8 @@ export async function onRequestPost(context) {
     p_terms_version: TERMS_VERSION,
     p_token_hash: await sha256Hex(token),
     p_attribution: Object.assign(cleanAttribution(body.attribution, request, adConsent),
-      { benefit_credential_id: certificateId || null, referral_code: referralCode || null }),
+      { benefit_token_hash: verification ? await sha256Hex(verification) : null, referral_code: referralCode || null,
+        expected_price: expectedPrice }),
     p_ad_consent: adConsent,
     p_displayed_price: displayedPrice,
     p_displayed_starts_at: displayedStart
@@ -99,8 +103,10 @@ export async function onRequestPost(context) {
   if (r.outcome === "closed") return json({ ok: false, code: "closed" }, 409);
   if (r.outcome === "full") return json({ ok: false, code: "full" }, 409);
   if (r.outcome === "stale_page") return json({ ok: false, code: "stale_page" }, 409);
-  if (r.outcome === "benefit_not_matched") return json({ ok: false, code: "benefit_not_matched" }, 409);
-  if (r.outcome === "benefit_not_available") return json({ ok: false, code: "benefit_not_available" }, 409);
+  if (r.outcome === "price_changed") return json({ ok: false, code: "price_changed", price_ghs: Number(r.price_ghs) }, 409);
+  // A self-referral reads as an invalid code: telling them apart would reveal whose code it is.
+  if (r.outcome === "referral_invalid" || r.outcome === "referral_self") return json({ ok: false, code: "referral_invalid" }, 409);
+  if (r.outcome === "benefit_not_valid" || r.outcome === "benefit_already_used") return json({ ok: false, code: r.outcome }, 409);
   if (r.outcome !== "created" && r.outcome !== "existing") return refuse("register-unexpected", 502);
 
   // First write wins (the RPC only fills an empty value), so re-submitting the
@@ -113,7 +119,8 @@ export async function onRequestPost(context) {
   const ids = eventIds(r.registration_id);
   const origin = new URL(request.url).origin;
   const base = { ok: true, token: token, registration: r.outcome, events: {},
-    price_ghs: Number(r.price_ghs), price_tier: r.price_tier || "standard" };
+    price_ghs: Number(r.price_ghs), price_tier: r.price_tier || "standard",
+    discount_kind: r.discount_kind || null, discount_ghs: Number(r.discount_ghs || 0) };
 
   if (r.status !== "pending_payment" || r.payment_status === "needs_review") {
     const state = stateFor(r.status, r.payment_status);

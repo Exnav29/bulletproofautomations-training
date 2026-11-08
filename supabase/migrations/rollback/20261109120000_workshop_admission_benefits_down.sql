@@ -1,7 +1,8 @@
 -- Rollback of 20261109120000_workshop_admission_benefits.sql. Run it BEFORE
 -- 20261103120000_workshops_down.sql. It drops only what release 2 added and
 -- restores, verbatim from 20261103120000, the three functions it replaced.
--- Export workshop_referral_payouts first: it is the record of commissions paid.
+-- Export workshop_referral_payouts and workshop_benefit_email_grants first:
+-- they are the record of commissions paid and of recovery decisions.
 
 create or replace function public.workshop_seats_in_use(p_session_id uuid, p_except uuid default null)
 returns integer language sql stable set search_path = '' as $$
@@ -132,24 +133,41 @@ begin
     'amount_minor', att.amount_minor, 'currency', att.currency, 'session_id', s.id);
 end $$;
 
-drop function if exists public.workshop_admin_referral(text, text, text, uuid, text);
+drop function if exists public.workshop_admin_referral(text, text, text, uuid, text, text, text, uuid);
 drop function if exists public.workshop_admin_admission(text, uuid, text, text);
-drop function if exists public.workshop_set_attend_email(uuid, text);
+drop function if exists public.workshop_commission_payable(public.workshop_registrations);
+drop function if exists public.workshop_quote(text, text, text, text);
+drop function if exists public.workshop_price(uuid, text, text, text);
+drop function if exists public.workshop_benefit_confirm(text, text, text, text, text);
+drop function if exists public.workshop_benefit_request(text, text, text, text);
 drop function if exists public.workshop_graduate_seats_in_use(uuid);
-drop function if exists public.workshop_benefit_tier(text, text);
+drop function if exists public.workshop_email_may_claim(text, text, uuid);
+drop function if exists public.workshop_credential_tier(text);
 drop function if exists public.workshop_obligations_met(uuid);
+drop function if exists public.workshop_set_attend_email(uuid, text);
+drop table if exists public.workshop_benefit_email_grants;
+drop table if exists public.workshop_benefit_verifications;
 drop table if exists public.workshop_referral_payouts;
-drop table if exists public.workshop_referrers;
+drop index if exists public.workshop_registrations_benefit_once;
 alter table public.workshop_registrations
+  drop column if exists commission_void_reason,
+  drop column if exists commission_voided_at,
+  drop column if exists commission_ghs,
+  drop column if exists referrer_id,
   drop column if exists referral_code,
+  drop column if exists discount_ghs,
+  drop column if exists discount_kind,
+  drop column if exists list_price_ghs,
   drop column if exists benefit_credential_id,
   drop column if exists price_tier,
   drop column if exists invite_removed_at,
   drop column if exists invited_at,
   drop column if exists invited_email,
   drop column if exists attend_email;
+drop table if exists public.workshop_referrers;
 alter table public.workshop_sessions
   drop column if exists referral_commission_ghs,
+  drop column if exists referral_discount_ghs,
   drop column if exists reserved_graduate_seats,
   drop column if exists graduate_free,
   drop column if exists foundations_discount_pct,

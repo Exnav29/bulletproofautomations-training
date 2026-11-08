@@ -537,3 +537,46 @@ Deno.test({ name: 'key guard: the webhook refuses to run with a training key or 
   assert(keysProblem(TEST, '', [])!.includes('not a live secret key'))
   assert(keysProblem('', '', [])!.includes('no webinar Paystack key'))
 } })
+
+// --- release 2: the webhook charges only the price the registration was quoted -----------
+
+Deno.test({ name: 'a referral-priced registration (GHS 300) is confirmed only by a GHS 300 charge; GHS 350 is held', ...opts, fn: async () => {
+  await reset({ price_ghs: 350, referral_discount_ghs: 50, referral_commission_ghs: 50 })
+  const before = await cohortSnapshot()
+  // One eligible Intermediate graduate referrer, from test records shaped like production's.
+  await pg.exec(`truncate public.workshop_referrers, private.studio_graduate_webinar_entitlements, private.studio_graduates, public.credentials cascade`)
+  await pg.exec('alter table public.enrollments disable trigger enrollments_seed_intermediate_payment_plan')
+  await insert('enrollments', { ...enrollment, id: '00000000-0000-4000-8000-0000000000b1', email: 'grad@example.com',
+    amount_paid_ghs: 750, payment_status: 'paid', paystack_reference: 'BPA-CAB-2026-GRADPAID' })
+  await pg.exec('alter table public.enrollments enable trigger enrollments_seed_intermediate_payment_plan')
+  await pg.exec(`insert into public.credentials (credential_id, holder_name, holder_email, credential, status, enrollment_id)
+      values ('BPA-TRN-2026-WEBHK1', 'Grad', 'grad@example.com', 'completion', 'valid', '00000000-0000-4000-8000-0000000000b1');
+    with g as (insert into private.studio_graduates (data, credential_id, state) values ('{}', 'BPA-TRN-2026-WEBHK1', 'issued') returning id)
+    insert into private.studio_graduate_webinar_entitlements (graduate_id) select id from g;
+    insert into public.workshop_referrers (code, credential_id, created_by) values ('GRAD50', 'BPA-TRN-2026-WEBHK1', 'test')`)
+  const referred = async (email: string) => {
+    const res = await pg.query<{ j: Row }>(
+      `select public.workshop_register(p_slug => 'test-webinar', p_email => $1, p_full_name => 'Referred Person',
+         p_whatsapp => null, p_whatsapp_consent => false, p_terms_version => '2026-11-03',
+         p_token_hash => null, p_attribution => '{"referral_code":"GRAD50","expected_price":300}'::jsonb) as j`, [email])
+    assertEquals([res.rows[0].j.outcome, Number(res.rows[0].j.price_ghs)], ['created', 300], JSON.stringify(res.rows[0].j))
+    return res.rows[0].j.registration_id as string
+  }
+  // Charged the advertised GHS 350 instead: a mismatch, held, never confirmed, no commission.
+  const a = await referred('a@example.com')
+  const ra = await start(a)
+  assertEquals(Number((await attempt(ra)).amount_minor), 30000)
+  const wrong = await deliver(charge(ra, 35000, { customer: { email: 'a@example.com' } }))
+  assertEquals(wrong.status, 200)
+  assert((await reg(a)).status !== 'confirmed')
+  assertEquals((await select(`select public.workshop_commission_payable(r) p from public.workshop_registrations r where id = $1`, [a]))[0].p, false)
+  // Charged exactly GHS 300: confirmed, and the GHS 50 commission becomes payable.
+  const b = await referred('b@example.com')
+  const rb = await start(b)
+  const right = await deliver(charge(rb, 30000, { customer: { email: 'b@example.com' } }))
+  assertEquals([right.status, right.outcome], [200, 'confirmed'])
+  const g = await reg(b)
+  assertEquals([g.status, g.referral_code, Number(g.commission_ghs)], ['confirmed', 'GRAD50', 50])
+  assertEquals((await select(`select public.workshop_commission_payable(r) p from public.workshop_registrations r where id = $1`, [b]))[0].p, true)
+  await assertCohortUntouched(before)
+} })
