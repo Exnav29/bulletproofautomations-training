@@ -1,0 +1,31 @@
+{
+  "_note": "PREVIEW-ONLY END-TO-END TEST SESSION. Lives on branch webinar-e2e-test, which must never be merged. Not a real session.",
+  "slug": "test-webinar-checkout",
+  "status": "published",
+  "kind": "webinar",
+  "title": "TEST SESSION: webinar registration and Paystack test checkout",
+  "summary": "This is a test page for checking registration, Paystack test-mode payment and the confirmation email. It is not a real webinar and no session will take place.",
+  "directory_line": "Test only. Not a real webinar; no session will take place.",
+  "description": "Preview-only test session for the end-to-end registration check. Payments use the Paystack test environment; no real money moves.",
+  "starts_at": "2026-12-15T12:00:00Z",
+  "time_zone": "Africa/Accra",
+  "duration_minutes": 60,
+  "format": "test only, no live session",
+  "price_ghs": 10,
+  "capacity": 10,
+  "audience": "The site owner, checking the registration and payment flow",
+  "leave_with": [
+    "A registration recorded in the webinar tables only.",
+    "A Paystack test-mode payment confirmed by the webinar webhook.",
+    "A confirmation email at the address you registered with."
+  ],
+  "run_of_show": [
+    { "at": "0:00", "title": "Register", "detail": "Name, email and the terms box" },
+    { "at": "0:02", "title": "Pay in Paystack test mode", "detail": "Test mobile money or a test card" },
+    { "at": "0:05", "title": "Confirmation", "detail": "The page and the email" }
+  ],
+  "good_fit": "You are testing the registration flow on the preview site.",
+  "not_fit": "You want to attend a real webinar. This test session will not take place. Webinars are training; certification is assessed separately.",
+  "bring": "an email inbox you can check, and Paystack's test payment details.",
+  "instructor": "johnathan"
+}
