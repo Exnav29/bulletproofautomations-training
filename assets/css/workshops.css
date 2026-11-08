@@ -177,6 +177,27 @@
 .ws-row__side { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin-top: 10px; }
 .ws-row__fee { font-family: var(--ws-display); font-weight: 600; font-size: 1.45rem; }
 
+/* ---------- series: the directory head, the numbered sequence and the
+   coming-soon label. Marigold stays reserved for a real date. ---------- */
+.ws-dir-head .ws-dir-lede { font-family: var(--ws-display); font-weight: 600; font-size: clamp(1.45rem, 4.4vw, 2.05rem); line-height: 1.15; max-width: 24em; }
+.ws-dir-sec { padding-top: 8px; }
+.ws-dir-sec > p { max-width: 62ch; margin-bottom: 14px; }
+.ws-dir-h2 { font-family: var(--ws-display); font-weight: 600; font-size: clamp(1.5rem, 4vw, 1.9rem); line-height: 1.1; padding-block: 20px 12px; }
+.ws-dir-note { padding-block: 24px 44px; max-width: 62ch; }
+.ws-series { list-style: none; margin: 0; padding: 0; border-top: 2px solid var(--ws-ink); }
+.ws-ser { display: grid; grid-template-columns: 2.6rem minmax(0, 1fr); gap: 6px 14px; padding-block: 16px; border-bottom: 1px solid var(--ws-line); }
+.ws-ser__n { font-family: var(--ws-display); font-weight: 600; font-size: 1.55rem; line-height: 1; color: var(--ws-soft); }
+.ws-ser h3 { font-family: var(--ws-display); font-weight: 600; font-size: 1.32rem; line-height: 1.15; }
+.ws-ser h3 a { text-decoration: none; }
+.ws-ser h3 a:hover { text-decoration: underline; }
+.ws-ser p { margin-top: 4px; max-width: 58ch; }
+.ws-ser__tag { grid-column: 2; justify-self: start; font-size: 14px; font-weight: 700; color: var(--ws-soft); border: 1px solid var(--ws-idle); border-radius: 999px; padding: 2px 10px; }
+.ws-ser__tag.is-date { color: var(--ws-time); border-color: currentColor; }
+.ws-soon { display: inline-block; margin-top: 18px; font-size: 15px; font-weight: 700; border: 1.5px solid var(--ws-ink); border-radius: 999px; padding: 3px 12px; }
+.ws-list--num { counter-reset: ws-n; }
+.ws-list--num li { padding-left: 30px; counter-increment: ws-n; }
+.ws-list--num li::before { content: counter(ws-n); width: auto; height: auto; background: none; top: 0; font-family: var(--ws-display); font-weight: 600; font-size: 1.15rem; line-height: 1.35; }
+
 /* ---------- confirmation ---------- */
 .ws-done { padding-block: 26px 48px; display: grid; gap: 22px; max-width: 44rem; }
 .ws-done .ws-sheet { max-width: 30rem; }
@@ -213,6 +234,8 @@
   .ws-two { grid-template-columns: 1fr 1fr; gap: 28px; }
   .ws-row { grid-template-columns: 6rem minmax(0, 1fr) 14rem; align-items: start; }
   .ws-row__side { grid-column: 3; grid-row: 1 / span 3; flex-direction: column; align-items: flex-end; margin-top: 2px; }
+  .ws-ser { grid-template-columns: 3.4rem minmax(0, 1fr) 9.5rem; align-items: start; }
+  .ws-ser__tag { grid-column: 3; grid-row: 1; justify-self: end; }
   .ws-consent { grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; }
 }
 @media (max-width: 899px) { .ws-aside { padding-bottom: 32px; scroll-margin-top: 12px; } }

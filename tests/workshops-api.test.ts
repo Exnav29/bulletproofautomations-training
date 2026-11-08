@@ -310,6 +310,21 @@ Deno.test('dispatch: webhook-confirmed payments get their confirmation emails in
   assertEquals(mail.length, 2)
 })
 
+Deno.test('not bookable: a draft session and a planned workshop with no row create nothing and start no checkout', opts, async () => {
+  // Workshop 01 waits as a draft row until go-live; workshops 02-10 have no row at all.
+  await reset({ status: 'draft' })
+  for (const slug of ['automate-invoices', 'who-should-you-sell-to']) {
+    const r = await call(register, '/api/workshops/register', form({ slug, testOptIn: true }))
+    assertEquals([r.status, r.json.code], [404, 'not_found'], slug)
+    const s = await call(session, '/api/workshops/session?slug=' + slug, null)
+    assertEquals(s.status, 404, slug)
+  }
+  assertEquals((await rows('select count(*)::int as n from public.workshop_registrations'))[0].n, 0)
+  assertEquals((await rows('select count(*)::int as n from public.workshop_payment_attempts'))[0].n, 0)
+  assertEquals(paystack.initialized.length, 0)
+  assertEquals(mail.length, 0)
+})
+
 Deno.test('Meta not configured: events stay queued and nothing is sent', opts, async () => {
   await reset({ price_ghs: 0 })
   await call(register, '/api/workshops/register', form({ ad_consent: true }))

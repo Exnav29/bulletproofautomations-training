@@ -1,13 +1,53 @@
 # Webinars and workshops: deployment, verification and rollback
 
-_Updated 4 November 2026 for the separate Paystack business "Bulletproof Automations Webinars".
-Nothing in this document has been run against production._
+_Updated 8 November 2026. Steps 1 to 3, 5 and 6 have been run against the existing Supabase
+project (owner-approved); see "Where it stands". Live checkout is off._
 
 - Product contract: `docs/PRD-WEBINARS-WORKSHOPS.md` (PR #59).
 - Design: `docs/workshops-design.md`.
 - Non-regression record: `docs/workshops-shared-changes.md`. **Read it before any production step.**
 
 **The production training webhook (v9) is not changed and is not redeployed at any step.**
+
+## Where it stands (8 November 2026)
+
+| Step | State |
+|---|---|
+| 1-2. Migration | **Applied** to the existing project after a verified backup. 19 protected checks (cohort, installments, `payment_events`, credentials, certificates, schema) unchanged |
+| 3. Webinar webhook | **Deployed** as `workshop-paystack-webhook` with the Webinars **test** key only. Registered as the Webinars business's **test** webhook |
+| 5. Dispatcher | **Scheduled**: cron job `workshop-dispatch`, every minute, token in Vault (`workshop_dispatch_token`). It points at the **preview** `webinar-e2e-test` until merge |
+| 6. Test-mode rehearsal | **Done on the existing project** (owner decision, no second project): MoMo and card payments, a cancelled checkout and retry, signed webhooks, automatic confirmation emails. Test rows use `BPA-WTEST-` and are excluded from revenue |
+| Test session `test-webinar-checkout` | Set to `draft`: not visible, not bookable |
+| Get Paid for Automation, workshop 01 | Page file published; database row **`draft`**, so it shows "Registration isn't open yet" and cannot take a booking |
+
+## Go-live: Get Paid for Automation, workshop 01
+
+Each line needs owner approval. Order matters: the row opens registration, so it goes last.
+
+1. **Owner decisions:** the joining platform and link, and the refund terms for webinars and
+   workshops. `/refund-policy` is written for cohorts, and the registration form links to it.
+2. **Refund terms** published, as a webinar section in `/refund-policy` or its own page linked from
+   the form (`scripts/workshops.js`, `form()`).
+3. **Joining details** stored on the row:
+   `update public.workshop_sessions set join_instructions = '<link and instructions>' where slug = 'what-to-charge-for-automation';`
+   The confirmation email prints this. Without it the email only says the link will follow.
+4. **Merge PR #61.** This publishes `/workshops` (the series, workshop 01 and nine coming-soon pages)
+   with registration still closed.
+5. **Repoint the dispatcher** to production:
+   `select cron.alter_job((select jobid from cron.job where jobname = 'workshop-dispatch'), command := replace((select command from cron.job where jobname = 'workshop-dispatch'), 'webinar-e2e-test.bulletproofautomations-training.pages.dev', 'training.bulletproofautomations.com'));`
+6. **Live keys:**
+   - Webinars business: set the **live** webhook URL (same function URL as test).
+   - Supabase secret `WORKSHOP_PAYSTACK_SECRET_KEY` = Webinars **live** key.
+   - Cloudflare **Production** `WORKSHOP_PAYSTACK_SECRET_KEY` = the same live key, and
+     `WORKSHOP_PAID_CHECKOUT=on`. Redeploy.
+   - Never put the live key in Preview.
+7. **Open registration:**
+   `update public.workshop_sessions set status = 'published' where slug = 'what-to-charge-for-automation';`
+   The page switches to the form without a deploy. To close it again, set it back to `draft`.
+
+Workshops 02 to 10 have no database row and no form. Scheduling one later means a session file with
+real values, a matching row, and pointing its series entry at the session
+(`content/workshops/README.md`).
 
 ## What exists on the branch
 
@@ -118,12 +158,14 @@ before testing:
    - the confirmation email arrives;
    - a cancelled checkout followed by a retry pays once.
 
-### 7. Publish the first session
+### 7. Publish a session
 
 1. Add `content/workshops/<slug>.json` with real values only. The build refuses placeholders,
    TBC and past dates.
-2. Add the matching `workshop_sessions` row with the same `slug`, `starts_at` and `price_ghs`.
-3. Merge. This publishes the page, the nav link and the sitemap entries.
+2. Add the matching `workshop_sessions` row with the same `slug`, `starts_at` and `price_ghs`,
+   as `draft` until registration should open.
+3. Merge. This publishes the page, the nav link and the sitemap entries. While the row is `draft`
+   the page says registration isn't open yet and the API refuses bookings.
 
 ### 8. Go live (separate approval)
 

@@ -45,6 +45,34 @@ established Bulletproof Automations site typography instead.
 - **Certification wording:** "Attending is training, not a certification" appears on every detail
   page.
 
+## Additions for the Get Paid for Automation series (8 November 2026)
+
+These additions extend the approved system. They introduce no new typefaces, colours or layouts.
+
+- **Series directory:** `/workshops` opens with the series name in the existing directory heading
+  style, then the positioning line in EB Garamond. The bookable workshop follows as the existing
+  directory row, then the numbered sequence of ten. The sequence uses rules between items, not
+  cards.
+- **Labels:** "Coming soon" is a neutral outlined label. The only marigold label is the real date
+  of workshop 01, keeping marigold for time-sensitive facts.
+- **Coming-soon pages:** these use the session-brief layout (crumbs, kicker, title, lede, ruled
+  sections). The registration sheet is replaced by a "Coming soon" sheet that says there is no
+  date or fee and links to workshop 01 and the series. They have no form, no fee and no trace.
+- **Detail page:** optional "Why this workshop" and numbered "What you will be able to do" sections
+  sit before "What you leave with". The series appears as a ruled section near the end, followed by
+  the independence disclaimer.
+- **Registration not open yet:** while a session's database row is `draft`, the sheet uses the
+  existing closed-form state with "Registration isn't open yet", and the hero and phone buttons
+  read "Registration not open yet".
+- **Case:** titles are in sentence case, following the site rule. The series name, Get Paid for
+  Automation, keeps its capitals as a proper name.
+- **QA (8 November 2026):**
+  - Pages: the directory, workshop 01, and workshops 02 and 10.
+  - Widths: 360, 390, 768 and 1280px under device emulation.
+  - Layout: document width equals the viewport at every width, with no element past the edge.
+  - Validation: html-validate is clean.
+  - Links: all 1,137 internal links resolve.
+
 ## QA record (4 November 2026, test fixtures)
 
 - **Pages and widths:** directory, paid and free detail pages, full and stale-page states, and the

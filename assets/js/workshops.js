@@ -124,8 +124,15 @@
 
     // The database's view of the session. If the page is stale, nobody pays.
     fetch("/api/workshops/session?slug=" + encodeURIComponent(slug))
-      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (r) { return r.status === 404 ? { notOpen: true } : r.ok ? r.json() : null; })
       .then(function (d) {
+        // The page is published but its database row is not: registration has
+        // not opened yet. The register endpoint refuses it too.
+        if (d && d.notOpen) {
+          closeForm("Registration isn't open yet", "The date and fee are set. Nothing can be booked or charged on this page until registration opens.", [{ href: "/workshops", text: "See all workshops", quiet: true }]);
+          Array.prototype.forEach.call(document.querySelectorAll(".ws-jump .ws-btn, [data-ws-sticky] .ws-btn"), function (a) { a.textContent = "Registration not open yet"; });
+          return;
+        }
         if (!d || !d.ok) return;
         var s = d.session;
         if (Number(s.price_ghs) !== price || new Date(s.starts_at).toISOString() !== starts) {
@@ -203,7 +210,7 @@
             full: ["This session is full", "No payment was taken."],
             closed: ["Registration has closed", "This session has started or is no longer taking registrations."],
             stale_page: ["The details have changed", "Refresh this page to see the current date and fee, then register."],
-            not_found: ["This session isn't available", "It may have been moved or cancelled."]
+            not_found: ["Registration isn't open", "This session isn't taking registrations. Nothing has been charged."]
           };
           if (codes[r.code]) return closeForm(codes[r.code][0], codes[r.code][1], [{ href: "/workshops", text: "See other sessions", quiet: true }]);
           if (r._status === 400) return showError("Check your details and try again.");

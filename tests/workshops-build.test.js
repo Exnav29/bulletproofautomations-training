@@ -11,9 +11,68 @@ const fixtureDir = path.join(__dirname, "fixtures", "workshops");
 const sample = () => JSON.parse(fs.readFileSync(path.join(fixtureDir, "sample-webinar.json"), "utf8"));
 const file = (slug) => path.join("/x/content/workshops", slug + ".json");
 
-test("the real content directory publishes nothing today", () => {
-  const live = ws.loadSessions(path.join(__dirname, "..", "content", "workshops")).filter((s) => s.status === "published");
-  assert.equal(live.length, 0, "no real session has been supplied; nothing may publish");
+const contentDir = path.join(__dirname, "..", "content", "workshops");
+
+test("the real content publishes exactly one bookable session: Get Paid for Automation, workshop 01", () => {
+  // These values must equal the workshop_sessions row; /api/workshops/register refuses a mismatch.
+  const live = ws.loadSessions(contentDir).filter((s) => s.status === "published");
+  assert.deepEqual(live.map((s) => s.slug), ["what-to-charge-for-automation"]);
+  const s = live[0];
+  assert.deepEqual([s.starts_at, s.duration_minutes, s.price_ghs, s.capacity, s.kind, s.time_zone],
+    ["2026-12-12T11:30:00Z", 180, 250, 25, "workshop", "Africa/Accra"]);
+  assert.equal(ws.when(s).accra, "11:30 AM");
+  assert.equal(ws.when(s).lagos, "12:30 PM");
+});
+
+test("the series lists ten workshops; only workshop 01 is bookable and the nine planned ones carry no schedule", () => {
+  const sessions = ws.loadSessions(contentDir);
+  const [series] = ws.loadSeries(contentDir, sessions);
+  assert.equal(series.name, "Get Paid for Automation");
+  assert.deepEqual(series.entries.map((e) => e.number), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  assert.deepEqual(series.entries.filter((e) => e.session).map((e) => e.number), [1]);
+  for (const e of series.entries.slice(1)) {
+    assert.equal(e.status, "planned");
+    for (const key of ["starts_at", "price_ghs", "capacity", "duration_minutes", "date"]) assert.equal(e[key], undefined, e.slug + " has " + key);
+  }
+});
+
+test("series pages: the directory, one detail page with a form, nine coming-soon pages with none", () => {
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), "ws-series-"));
+  const sessions = ws.loadSessions(contentDir);
+  const paths = ws.render(sessions, out, ws.loadSeries(contentDir, sessions));
+  assert.equal(paths.length, 11);
+  const read = (p) => fs.readFileSync(path.join(out, p, "index.html"), "utf8");
+  const dir = read("workshops");
+  assert.match(dir, /<h1>Get Paid for Automation<\/h1>/);
+  assert.equal((dir.match(/Coming soon/g) || []).length, 9);
+  assert.match(dir, /none of their owners sponsors, endorses or is affiliated/);
+  assert.doesNotMatch(dir, /data-ws-form/);
+  const w01 = read("workshops/what-to-charge-for-automation");
+  assert.match(w01, /data-ws-form/);
+  assert.match(w01, /data-price="250"/);
+  assert.match(w01, /Get Paid for Automation, workshop 01, with Johnathan Lightfoot/);
+  assert.match(w01, /11:30 AM in Accra<br>12:30 PM in Lagos/);
+  for (const p of paths.filter((x) => x !== "/workshops" && x !== "/workshops/what-to-charge-for-automation")) {
+    const html = read(p.slice(1));
+    assert.match(html, /data-ws-page="planned"/, p);
+    assert.doesNotMatch(html, /data-ws-form|data-slug=|data-price=|GHS |Register and pay/, p + " must not be bookable");
+    assert.match(html, /not taking registrations/, p);
+    assert.match(html, /href="\/workshops\/what-to-charge-for-automation"/, p + " links to the bookable workshop");
+  }
+});
+
+test("a planned workshop with a date, fee or capacity fails the build", () => {
+  const sessions = ws.loadSessions(contentDir);
+  const series = JSON.parse(fs.readFileSync(path.join(contentDir, "series", "get-paid-for-automation.json"), "utf8"));
+  const seriesFile = path.join("/x/content/workshops/series", "get-paid-for-automation.json");
+  for (const extra of [{ starts_at: "2027-01-09T11:30:00Z" }, { price_ghs: 250 }, { capacity: 25 }]) {
+    const copy = JSON.parse(JSON.stringify(series));
+    Object.assign(copy.entries[1], extra);
+    assert.throws(() => ws.validateSeries(copy, seriesFile, sessions), /must not carry/, JSON.stringify(extra));
+  }
+  const unpublished = JSON.parse(JSON.stringify(series));
+  unpublished.entries[0].session = "no-such-session";
+  assert.throws(() => ws.validateSeries(unpublished, seriesFile, sessions), /not a published session/);
 });
 
 test("fixtures validate and render a directory, detail and confirmation page", () => {

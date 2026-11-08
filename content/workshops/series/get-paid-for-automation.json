@@ -1,0 +1,169 @@
+{
+  "slug": "get-paid-for-automation",
+  "name": "Get Paid for Automation",
+  "presenter": "Bulletproof Automations",
+  "positioning": "You know how to automate. Now learn how to turn those skills into paying work.",
+  "intro": [
+    "Plenty of people can build a workflow. Far fewer can find a business that needs one, price the work, win the contract and deliver it well enough to be hired again. Tutorials and certifications cover the first part. This series covers the rest.",
+    "It is for people who already build automations, in n8n, Make, Zapier, Microsoft Power Automate and Power Apps, custom integrations or AI-powered tools. The platform does not matter here. What matters is turning the skill into work someone will pay for.",
+    "The first workshop is about pricing: what to charge, and how to explain it. The nine that follow cover the rest of the process, from choosing who to sell to and finding clients to writing proposals, closing deals, delivering and winning work abroad."
+  ],
+  "standalone": "Each workshop stands alone. You do not need to take the whole series, or take the workshops in order.",
+  "disclaimer": "Get Paid for Automation is organized and presented solely by Bulletproof Automations, an independent training provider. n8n, Make, Zapier, Microsoft Power Automate and Power Apps are named only to describe the tools participants use; none of their owners sponsors, endorses or is affiliated with this series. The workshops teach business skills and do not guarantee clients, contracts or income.",
+  "entries": [
+    { "number": 1, "session": "what-to-charge-for-automation" },
+    {
+      "number": 2,
+      "status": "planned",
+      "slug": "who-should-you-sell-to",
+      "title": "Who should you sell to?",
+      "headline": "Find the businesses that need your skills and can pay for them.",
+      "problem": "Many automation freelancers try to sell to everyone. They end up pitching businesses with no budget, no clear problem, or a problem nobody can automate well. A clear ideal client profile tells you where to spend your time, and where not to.",
+      "audience": "Practitioners who can deliver automation work but are unsure which businesses to approach first.",
+      "outcomes": [
+        "Describe your ideal client by industry, size, processes and budget.",
+        "Spot the signs that a business has a costly, repetitive problem worth automating.",
+        "Judge whether a prospect can realistically pay for the work.",
+        "Match prospects to the problems you can already solve well.",
+        "Write a short statement of who you serve and what you fix."
+      ],
+      "series_fit": "Workshop 01 helps you price the work. This one decides whose work to price. A clear client profile makes every later step, from finding clients to writing proposals, more focused."
+    },
+    {
+      "number": 3,
+      "status": "planned",
+      "slug": "where-are-the-clients",
+      "title": "Where are the clients?",
+      "headline": "Practical ways to find and approach businesses that need automation.",
+      "problem": "Knowing who you want to serve is not the same as meeting them. Most practitioners rely on luck and the occasional referral. A repeatable way to find prospects and open a conversation is what turns a skill into a steady flow of work.",
+      "audience": "Practitioners who know what they offer but have few prospective clients.",
+      "outcomes": [
+        "Find prospects among local businesses, professional networks and industry associations.",
+        "Ask for, and earn, referrals without awkwardness.",
+        "Use online communities and freelance platforms without competing on price alone.",
+        "Write a first message that gets a reply rather than being ignored.",
+        "Keep a simple record of who you have contacted and what happens next."
+      ],
+      "series_fit": "Builds on the client profile from Workshop 02 and leads into Workshop 04, where the first conversation becomes a discovery session."
+    },
+    {
+      "number": 4,
+      "status": "planned",
+      "slug": "discover-what-clients-need",
+      "title": "Discover what clients need",
+      "headline": "Ask the questions that reveal problems worth paying to solve.",
+      "problem": "Clients rarely ask for an automation. They describe a frustration: invoices chased by hand, orders typed in twice, a report that takes a day. Discovery turns that frustration into a defined problem with a cost attached, and that is what makes a project worth paying for.",
+      "audience": "Practitioners who get to the first meeting but leave without a clear project.",
+      "outcomes": [
+        "Run a structured discovery conversation.",
+        "Map how a business process works today, including the workarounds.",
+        "Estimate what the current problem costs in time, errors and missed revenue.",
+        "Separate real automation opportunities from problems that need a different fix.",
+        "Summarize your findings so the client agrees on what needs solving."
+      ],
+      "series_fit": "Discovery supplies the facts that the scope in Workshop 05 and the price in Workshop 01 depend on."
+    },
+    {
+      "number": 5,
+      "status": "planned",
+      "slug": "scope-it-before-you-quote-it",
+      "title": "Scope it before you quote it",
+      "headline": "Agree what you are building before you agree what it costs.",
+      "problem": "Most project disputes start with a vague scope. The client expected one thing, the builder delivered another, and the extra work went unpaid. A clear scope protects both sides before any money changes hands.",
+      "audience": "Practitioners who have had projects grow beyond what they quoted.",
+      "outcomes": [
+        "Define deliverables and requirements in plain language.",
+        "Write assumptions and exclusions so the limits are agreed in advance.",
+        "Set acceptance criteria that say when the work is finished.",
+        "Handle change requests with a simple, fair process.",
+        "Turn a scope into the basis for an accurate quote."
+      ],
+      "series_fit": "Connects discovery in Workshop 04 to pricing in Workshop 01 and to the proposal in Workshop 06."
+    },
+    {
+      "number": 6,
+      "status": "planned",
+      "slug": "write-proposals-that-win",
+      "title": "Write proposals that win",
+      "headline": "Turn a client's problem into a proposal they can say yes to.",
+      "problem": "A good proposal is not a price list. It shows the client you understood their problem, explains what they will get and what it will cost, and makes the next step easy. Many practitioners send a number in a chat message and wonder why the client goes quiet.",
+      "audience": "Practitioners who are asked for proposals or quotes and want them to read professionally.",
+      "outcomes": [
+        "Structure a proposal around the client's problem and the outcome they want.",
+        "Present deliverables, fees, timeline and responsibilities clearly.",
+        "Offer options without confusing the client.",
+        "Write terms covering payment, revisions and support.",
+        "Make the next step obvious."
+      ],
+      "series_fit": "Brings discovery, scope and pricing from Workshops 01, 04 and 05 together into one document the client can approve."
+    },
+    {
+      "number": 7,
+      "status": "planned",
+      "slug": "close-the-deal",
+      "title": "Close the deal",
+      "headline": "Move from an interested client to a signed agreement.",
+      "problem": "Plenty of proposals stall. The client asks for a discount, compares you with someone cheaper, or simply stops replying. Knowing how to discuss fees, answer objections and follow up is often the difference between a busy month and an empty one.",
+      "audience": "Practitioners whose proposals get interest but not agreement.",
+      "outcomes": [
+        "Discuss your fee calmly and explain what it covers.",
+        "Respond to common objections about price, timing and trust.",
+        "Negotiate reasonable terms without cutting your price by reflex.",
+        "Follow up on a proposal without pestering.",
+        "Confirm the agreement in writing before any work starts."
+      ],
+      "series_fit": "Follows Workshop 06. Once the proposal is sent, this is how it becomes a contract."
+    },
+    {
+      "number": 8,
+      "status": "planned",
+      "slug": "deliver-like-a-professional",
+      "title": "Deliver like a professional",
+      "headline": "Run projects so clients come back and refer you.",
+      "problem": "Winning the project is half the job. Missed updates, untested workflows and handovers nobody understands cost practitioners their reputation, and reputation is where referrals come from.",
+      "audience": "Practitioners who are starting to deliver paid projects and want them to run smoothly.",
+      "outcomes": [
+        "Set expectations at the start about communication, timing and the client's responsibilities.",
+        "Report progress so the client is never surprised.",
+        "Test deliverables against the agreed acceptance criteria.",
+        "Hand over with documentation the client can actually use.",
+        "Ask for feedback, testimonials and referrals at the right moment."
+      ],
+      "series_fit": "Delivers on the scope and proposal from Workshops 05 and 06, and sets up the ongoing relationship covered in Workshop 09."
+    },
+    {
+      "number": 9,
+      "status": "planned",
+      "slug": "turn-projects-into-recurring-income",
+      "title": "Turn projects into recurring income",
+      "headline": "Build legitimate ongoing work from the automations you deliver.",
+      "problem": "Automations need care after launch. Connected services change, volumes grow and businesses want improvements. Practitioners who stop at handover leave that work, and the income that comes with it, to someone else.",
+      "audience": "Practitioners with delivered projects who want more predictable income.",
+      "outcomes": [
+        "Identify the ongoing support a client's automations genuinely need.",
+        "Design support, monitoring and maintenance offers clients understand.",
+        "Price recurring services fairly for both sides.",
+        "Write a simple service agreement covering response times and limits.",
+        "Recognize recurring arrangements that would be unfair or unsustainable."
+      ],
+      "series_fit": "Extends Workshops 01 and 08: pricing applied to ongoing services, built on a delivery the client already trusts."
+    },
+    {
+      "number": 10,
+      "status": "planned",
+      "slug": "win-international-clients",
+      "title": "Win international clients",
+      "headline": "Offer your automation services to clients outside Ghana.",
+      "problem": "Automation work can be delivered from anywhere, and many overseas businesses hire remote specialists. Competing for that work means presenting your services for a different market, quoting in another currency, and handling contracts, payments and time zones across borders.",
+      "audience": "Practitioners ready to take on clients outside Ghana, or already doing so informally.",
+      "outcomes": [
+        "Position your services for overseas buyers.",
+        "Communicate professionally across cultures and time zones.",
+        "Prepare international quotations, including currency and payment terms.",
+        "Understand the practical points of cross-border contracts and getting paid.",
+        "Decide which international opportunities fit your capacity."
+      ],
+      "series_fit": "Applies the whole series, from pricing to delivery, to clients in other markets."
+    }
+  ]
+}

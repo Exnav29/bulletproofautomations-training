@@ -244,7 +244,8 @@ const workshops = require("./workshops.js");
 const workshopDir = process.env.WORKSHOP_CONTENT_DIR && !process.env.CF_PAGES
   ? path.resolve(root, process.env.WORKSHOP_CONTENT_DIR)
   : path.join(root, "content", "workshops");
-const workshopPaths = workshops.render(workshops.loadSessions(workshopDir), dist);
+const workshopSessions = workshops.loadSessions(workshopDir);
+const workshopPaths = workshops.render(workshopSessions, dist, workshops.loadSeries(workshopDir, workshopSessions));
 const navItem = workshopPaths.length
   ? '<li><a href="/workshops" aria-current="{{n_workshops}}">Webinars and workshops</a></li>' : "";
 const footItem = workshopPaths.length ? '<li><a href="/workshops">Webinars and workshops</a></li>' : "";

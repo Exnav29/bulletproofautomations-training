@@ -9,12 +9,26 @@ ENVV=(SUPABASE_URL=https://baseline.supabase.co SUPABASE_ANON_KEY=baseline-anon 
 env "${ENVV[@]}" node scripts/build.js >/dev/null
 # Reviewed, intended changes to EXISTING files (see docs/workshops-shared-changes.md):
 ALLOWED='^\./(_headers|admin/(index|credentials/index|enrollments/index|payments/index|studio/index|verification/index)\.html|assets/css/admin-console\.css|assets/js/admin-console\.js)$'
+# Publishing a webinar session (content/workshops) adds exactly two things to existing files:
+# one "Webinars and workshops" nav/footer line per page, and /workshops entries in the sitemap.
+# Those additions are removed before comparing; any other difference still fails.
+strip_workshops() {
+  node -e '
+    const fs = require("fs");
+    let t = fs.readFileSync(process.argv[1], "utf8");
+    t = t.replace(/\r?\n[ \t]*<li><a href="\/workshops"( aria-current="[^"]*")?>Webinars and workshops<\/a><\/li>/g, "");
+    t = t.replace(/\n[ \t]*<url>\s*<loc>https:\/\/training\.bulletproofautomations\.com\/workshops[^<]*<\/loc>\s*<\/url>/g, "");
+    process.stdout.write(t);' "$1"
+}
 fail=0
 while IFS= read -r f; do
   if ! cmp -s "$MAIN/dist/$f" "dist/$f"; then
-    if [[ "$f" =~ $ALLOWED ]]; then echo "changed (reviewed): $f"; else echo "UNEXPECTED CHANGE: $f"; fail=1; fi
+    if [[ "$f" =~ $ALLOWED ]]; then echo "changed (reviewed): $f"
+    elif [[ "$f" =~ \.(html|xml)$ ]] && cmp -s "$MAIN/dist/$f" <(strip_workshops "dist/$f"); then workshops_only=$((${workshops_only:-0}+1))
+    else echo "UNEXPECTED CHANGE: $f"; fail=1; fi
   fi
 done < <(cd "$MAIN/dist" && find . -type f | sort)
+echo "changed only by the published-workshops nav, footer and sitemap entries: ${workshops_only:-0} files"
 # _headers may only gain lines; every existing rule must survive unchanged.
 if ! diff <(cat "$MAIN/dist/_headers") <(cat dist/_headers) | grep -q '^<'; then echo "_headers: additions only"; else echo "UNEXPECTED: _headers lost or changed existing lines"; fail=1; fi
 exit $fail

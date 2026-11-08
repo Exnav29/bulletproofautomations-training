@@ -9,7 +9,11 @@
  *   - a published file with a missing field, a past date or any [BRACKETED]
  *     placeholder fails the build rather than publishing;
  *   - with nothing published, NOTHING is emitted: no /workshops route, no nav
- *     item, no sitemap entry. There is no empty or coming-soon page.
+ *     item, no sitemap entry. There is no empty page;
+ *   - a series (content/workshops/series/*.json) may also list workshops that
+ *     are still being planned. A planned entry is copy only: the validator
+ *     refuses a date, fee or capacity on it, it has no database row and its
+ *     page has no form, so it can never take a registration or a payment.
  *
  * The page states the price and time it was built with (data-price,
  * data-starts). The database is authoritative: /api/workshops/register
@@ -85,6 +89,71 @@ function loadSessions(dir, now) {
     return validate(data, file, now);
   });
 }
+
+/* ---------------------------------------------------------------------------
+   Series. One file groups sessions under one name and lists the workshops
+   still being planned, in order. An entry is either
+     { "number": 1, "session": "<slug of a published session file>" }  bookable
+     { "number": 2, "status": "planned", "slug": ..., ... }              copy only
+   ------------------------------------------------------------------------- */
+const SERIES_REQUIRED = ["slug", "name", "presenter", "positioning", "intro", "standalone", "disclaimer", "entries"];
+const PLANNED_REQUIRED = ["slug", "title", "headline", "problem", "audience", "outcomes", "series_fit"];
+// A planned workshop has no schedule yet. Any of these would be an invented fact.
+const PLANNED_FORBIDDEN = ["starts_at", "price_ghs", "capacity", "duration_minutes", "time_zone", "format", "date", "seats"];
+
+function validateSeries(series, file, sessions) {
+  const problems = [];
+  for (const key of SERIES_REQUIRED) {
+    if (series[key] === undefined || series[key] === null || series[key] === "" || (Array.isArray(series[key]) && !series[key].length)) problems.push("missing " + key);
+  }
+  if (series.slug && path.basename(file, ".json") !== series.slug) problems.push("file name must match slug");
+  const published = new Set(sessions.filter(function (s) { return s.status === "published"; }).map(function (s) { return s.slug; }));
+  const taken = new Set(sessions.map(function (s) { return s.slug; }).concat(["registered"]));
+  (series.entries || []).forEach(function (e, i) {
+    const label = "entry " + (i + 1);
+    if (e.number !== i + 1) problems.push(label + ": number must be " + (i + 1));
+    if (e.session !== undefined) {
+      if (!published.has(e.session)) problems.push(label + ": session " + e.session + " is not a published session file; publish it or make the entry planned");
+      return;
+    }
+    if (e.status !== "planned") problems.push(label + ": needs a session slug or status planned");
+    for (const key of PLANNED_REQUIRED) {
+      if (e[key] === undefined || e[key] === null || e[key] === "" || (Array.isArray(e[key]) && !e[key].length)) problems.push(label + ": missing " + key);
+    }
+    for (const key of PLANNED_FORBIDDEN) if (e[key] !== undefined) problems.push(label + ": a planned workshop must not carry " + key);
+    if (e.slug && !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(e.slug)) problems.push(label + ": slug must be lowercase words joined by hyphens");
+    if (e.slug && taken.has(e.slug)) problems.push(label + ": slug " + e.slug + " is already used");
+    if (e.slug) taken.add(e.slug);
+  });
+  walkStrings(series, function (text) {
+    if (/\[[A-Z0-9 ,.$:'\-]{2,}\]/.test(text)) problems.push("placeholder left in series: " + text.slice(0, 60));
+    if (/TODO|TBC|TBD|lorem ipsum/i.test(text)) problems.push("unfinished text in series: " + text.slice(0, 60));
+  });
+  if (problems.length) throw new Error("content/workshops/series/" + path.basename(file) + ": " + problems.join("; "));
+  return series;
+}
+
+function loadSeries(dir, sessions) {
+  const seriesDir = path.join(dir, "series");
+  if (!fs.existsSync(seriesDir)) return [];
+  return fs.readdirSync(seriesDir).filter(function (f) { return f.endsWith(".json"); }).sort().map(function (f) {
+    const file = path.join(seriesDir, f);
+    let data;
+    try { data = JSON.parse(fs.readFileSync(file, "utf8")); }
+    catch (err) { throw new Error("content/workshops/series/" + f + ": not valid JSON (" + err.message + ")"); }
+    return validateSeries(data, file, sessions);
+  });
+}
+
+/* The series and entry a session belongs to, if any. */
+function membership(seriesList, slug) {
+  for (const series of seriesList || []) {
+    const entry = series.entries.find(function (e) { return e.session === slug; });
+    if (entry) return { series: series, entry: entry };
+  }
+  return null;
+}
+function num(n) { return n < 10 ? "0" + n : String(n); }
 
 /* ---------------------------------------------------------------------------
    Formatting. Times are shown in Accra (GMT) and Lagos (WAT, GMT+1), the two
@@ -186,8 +255,9 @@ function form(s) {
 /* ---------------------------------------------------------------------------
    Pages
    ------------------------------------------------------------------------- */
-function detailPage(s) {
+function detailPage(s, seriesList, live) {
   const w = when(s);
+  const member = membership(seriesList, s.slug);
   const url = ORIGIN + "/workshops/" + s.slug;
   const ins = INSTRUCTORS[s.instructor || "johnathan"];
   const run = (s.run_of_show || []).length
@@ -196,6 +266,18 @@ function detailPage(s) {
         return '<li><span class="ws-run__at">' + esc(r.at) + '</span><div><b>' + esc(r.title) + '</b>' + (r.detail ? '<span>' + esc(r.detail) + '</span>' : '') + '</div></li>';
       }).join("") + '</ol></section>'
     : '';
+  const why = (s.why || []).length
+    ? '<section class="ws-sec" aria-labelledby="ws-why"><h2 id="ws-why">Why this ' + esc(kindLabel(s).toLowerCase()) + '</h2>' +
+      s.why.map(function (p) { return '<p>' + esc(p) + '</p>'; }).join("") + '</section>'
+    : '';
+  const outcomes = (s.outcomes || []).length
+    ? '<section class="ws-sec" aria-labelledby="ws-learn"><h2 id="ws-learn">What you will be able to do</h2><ol class="ws-list ws-list--num">' +
+      s.outcomes.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join("") + '</ol></section>'
+    : '';
+  const inSeries = member
+    ? '<section class="ws-sec" aria-labelledby="ws-series"><h2 id="ws-series">Part of ' + esc(member.series.name) + '</h2>' +
+      '<p>' + esc(member.series.standalone) + '</p>' + seriesItems(member.series, live, member.entry.number) + '</section>'
+    : '';
   const faq = (s.faq || []).length
     ? '<section class="ws-sec" aria-labelledby="ws-faq"><h2 id="ws-faq">Questions</h2>' +
       s.faq.map(function (f) { return '<details class="ws-faq"><summary>' + esc(f.q) + '</summary><p>' + esc(f.a) + '</p></details>'; }).join("") + '</section>'
@@ -203,15 +285,19 @@ function detailPage(s) {
   const body =
 '<main id="main" class="ws" data-ws-page="detail" data-slug="' + esc(s.slug) + '" data-price="' + esc(s.price_ghs) + '" data-starts="' + esc(new Date(s.starts_at).toISOString()) + '" data-title="' + esc(s.title) + '">\n' +
 '<div class="ws-wrap ws-layout">\n<div class="ws-main">\n' +
-'  <p class="ws-crumbs"><a href="/workshops">Webinars and workshops</a></p>\n' +
+'  <p class="ws-crumbs"><a href="/workshops">' + esc(member ? member.series.name : "Webinars and workshops") + '</a></p>\n' +
 '  <section class="ws-hero" aria-labelledby="ws-title">\n' +
-'    <div><p class="ws-kind">' + esc(kindLabel(s)) + ' with ' + esc(ins.name) + '</p>\n' +
+'    <div><p class="ws-kind">' + (member
+      ? esc(member.series.name) + ', ' + esc(kindLabel(s).toLowerCase()) + ' ' + num(member.entry.number) + ', with ' + esc(ins.name)
+      : esc(kindLabel(s)) + ' with ' + esc(ins.name)) + '</p>\n' +
 '    <h1 class="ws-title" id="ws-title">' + esc(s.title) + '</h1>\n' +
 '    <p class="ws-lede">' + esc(s.summary) + '</p></div>\n' +
 '    ' + factsList(s, w) + '\n' +
 '    <p class="ws-jump"><a class="ws-btn ws-btn--block" href="#register">' + esc(cta(s)) + '</a></p>\n' +
 '  </section>\n' +
 '  <div class="ws-content">\n' +
+(why ? '    ' + why + '\n' : '') +
+(outcomes ? '    ' + outcomes + '\n' : '') +
 '    <section class="ws-sec" aria-labelledby="ws-leave"><h2 id="ws-leave">What you leave with</h2><ul class="ws-list">' +
       s.leave_with.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join("") + '</ul></section>\n' +
 '    ' + run + '\n' +
@@ -223,6 +309,8 @@ function detailPage(s) {
       '<img src="' + ins.photo + '.jpg" alt="' + esc(ins.name) + '" width="88" height="110" loading="lazy" decoding="async"></picture>' +
       '<div><b>' + esc(ins.name) + '</b><p>' + esc(ins.bio) + '</p><p><a href="/about">More about ' + esc(ins.name.split(" ")[0]) + '</a></p></div></div></section>\n' +
 '    ' + faq + '\n' +
+(inSeries ? '    ' + inSeries + '\n' : '') +
+(member ? '    <p class="ws-small">' + esc(member.series.disclaimer) + '</p>\n' : '') +
 '    <p class="ws-small">Attending a webinar or workshop is training. It is not a certification and does not count towards one.</p>\n' +
 '  </div>\n</div>\n' +
 '<aside class="ws-aside" id="register" aria-labelledby="ws-reg">\n' +
@@ -238,8 +326,7 @@ function detailPage(s) {
   return page(s.title + " — " + kindLabel(s) + " — Bulletproof Automations Training", s.description, url, body);
 }
 
-function directoryPage(list) {
-  const rows = list.map(function (s) {
+function directoryRow(s) {
     const w = when(s);
     return '<li class="ws-row">\n' +
       '  <div class="ws-row__date"><b>' + esc(w.day) + '</b><span>' + esc(w.mon) + ', ' + esc(w.wd) + '</span></div>\n' +
@@ -248,7 +335,10 @@ function directoryPage(list) {
       '  <p class="ws-row__out">' + esc(s.directory_line) + '</p></div>\n' +
       '  <div class="ws-row__side"><span class="ws-row__fee">' + esc(fee(s)) + '</span><a class="ws-btn ws-btn--small" href="/workshops/' + esc(s.slug) + '" aria-label="View details: ' + esc(s.title) + '">View details</a></div>\n' +
       '</li>';
-  }).join("\n");
+}
+
+function directoryPage(list) {
+  const rows = list.map(directoryRow).join("\n");
   const body = '<main id="main" class="ws" data-ws-page="directory">\n<div class="ws-wrap">\n' +
     '<div class="ws-dir-head"><h1>Webinars and workshops</h1>\n' +
     '<p>Live sessions with Johnathan Lightfoot. Each one builds one working automation you can use the next day. Attending is training, not a certification.</p></div>\n' +
@@ -256,6 +346,88 @@ function directoryPage(list) {
   return page("Webinars and workshops — Bulletproof Automations Training",
     "Live, instructor-led webinars and workshops on practical automation, with dates, times in Accra and Lagos, and fees in cedis.",
     ORIGIN + "/workshops", body);
+}
+
+/* The series in order. The entry for the page being viewed is not a link. */
+function seriesItems(series, live, current) {
+  const bySlug = new Map((live || []).map(function (s) { return [s.slug, s]; }));
+  return '<ol class="ws-series">' + series.entries.map(function (e) {
+    const s = e.session ? bySlug.get(e.session) : null;
+    const slug = s ? s.slug : e.slug;
+    const title = s ? s.title : e.title;
+    const line = s ? s.directory_line : e.headline;
+    const w = s ? when(s) : null;
+    const name = e.number === current
+      ? '<span aria-current="page">' + esc(title) + '</span>'
+      : '<a href="/workshops/' + esc(slug) + '">' + esc(title) + '</a>';
+    return '<li class="ws-ser"><span class="ws-ser__n">' + num(e.number) + '</span>' +
+      '<div class="ws-ser__text"><h3>' + name + '</h3><p>' + esc(line) + '</p></div>' +
+      '<span class="ws-ser__tag' + (s ? ' is-date' : '') + '">' + esc(w ? w.wd + " " + w.day + " " + w.mon : "Coming soon") + '</span></li>';
+  }).join("") + '</ol>';
+}
+
+/* The directory when a series exists: the series first, its bookable
+   session featured, then the whole sequence, then any sessions outside it. */
+function seriesDirectoryPage(series, live) {
+  const inSeries = new Set(series.entries.map(function (e) { return e.session; }).filter(Boolean));
+  const featured = live.filter(function (s) { return inSeries.has(s.slug); });
+  const others = live.filter(function (s) { return !inSeries.has(s.slug); });
+  const count = series.entries.length === 10 ? "ten" : String(series.entries.length);
+  const body = '<main id="main" class="ws" data-ws-page="directory">\n<div class="ws-wrap">\n' +
+    '<div class="ws-dir-head"><p class="ws-kind">A live workshop series from ' + esc(series.presenter) + '</p>\n' +
+    '<h1>' + esc(series.name) + '</h1>\n' +
+    '<p class="ws-dir-lede">' + esc(series.positioning) + '</p>\n' +
+    series.intro.map(function (p) { return '<p>' + esc(p) + '</p>'; }).join("\n") + '</div>\n' +
+    (featured.length ? '<section class="ws-dir-sec" aria-labelledby="ws-next"><h2 class="ws-dir-h2" id="ws-next">Next workshop</h2>\n<ul class="ws-rows">\n' +
+      featured.map(directoryRow).join("\n") + '\n</ul></section>\n' : '') +
+    '<section class="ws-dir-sec" aria-labelledby="ws-all"><h2 class="ws-dir-h2" id="ws-all">The ' + esc(count) + ' workshops</h2>\n' +
+    '<p>' + esc(series.standalone) + '</p>\n' + seriesItems(series, live, null) + '</section>\n' +
+    (others.length ? '<section class="ws-dir-sec" aria-labelledby="ws-other"><h2 class="ws-dir-h2" id="ws-other">Other sessions</h2>\n<ul class="ws-rows">\n' +
+      others.map(directoryRow).join("\n") + '\n</ul></section>\n' : '') +
+    '<p class="ws-small ws-dir-note">' + esc(series.disclaimer) + ' Attending is training, not a certification.</p>\n' +
+    '</div>\n</main>';
+  return page(series.name + " — live workshops for automation practitioners — Bulletproof Automations Training",
+    series.positioning + " Live workshops on pricing, finding clients, proposals and delivery, from " + series.presenter + ".",
+    ORIGIN + "/workshops", body);
+}
+
+/* A workshop still being planned: copy, no date, no fee, no form. */
+function plannedPage(series, e, live) {
+  const first = series.entries.find(function (x) { return x.session; });
+  const firstSession = first ? (live || []).find(function (s) { return s.slug === first.session; }) : null;
+  const body =
+'<main id="main" class="ws" data-ws-page="planned">\n' +
+'<div class="ws-wrap ws-layout">\n<div class="ws-main">\n' +
+'  <p class="ws-crumbs"><a href="/workshops">' + esc(series.name) + '</a></p>\n' +
+'  <section class="ws-hero" aria-labelledby="ws-title">\n' +
+'    <div><p class="ws-kind">' + esc(series.name) + ', workshop ' + num(e.number) + '</p>\n' +
+'    <h1 class="ws-title" id="ws-title">' + esc(e.title) + '</h1>\n' +
+'    <p class="ws-lede">' + esc(e.headline) + '</p>\n' +
+'    <p class="ws-soon">Coming soon</p></div>\n' +
+'  </section>\n' +
+'  <div class="ws-content">\n' +
+'    <section class="ws-sec" aria-labelledby="ws-problem"><h2 id="ws-problem">The problem it solves</h2><p>' + esc(e.problem) + '</p></section>\n' +
+'    <section class="ws-sec" aria-labelledby="ws-who"><h2 id="ws-who">Who it is for</h2><p>' + esc(e.audience) + '</p></section>\n' +
+'    <section class="ws-sec" aria-labelledby="ws-learn"><h2 id="ws-learn">What you will be able to do</h2><ol class="ws-list ws-list--num">' +
+      e.outcomes.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join("") + '</ol></section>\n' +
+'    <section class="ws-sec" aria-labelledby="ws-series"><h2 id="ws-series">Where it fits in the series</h2><p>' + esc(e.series_fit) + '</p>' +
+      seriesItems(series, live, e.number) + '</section>\n' +
+'    <p class="ws-small">' + esc(series.disclaimer) + '</p>\n' +
+'    <p class="ws-small">Attending a webinar or workshop is training. It is not a certification and does not count towards one.</p>\n' +
+'  </div>\n</div>\n' +
+'<aside class="ws-aside" aria-labelledby="ws-soon-h">\n' +
+'  <div class="ws-sheet">\n' +
+'    <h2 id="ws-soon-h">Coming soon</h2>\n' +
+'    <p>This workshop does not have a date or a fee yet, and it is not taking registrations.</p>\n' +
+(firstSession
+  ? '    <p>Workshop 01, ' + esc(firstSession.title) + ', is on ' + esc(when(firstSession).long) + '.</p>\n' +
+    '    <a class="ws-btn ws-btn--block" href="/workshops/' + esc(firstSession.slug) + '">See workshop 01</a>\n'
+  : '') +
+'    <a class="ws-btn ws-btn--block ws-btn--quiet" href="/workshops">See all ' + esc(series.entries.length) + ' workshops</a>\n' +
+'  </div>\n</aside>\n</div>\n</main>';
+  return page(e.title + " — " + series.name + ", workshop " + num(e.number) + " — Bulletproof Automations Training",
+    series.name + ", workshop " + num(e.number) + ". " + e.headline + " Coming soon from " + series.presenter + ".",
+    ORIGIN + "/workshops/" + e.slug, body);
 }
 
 function registeredPage() {
@@ -271,23 +443,34 @@ function registeredPage() {
     ORIGIN + "/workshops/registered", body);
 }
 
-/* Writes the pages into outDir/workshops and returns the public paths. */
-function render(sessions, outDir) {
+/* Writes the pages into outDir/workshops and returns the public paths.
+   A series only renders alongside at least one published session, so there
+   is never a directory with nothing on it that can be booked. */
+function render(sessions, outDir, seriesList) {
   const live = sessions.filter(function (s) { return s.status === "published"; })
     .sort(function (a, b) { return Date.parse(a.starts_at) - Date.parse(b.starts_at); });
   if (!live.length) return [];
+  const series = (seriesList || [])[0] || null;
   const base = path.join(outDir, "workshops");
   fs.mkdirSync(path.join(base, "registered"), { recursive: true });
-  fs.writeFileSync(path.join(base, "index.html"), directoryPage(live));
+  fs.writeFileSync(path.join(base, "index.html"), series ? seriesDirectoryPage(series, live) : directoryPage(live));
   fs.writeFileSync(path.join(base, "registered", "index.html"),
     registeredPage().replace("</head>", '<meta name="robots" content="noindex">\n</head>'));
   const paths = ["/workshops"];
   for (const s of live) {
     fs.mkdirSync(path.join(base, s.slug), { recursive: true });
-    fs.writeFileSync(path.join(base, s.slug, "index.html"), detailPage(s));
+    fs.writeFileSync(path.join(base, s.slug, "index.html"), detailPage(s, seriesList, live));
     paths.push("/workshops/" + s.slug);
+  }
+  if (series) {
+    for (const e of series.entries) {
+      if (e.session) continue;
+      fs.mkdirSync(path.join(base, e.slug), { recursive: true });
+      fs.writeFileSync(path.join(base, e.slug, "index.html"), plannedPage(series, e, live));
+      paths.push("/workshops/" + e.slug);
+    }
   }
   return paths;
 }
 
-module.exports = { loadSessions, validate, render, when, fee, ORIGIN };
+module.exports = { loadSessions, loadSeries, validate, validateSeries, render, when, fee, ORIGIN };
