@@ -19,18 +19,44 @@ project (owner-approved); see "Where it stands". Live checkout is off._
 | 6. Test-mode rehearsal | **Done on the existing project** (owner decision, no second project): MoMo and card payments, a cancelled checkout and retry, signed webhooks, automatic confirmation emails. Test rows use `BPA-WTEST-` and are excluded from revenue |
 | Test session `test-webinar-checkout` | Set to `draft`: not visible, not bookable |
 | Get Paid for Automation, workshop 01 | Page file published; database row **`draft`**, so it shows "Registration isn't open yet" and cannot take a booking |
+| Workshop 01 joining details | **Stored on the row** (8 November 2026): Google Meet link and joining instructions. Never in this repository, which is public |
+| Webinar and workshop refund policy | **Drafted, not approved**: `content/workshops/refund-policy.json`, `"approved": false`. Nothing published |
+
+## Joining details (Google Meet)
+
+Each workshop has its own Google Calendar event and its own Meet link, on the owner's calendar. The
+link is stored **only** in `workshop_sessions.join_instructions` on that workshop's row:
+
+- `anon` and `authenticated` have no grant on the row (the admin can read it signed in), and no
+  public endpoint selects the column: not `/api/workshops/session`, the status RPC or the pages.
+- It goes out in the confirmation email, which the dispatcher sends only while the registration is
+  still `confirmed`. A registration refunded or cancelled before the email goes out gets nothing.
+- The `.ics` from `/api/workshops/calendar` carries it too, served only by token and only while the
+  registration is `confirmed`. Refunded, cancelled and unpaid registrations get 404.
+- The build fails on a meeting link or a `join_instructions` field in any content file, and CI
+  fails if one reaches `dist/`.
+- Participants are not added to the Calendar event, so Google sends no invitations. Everyone joins
+  by "ask to join", and the host admits them against the roll in `/admin/workshops/`. That is
+  the real control on a forwarded link.
+
+For a later workshop, store **its own** link on **its own** row. Never reuse workshop 01's.
 
 ## Go-live: Get Paid for Automation, workshop 01
 
 Each line needs owner approval. Order matters: the row opens registration, so it goes last.
 
-1. **Owner decisions:** the joining platform and link, and the refund terms for webinars and
-   workshops. `/refund-policy` is written for cohorts, and the registration form links to it.
-2. **Refund terms** published, as a webinar section in `/refund-policy` or its own page linked from
-   the form (`scripts/workshops.js`, `form()`).
-3. **Joining details** stored on the row:
-   `update public.workshop_sessions set join_instructions = '<link and instructions>' where slug = 'what-to-charge-for-automation';`
-   The confirmation email prints this. Without it the email only says the link will follow.
+1. **Meeting length.** A free personal Google account limits Meet calls with three or more
+   people to 60 minutes. Confirm the host account can run a 3-hour group call (a Google One plan
+   with longer group calls, or a Workspace account) **before** taking money. Test it with two other
+   people for more than 60 minutes.
+2. **Refund policy.** The owner approves the wording in `content/workshops/refund-policy.json`.
+   Then, in one commit: set `"approved": true` and `"version"` to the effective date (`YYYY-MM-DD`),
+   and set `TERMS_VERSION` in `functions/api/_workshops.js` to the same date. The build then
+   publishes `/workshops/refund-policy` and points every paid form's checkbox at it. A test fails
+   if the two versions differ.
+3. **Rehearsal (optional, test mode).** Merge this branch into `webinar-e2e-test`, set the test
+   session to `published`, pay once with Paystack test MoMo, check the email in a real inbox,
+   then set it back to `draft`.
 4. **Merge PR #61.** This publishes `/workshops` (the series, workshop 01 and nine coming-soon pages)
    with registration still closed.
 5. **Repoint the dispatcher** to production:
@@ -48,6 +74,12 @@ Each line needs owner approval. Order matters: the row opens registration, so it
 Workshops 02 to 10 have no database row and no form. Scheduling one later means a session file with
 real values, a matching row, and pointing its series entry at the session
 (`content/workshops/README.md`).
+
+Their dates are held in the owner's Google Calendar, which is the schedule of record. They are
+deliberately **not** in this repository or on the coming-soon pages: each opens only when its fee,
+places and terms are approved, and the 26 December and 2 January dates need marketing approval
+before anyone advertises them. A calendar date never opens registration. Only the database row
+does.
 
 ## What exists on the branch
 

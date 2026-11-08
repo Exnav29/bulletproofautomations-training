@@ -40,3 +40,16 @@ then replace its series entry with `{ "number": n, "session": "<slug>" }`. Keep 
 URL does not change.
 
 `materials/<session slug>/` holds participant materials. They are never published (see its README).
+
+## Joining links never go here
+
+This repository is public. A workshop's Meet (or other) joining link lives only in
+`workshop_sessions.join_instructions` on its database row, and reaches confirmed participants
+by email. The build fails on a meeting link or a `join_instructions` field in any file in this
+folder, draft or not.
+
+## Refund policy
+
+`refund-policy.json` holds the webinar and workshop refund policy. While `"approved"` is `false`,
+nothing is published and paid forms link to `/refund-policy`. The go-live steps are in
+`docs/workshops-runbook.md`.

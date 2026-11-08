@@ -35,6 +35,9 @@ jobs:
           test "$(grep -l 'data-ws-form' dist/workshops/*/index.html | wc -l)" -eq 1
           grep -q 'data-ws-form' dist/workshops/what-to-charge-for-automation/index.html
           test "$(grep -l 'data-ws-page="planned"' dist/workshops/*/index.html | wc -l)" -eq 9
+          # Joining links are private: they live on the database row and go only to
+          # confirmed participants by email. None may ever reach the built site.
+          ! grep -rIlE 'meet\.google\.com|zoom\.us/j|teams\.microsoft\.com/l/meetup' dist
       - name: Check admin JavaScript and certificate archive
         run: |
           node --check assets/js/admin-console.js

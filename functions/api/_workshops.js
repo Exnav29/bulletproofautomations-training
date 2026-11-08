@@ -237,8 +237,37 @@ export function formatWhen(session) {
   const clock = { hour: "numeric", minute: "2-digit", hour12: true };
   const accra = new Intl.DateTimeFormat("en-GB", Object.assign({ timeZone: "Africa/Accra" }, clock)).format(start).toUpperCase();
   const lagos = new Intl.DateTimeFormat("en-GB", Object.assign({ timeZone: "Africa/Lagos" }, clock)).format(start).toUpperCase();
+  const end = new Date(start.getTime() + Number(session.duration_minutes || 60) * 60000);
+  const span = function (zone) {
+    const f = new Intl.DateTimeFormat("en-GB", Object.assign({ timeZone: zone }, clock));
+    return (f.format(start) + "–" + f.format(end)).toUpperCase();
+  };
   // Same wording as the pages: both audiences' clocks from the one stored instant.
-  return { date: date, time: time.toUpperCase().replace(/\s/g, " "), zone: zoneLabel, both: accra + " in Accra, " + lagos + " in Lagos" };
+  return { date: date, time: time.toUpperCase().replace(/\s/g, " "), zone: zoneLabel, both: accra + " in Accra, " + lagos + " in Lagos",
+    ghana: span("Africa/Accra") + " (GMT)", lagos: span("Africa/Lagos") + " (WAT)" };
+}
+
+/* The first https link in a session's private joining instructions: the
+   button in the email and the LOCATION of the calendar file. */
+export function joinUrl(session) {
+  const m = /https:\/\/[^\s<>"']+/.exec(String((session && session.join_instructions) || ""));
+  return m ? m[0].replace(/[.,;:)]+$/, "") : null;
+}
+
+/* A Google Calendar "add" link. It opens a prefilled event in the attendee's
+   own calendar; nothing is sent to the host and no invitation is created. */
+export function googleCalendarLink(session) {
+  const start = new Date(session.starts_at);
+  const end = new Date(start.getTime() + Number(session.duration_minutes || 60) * 60000);
+  const url = joinUrl(session);
+  const q = new URLSearchParams({
+    action: "TEMPLATE",
+    text: session.title,
+    dates: icsStamp(start) + "/" + icsStamp(end),
+    details: "Bulletproof Automations Training." + (url ? " Join: " + url : ""),
+    location: url || "Online"
+  });
+  return "https://calendar.google.com/calendar/render?" + q.toString();
 }
 
 function money(minorOrGhs, isMinor) {
@@ -253,7 +282,22 @@ function icsStamp(date) {
 export function calendarFile(session, origin) {
   const start = new Date(session.starts_at);
   const end = new Date(start.getTime() + Number(session.duration_minutes || 60) * 60000);
-  const fold = function (s) { return String(s).replace(/[\\,;]/g, function (c) { return "\\" + c; }).replace(/\n/g, "\\n"); };
+  const fold = function (s) { return String(s).replace(/[\\,;]/g, function (c) { return "\\" + c; }).replace(/\r?\n/g, "\\n"); };
+  // RFC 5545 3.1: content lines longer than 75 octets are folded.
+  const line = function (s) {
+    const out = [];
+    let rest = s;
+    while (rest.length > 74) { out.push(rest.slice(0, 74)); rest = " " + rest.slice(74); }
+    out.push(rest);
+    return out.join("\r\n");
+  };
+  // Joining details appear only when the caller passed them, which it does
+  // only for a confirmed registration. METHOD:PUBLISH with no ORGANIZER or
+  // ATTENDEE: opening the file adds an event and sends no invitation.
+  const url = joinUrl(session);
+  const description = session.join_instructions
+    ? "Bulletproof Automations Training.\n\n" + session.join_instructions
+    : "Bulletproof Automations Training. Joining details are in your confirmation email.";
   return [
     "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Bulletproof Automations//Training//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
     "BEGIN:VEVENT",
@@ -262,10 +306,11 @@ export function calendarFile(session, origin) {
     "DTSTART:" + icsStamp(start),
     "DTEND:" + icsStamp(end),
     "SUMMARY:" + fold(session.title),
-    "DESCRIPTION:" + fold("Bulletproof Automations Training. Joining details are in your confirmation email."),
+    "DESCRIPTION:" + fold(description),
+    url ? "LOCATION:" + fold(url) : null,
     "URL:" + origin + "/workshops/" + session.slug,
     "END:VEVENT", "END:VCALENDAR", ""
-  ].join("\r\n");
+  ].filter(function (l) { return l !== null; }).map(line).join("\r\n");
 }
 
 /* ---------------------------------------------------------------------------
@@ -287,19 +332,28 @@ export function emailFor(kind, registration, session, links, env) {
   const when = formatWhen(session);
   const facts = [
     ["Date", when.date],
-    ["Time", when.both],
+    ["Ghana time", when.ghana],
+    ["Lagos time", when.lagos],
     ["Duration", session.duration_minutes + " minutes"],
     ["Format", session.format]
   ];
   const join = session.join_instructions
-    ? session.join_instructions
+    ? String(session.join_instructions).trim()
     : "We will email your joining link before the session starts.";
+  const url = joinUrl(session);
+  const joinLabel = url && /^https:\/\/meet\.google\.com\//.test(url) ? "Join on Google Meet" : "Open the joining link";
+  // Escaped first, then any https link made clickable, so nothing in the
+  // stored text can inject markup.
+  const joinHtml = esc(join).replace(/https:\/\/[^\s<>"']+/g, function (u) {
+    const clean = u.replace(/[.,;:)]+$/, "");
+    return '<a href="' + clean + '" style="color:#116149;font-weight:700">' + clean + "</a>" + u.slice(clean.length);
+  }).replace(/\r?\n/g, "<br>");
   const reviewDays = /^[0-9]{1,2}$/.test(String(env.WORKSHOP_REVIEW_RESPONSE_DAYS || ""))
     ? " within " + env.WORKSHOP_REVIEW_RESPONSE_DAYS + " business days"
     : "";
 
   const wa = supportWhatsApp(env);
-  const help = "Questions? Reply to this email" + (wa ? " or WhatsApp " + wa : "") + ".";
+  const help = "Questions? Reply to this email or write to " + MAILBOX + (wa ? ", or WhatsApp " + wa : "") + ".";
   let subject, lead, body, showJoin;
   if (kind === "confirmation" || kind === "admitted") {
     subject = "You're registered: " + session.title;
@@ -325,7 +379,7 @@ export function emailFor(kind, registration, session, links, env) {
   }
 
   const rows = facts.map(function (f) {
-    return '<tr><td style="padding:6px 0;color:#52615b;width:96px;vertical-align:top">' + esc(f[0]) +
+    return '<tr><td style="padding:6px 12px 6px 0;color:#52615b;width:104px;vertical-align:top">' + esc(f[0]) +
       '</td><td style="padding:6px 0;font-weight:700;color:#10251d">' + esc(f[1]) + "</td></tr>";
   }).join("");
   const html = '<!doctype html><html><body style="margin:0;background:#f3efe5;font-family:Arial,sans-serif;color:#10251d">' +
@@ -337,8 +391,11 @@ export function emailFor(kind, registration, session, links, env) {
     '<table style="border-collapse:collapse;font-size:15px;margin-bottom:18px">' + rows + "</table>" +
     '<p style="font-size:15px;line-height:1.55;margin:0 0 18px">' + esc(body) + "</p>" +
     (showJoin ? '<div style="padding:16px;background:#f3efe5;border-radius:10px;font-size:15px;line-height:1.55;margin-bottom:18px">' +
-      '<strong>How to join</strong><br>' + esc(join).replace(/\n/g, "<br>") + "</div>" : "") +
-    (showJoin && links.calendar ? '<a href="' + esc(links.calendar) + '" style="display:inline-block;background:#116149;color:#fff;text-decoration:none;padding:12px 16px;border-radius:10px;font-weight:700">Add to calendar</a>' : "") +
+      '<strong>How to join</strong><br>' + joinHtml + "</div>" : "") +
+    (showJoin && url ? '<p style="margin:0 0 14px"><a href="' + esc(url) + '" style="display:inline-block;background:#116149;color:#fff;text-decoration:none;padding:12px 16px;border-radius:10px;font-weight:700">' + esc(joinLabel) + "</a></p>" : "") +
+    (showJoin ? '<p style="margin:0;font-size:14px;line-height:1.6">Add it to your calendar: ' +
+      '<a href="' + esc(googleCalendarLink(session)) + '" style="color:#116149;font-weight:700">Google Calendar</a>' +
+      (links.calendar ? ' or <a href="' + esc(links.calendar) + '" style="color:#116149;font-weight:700">other calendars (.ics)</a>' : "") + "</p>" : "") +
     '<p style="font-size:13px;line-height:1.5;color:#52615b;margin:22px 0 0">' + esc(help) + '</p>' +
     "</div>" +
     '<p style="font-size:12px;line-height:1.5;color:#65736d;margin:16px 4px 0">Bulletproof Automations is an independent training provider based in Jacksonville, Florida. ' +
@@ -346,7 +403,8 @@ export function emailFor(kind, registration, session, links, env) {
     "</div></body></html>";
   const text = lead + "\n\n" + session.title + "\n" + facts.map(function (f) { return f[0] + ": " + f[1]; }).join("\n") +
     "\n\n" + body + (showJoin ? "\n\nHow to join:\n" + join : "") +
-    (showJoin && links.calendar ? "\n\nAdd to calendar: " + links.calendar : "") +
+    (showJoin ? "\n\nAdd to Google Calendar: " + googleCalendarLink(session) : "") +
+    (showJoin && links.calendar ? "\nAdd to other calendars (.ics): " + links.calendar : "") +
     "\n\n" + help + "\n\nBulletproof Automations Training";
   return { subject: subject, html: html, text: text };
 }

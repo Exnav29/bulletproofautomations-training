@@ -43,6 +43,17 @@ function esc(value) {
     .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
+/* Joining details are private: they live only on the session's database row
+   and are emailed to confirmed participants. This repository is public, so a
+   joining link in any content file, draft or not, fails the build. */
+const MEETING_LINK = /https?:\/\/([a-z0-9-]+\.)*(meet\.google\.com|zoom\.us|teams\.microsoft\.com|teams\.live\.com|whereby\.com|webex\.com)\b/i;
+function privateProblems(data) {
+  const problems = [];
+  if (/"join_(instructions|url|link)"/.test(JSON.stringify(data))) problems.push("joining details belong on the database row, never in a content file");
+  walkStrings(data, function (text) { if (MEETING_LINK.test(text)) problems.push("meeting link in a content file: joining links are private"); });
+  return problems;
+}
+
 function walkStrings(value, visit) {
   if (typeof value === "string") visit(value);
   else if (Array.isArray(value)) value.forEach(function (v) { walkStrings(v, visit); });
@@ -68,6 +79,7 @@ function validate(s, file, now) {
   if (s.capacity !== undefined && s.capacity !== null && !(Number.isInteger(s.capacity) && s.capacity > 0)) problems.push("capacity must be a positive whole number");
   if (s.run_of_show && !s.run_of_show.every(function (r) { return r && r.at && r.title; })) problems.push("each run_of_show item needs at and title");
   if (s.instructor && !INSTRUCTORS[s.instructor]) problems.push("unknown instructor " + s.instructor);
+  problems.push.apply(problems, privateProblems(s));
   if (s.status === "published") {
     walkStrings(s, function (text) {
       if (/\[[A-Z0-9 ,.$:'\-]{2,}\]/.test(text)) problems.push("placeholder left in published file: " + text.slice(0, 60));
@@ -81,7 +93,7 @@ function validate(s, file, now) {
 
 function loadSessions(dir, now) {
   if (!fs.existsSync(dir)) return [];
-  return fs.readdirSync(dir).filter(function (f) { return f.endsWith(".json"); }).sort().map(function (f) {
+  return fs.readdirSync(dir).filter(function (f) { return f.endsWith(".json") && f !== "refund-policy.json"; }).sort().map(function (f) {
     const file = path.join(dir, f);
     let data;
     try { data = JSON.parse(fs.readFileSync(file, "utf8")); }
@@ -125,6 +137,7 @@ function validateSeries(series, file, sessions) {
     if (e.slug && taken.has(e.slug)) problems.push(label + ": slug " + e.slug + " is already used");
     if (e.slug) taken.add(e.slug);
   });
+  problems.push.apply(problems, privateProblems(series));
   walkStrings(series, function (text) {
     if (/\[[A-Z0-9 ,.$:'\-]{2,}\]/.test(text)) problems.push("placeholder left in series: " + text.slice(0, 60));
     if (/TODO|TBC|TBD|lorem ipsum/i.test(text)) problems.push("unfinished text in series: " + text.slice(0, 60));
@@ -143,6 +156,59 @@ function loadSeries(dir, sessions) {
     catch (err) { throw new Error("content/workshops/series/" + f + ": not valid JSON (" + err.message + ")"); }
     return validateSeries(data, file, sessions);
   });
+}
+
+/* ---------------------------------------------------------------------------
+   The webinar and workshop refund policy (content/workshops/refund-policy.json).
+   Until the owner approves the wording ("approved": true) nothing is published
+   and paid forms keep linking to /refund-policy, exactly as before. Once
+   approved, /workshops/refund-policy is built and every paid form links to it.
+   ------------------------------------------------------------------------- */
+const POLICY_HREF = "/workshops/refund-policy";
+function loadPolicy(dir) {
+  const file = path.join(dir, "refund-policy.json");
+  if (!fs.existsSync(file)) return null;
+  let p;
+  try { p = JSON.parse(fs.readFileSync(file, "utf8")); }
+  catch (err) { throw new Error("content/workshops/refund-policy.json: not valid JSON (" + err.message + ")"); }
+  const problems = [];
+  if (typeof p.approved !== "boolean") problems.push("approved must be true or false");
+  for (const key of ["title", "version", "intro", "sections"]) if (!p[key] || (Array.isArray(p[key]) && !p[key].length)) problems.push("missing " + key);
+  (p.sections || []).forEach(function (sec, i) {
+    if (!sec || !sec.heading || !Array.isArray(sec.paragraphs) || !sec.paragraphs.length) problems.push("section " + (i + 1) + " needs heading and paragraphs");
+  });
+  if (p.approved) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(p.version))) problems.push("an approved policy's version is its effective date, YYYY-MM-DD");
+    walkStrings(p, function (text) {
+      if (/\[[A-Z0-9 ,.$:'\-]{2,}\]/.test(text)) problems.push("placeholder left in approved policy: " + text.slice(0, 60));
+      if (/TODO|TBC|TBD|DRAFT|lorem ipsum/.test(text)) problems.push("unfinished text in approved policy: " + text.slice(0, 60));
+    });
+  }
+  if (problems.length) throw new Error("content/workshops/refund-policy.json: " + problems.join("; "));
+  return p;
+}
+
+function policyHref(policy) { return policy && policy.approved ? POLICY_HREF : "/refund-policy"; }
+
+function policyPage(p) {
+  const body =
+'<main id="main" class="ws" data-ws-page="policy">\n' +
+'<div class="ws-wrap">\n<div class="ws-main">\n' +
+'  <p class="ws-crumbs"><a href="/workshops">Webinars and workshops</a></p>\n' +
+'  <section class="ws-hero" aria-labelledby="ws-title"><div>\n' +
+'    <h1 class="ws-title" id="ws-title">' + esc(p.title) + '</h1>\n' +
+'    <p class="ws-lede">' + esc(p.intro) + '</p>\n' +
+'    <p class="ws-small">Version ' + esc(p.version) + '</p>\n' +
+'  </div></section>\n' +
+'  <div class="ws-content">\n' +
+      p.sections.map(function (sec, i) {
+        return '    <section class="ws-sec" aria-labelledby="ws-p' + (i + 1) + '"><h2 id="ws-p' + (i + 1) + '">' + esc(sec.heading) + '</h2>' +
+          sec.paragraphs.map(function (t) { return '<p>' + esc(t) + '</p>'; }).join("") + '</section>\n';
+      }).join("") +
+'  </div>\n</div>\n</div>\n</main>';
+  return page(p.title + " — Bulletproof Automations Training",
+    "How refunds, transfers and cancellations work for paid Bulletproof Automations webinars and workshops.",
+    ORIGIN + POLICY_HREF, body);
 }
 
 /* The series and entry a session belongs to, if any. */
@@ -237,14 +303,14 @@ function trace(s, w) {
   }).join("\n") + '\n</ol>';
 }
 
-function form(s) {
+function form(s, policy) {
   return '<form class="ws-form" data-ws-form novalidate>\n' +
     '  <div class="ws-field"><label for="ws-name">Full name</label><input id="ws-name" name="full_name" type="text" autocomplete="name" required maxlength="120"></div>\n' +
     '  <div class="ws-field"><label for="ws-email">Email <span class="ws-hint">Your joining link goes here</span></label><input id="ws-email" name="email" type="email" autocomplete="email" inputmode="email" required maxlength="160"></div>\n' +
     '  <div class="ws-field"><label for="ws-wa">WhatsApp <span class="ws-hint">Optional</span></label><input id="ws-wa" name="whatsapp" type="tel" autocomplete="tel" inputmode="tel" maxlength="40" placeholder="+233"></div>\n' +
     '  <label class="ws-check" data-wa-consent hidden><input type="checkbox" name="whatsapp_consent"> <span>Send me session reminders on WhatsApp.</span></label>\n' +
     '  <label class="ws-check"><input type="checkbox" name="ack_terms" required> <span>I agree to the <a href="/privacy">privacy notice</a>' +
-    (s.price_ghs > 0 ? ' and the <a href="/refund-policy">refund policy</a>' : '') + '.</span></label>\n' +
+    (s.price_ghs > 0 ? ' and the <a href="' + policyHref(policy) + '">refund policy</a>' : '') + '.</span></label>\n' +
     '  <div class="ws-hp" aria-hidden="true"><label for="ws-company">Company website</label><input id="ws-company" name="company_website" type="text" tabindex="-1" autocomplete="off"></div>\n' +
     '  <p class="ws-error" data-ws-error role="alert" hidden></p>\n' +
     '  <button class="ws-btn ws-btn--block" type="submit" data-ws-submit>' + esc(cta(s)) + '</button>\n' +
@@ -255,7 +321,7 @@ function form(s) {
 /* ---------------------------------------------------------------------------
    Pages
    ------------------------------------------------------------------------- */
-function detailPage(s, seriesList, live) {
+function detailPage(s, seriesList, live, policy) {
   const w = when(s);
   const member = membership(seriesList, s.slug);
   const url = ORIGIN + "/workshops/" + s.slug;
@@ -319,7 +385,7 @@ function detailPage(s, seriesList, live) {
 '    <p class="ws-sumline">' + esc(w.long) + ', ' + esc(w.gmt) + ' GMT. ' + esc(fee(s)) + '.</p>\n' +
 '    <p class="ws-banner" data-ws-banner role="status" hidden></p>\n' +
 '    ' + trace(s, w).replace(/\n/g, "\n    ") + '\n' +
-'    ' + form(s).replace(/\n/g, "\n    ") + '\n' +
+'    ' + form(s, policy).replace(/\n/g, "\n    ") + '\n' +
 '    <div class="ws-after" data-ws-after hidden></div>\n' +
 '  </div>\n</aside>\n</div>\n' +
 '<div class="ws-stickybar" data-ws-sticky hidden><a class="ws-btn ws-btn--block" href="#register">' + esc(cta(s)) + '</a></div>\n</main>';
@@ -446,7 +512,7 @@ function registeredPage() {
 /* Writes the pages into outDir/workshops and returns the public paths.
    A series only renders alongside at least one published session, so there
    is never a directory with nothing on it that can be booked. */
-function render(sessions, outDir, seriesList) {
+function render(sessions, outDir, seriesList, policy) {
   const live = sessions.filter(function (s) { return s.status === "published"; })
     .sort(function (a, b) { return Date.parse(a.starts_at) - Date.parse(b.starts_at); });
   if (!live.length) return [];
@@ -459,7 +525,7 @@ function render(sessions, outDir, seriesList) {
   const paths = ["/workshops"];
   for (const s of live) {
     fs.mkdirSync(path.join(base, s.slug), { recursive: true });
-    fs.writeFileSync(path.join(base, s.slug, "index.html"), detailPage(s, seriesList, live));
+    fs.writeFileSync(path.join(base, s.slug, "index.html"), detailPage(s, seriesList, live, policy));
     paths.push("/workshops/" + s.slug);
   }
   if (series) {
@@ -470,7 +536,12 @@ function render(sessions, outDir, seriesList) {
       paths.push("/workshops/" + e.slug);
     }
   }
+  if (policy && policy.approved && live.some(function (s) { return s.price_ghs > 0; })) {
+    fs.mkdirSync(path.join(base, "refund-policy"), { recursive: true });
+    fs.writeFileSync(path.join(base, "refund-policy", "index.html"), policyPage(policy));
+    paths.push(POLICY_HREF);
+  }
   return paths;
 }
 
-module.exports = { loadSessions, loadSeries, validate, validateSeries, render, when, fee, ORIGIN };
+module.exports = { loadSessions, loadSeries, loadPolicy, validate, validateSeries, render, when, fee, ORIGIN, POLICY_HREF };

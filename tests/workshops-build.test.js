@@ -122,3 +122,58 @@ test("file name must match slug, and content is escaped", () => {
   assert.doesNotMatch(html, /<script>alert/);
   assert.match(html, /Invoices &lt;script&gt;alert\(1\)&lt;\/script&gt; &amp; you/);
 });
+
+test("a joining link or joining field in any content file fails the build, draft or published", () => {
+  // The repository is public. Joining details live only on the database row.
+  for (const change of [
+    { join_instructions: "See you there" },
+    { description: "Join at https://meet.google.com/abc-defg-hij" },
+    { faq: [{ q: "Link?", a: "https://us02web.zoom.us/j/123" }] },
+  ]) {
+    for (const status of ["published", "draft"]) {
+      const s = Object.assign(sample(), change, { status });
+      assert.throws(() => ws.validate(s, file(s.slug)), /joining|meeting link/, status + " " + JSON.stringify(change));
+    }
+  }
+  const series = { slug: "s", name: "S", presenter: "P", positioning: "x", intro: ["x"], standalone: "x",
+    disclaimer: "x", entries: [{ number: 1, status: "planned", slug: "a", title: "A", headline: "h", problem: "p",
+      audience: "a", outcomes: ["o"], series_fit: "Join on https://meet.google.com/abc-defg-hij" }] };
+  assert.throws(() => ws.validateSeries(series, "/x/series/s.json", []), /meeting link/);
+  // And the real content carries none.
+  const raw = fs.readdirSync(contentDir, { recursive: true }).filter((f) => String(f).endsWith(".json"))
+    .map((f) => fs.readFileSync(path.join(contentDir, String(f)), "utf8")).join("\n");
+  assert.doesNotMatch(raw, /meet\.google\.com|join_instructions/);
+});
+
+test("refund policy: unapproved publishes nothing and the form keeps /refund-policy; approved builds its page and the form links to it", () => {
+  const policy = ws.loadPolicy(contentDir);
+  assert.equal(policy.approved, false, "the workshop refund policy is not approved yet");
+  const s = ws.validate(sample(), file("sample-webinar"));
+
+  const before = fs.mkdtempSync(path.join(os.tmpdir(), "ws-pol-"));
+  const paths = ws.render([s], before, [], policy);
+  assert.equal(paths.includes(ws.POLICY_HREF), false);
+  assert.equal(fs.existsSync(path.join(before, "workshops/refund-policy")), false);
+  assert.match(fs.readFileSync(path.join(before, "workshops/sample-webinar/index.html"), "utf8"), /href="\/refund-policy">refund policy/);
+
+  const approved = Object.assign({}, policy, { approved: true, version: "2026-12-01" });
+  const after = fs.mkdtempSync(path.join(os.tmpdir(), "ws-pol-"));
+  assert.ok(ws.render([s], after, [], approved).includes(ws.POLICY_HREF));
+  assert.match(fs.readFileSync(path.join(after, "workshops/sample-webinar/index.html"), "utf8"), /href="\/workshops\/refund-policy">refund policy/);
+  const page = fs.readFileSync(path.join(after, "workshops/refund-policy/index.html"), "utf8");
+  assert.match(page, /Webinar and workshop refund policy/);
+  assert.match(page, /Version 2026-12-01/);
+});
+
+test("refund policy: approval needs a dated version that matches the terms version registrations record", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ws-pol-"));
+  const draft = ws.loadPolicy(contentDir);
+  fs.writeFileSync(path.join(dir, "refund-policy.json"), JSON.stringify(Object.assign({}, draft, { approved: true })));
+  assert.throws(() => ws.loadPolicy(dir), /effective date/);
+  // When the owner approves the wording, TERMS_VERSION in functions/api/_workshops.js
+  // must change in the same commit, so every registration records the policy it agreed to.
+  if (draft.approved) {
+    const terms = /TERMS_VERSION = "([^"]+)"/.exec(fs.readFileSync(path.join(__dirname, "..", "functions/api/_workshops.js"), "utf8"))[1];
+    assert.equal(draft.version, terms);
+  }
+});
