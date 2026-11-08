@@ -674,9 +674,18 @@
     <section class="panel" aria-labelledby="ws-inv-title">
       <h3 class="panel__title" id="ws-inv-title">Google Calendar invitations &mdash; <span id="ws-inv-count">0</span> to do</h3>
       <p class="sec-gap__lede">For sessions joined by invitation only. Open the session's event in Google Calendar,
-        make the change there, then record it here. Only confirmed, paid registrations appear under &ldquo;Add&rdquo;. Refunds,
-        cancellations and changes of Google account appear under &ldquo;Remove&rdquo;.</p>
+        make the change there, then record it here. Only confirmed registrations that are paid, or are complimentary
+        graduate places, appear under &ldquo;Add&rdquo;. Refunds, cancellations and changes of Google account appear under &ldquo;Remove&rdquo;.</p>
       <div id="ws-invites"><p class="msg msg--empty">Nothing to do.</p></div>
+    </section>
+
+    <section class="panel" aria-labelledby="ws-ref-title">
+      <h3 class="panel__title" id="ws-ref-title">Referrals &mdash; <span id="ws-ref-due">0</span> commissions due</h3>
+      <p class="sec-gap__lede">Codes are issued only to eligible Intermediate graduates, checked against the certificate register.
+        A commission is due on a confirmed, fully paid, non-complimentary registration that arrived with a code. Pay it by
+        MoMo yourself, then record the reference here. Each registration can be paid once.</p>
+      <p><button class="mini" type="button" id="ws-ref-new">Issue a referral code</button></p>
+      <div id="ws-referrals"><p class="msg msg--empty">No referral codes issued.</p></div>
     </section>
 
     <div class="filters">

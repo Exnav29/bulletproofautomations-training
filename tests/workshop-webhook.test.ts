@@ -24,8 +24,9 @@ const DB_PORT = 54331
 
 type Row = Record<string, any>
 const pg = new PGlite()
-for (const f of ['./fixtures/payment-ledger.sql', './fixtures/supabase-stubs.sql',
-  '../supabase/migrations/20261103120000_workshops.sql']) {
+// Release 2 (admission, prices, benefits) is loaded too: the webhook must behave the same on top of it.
+for (const f of ['./fixtures/payment-ledger.sql', './fixtures/supabase-stubs.sql', './fixtures/graduate-records.sql',
+  '../supabase/migrations/20261103120000_workshops.sql', '../supabase/migrations/20261109120000_workshop_admission_benefits.sql']) {
   await pg.exec(await Deno.readTextFile(new URL(f, import.meta.url)))
 }
 

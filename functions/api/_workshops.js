@@ -248,7 +248,7 @@ export function formatWhen(session) {
 }
 
 /* "invite": the session is joined only by Google accounts on its Calendar
-   event (migration 20261108120000). "link": joining instructions are emailed.
+   event (migration 20261109120000). "link": joining instructions are emailed.
    A database without the admission column, or any failure, reads as "link",
    so registration and payment never depend on this lookup. */
 export async function sessionAdmission(env, slug) {
@@ -386,8 +386,11 @@ export function emailFor(kind, registration, session, links, env) {
     subject = "You're registered: " + session.title;
     lead = kind === "admitted" ? first + ", your place is confirmed." : first + ", you're registered.";
     body = Number(registration.amount_paid_minor || 0) > 0
-      ? "We have received your payment of " + money(registration.amount_paid_minor, true) + ". Keep this email: it has your joining details."
-      : "Keep this email: it has your joining details.";
+      ? "We have received your payment of " + money(registration.amount_paid_minor, true) +
+        (registration.price_tier === "foundations" ? ", the Foundations certificate price" : "") + ". Keep this email: it has your joining details."
+      : registration.price_tier === "graduate"
+        ? "Your place is complimentary, as an Intermediate graduate. Keep this email: it has your joining details."
+        : "Keep this email: it has your joining details.";
     showJoin = true;
   } else if (kind === "payment_review") {
     subject = "We have your payment for " + session.title;

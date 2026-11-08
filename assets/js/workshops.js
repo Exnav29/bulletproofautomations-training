@@ -30,6 +30,20 @@
     return n;
   }
   function store() { try { return window.localStorage; } catch (e) { return null; } }
+  /* A referrer's code from their link (?ref=XXXXXXXX), kept for this tab so it
+     survives moving between workshop pages. The server ignores any code that is
+     not an active referrer's, so this only ever carries a hint. */
+  function referralCode() {
+    var fromUrl = "";
+    try { fromUrl = new URLSearchParams(window.location.search).get("ref") || ""; } catch (e) { /* old browser */ }
+    var ok = /^[A-Za-z2-9]{8}$/.test(fromUrl);
+    try {
+      if (ok) window.sessionStorage.setItem("bpa_ws_ref", fromUrl.toUpperCase());
+      else fromUrl = window.sessionStorage.getItem("bpa_ws_ref") || "";
+    } catch (e) { /* storage blocked */ }
+    return /^[A-Za-z2-9]{8}$/.test(fromUrl) ? fromUrl.toUpperCase() : "";
+  }
+  referralCode();
   function saveAccess(slug, value) {
     try { var s = store(); if (s) s.setItem("bpa_ws_" + slug, JSON.stringify(value)); } catch (e) { /* private mode */ }
   }
@@ -201,6 +215,8 @@
         full_name: form.elements.full_name.value.trim(),
         email: form.elements.email.value.trim(),
         attend_email: form.elements.attend_email ? form.elements.attend_email.value.trim() : "",
+        certificate_id: form.elements.certificate_id ? form.elements.certificate_id.value.trim() : "",
+        ref: referralCode(),
         whatsapp: form.elements.whatsapp.value.trim(),
         whatsapp_consent: form.elements.whatsapp_consent ? form.elements.whatsapp_consent.checked : false,
         ack_terms: form.elements.ack_terms.checked,
@@ -221,6 +237,11 @@
             not_found: ["Registration isn't open", "This session isn't taking registrations. Nothing has been charged."]
           };
           if (r.code === "attend_email_required") return showError("Add the Google account you will join with. Only that account can get into the meeting.");
+          if (r.code === "benefit_not_matched") {
+            if (form.elements.certificate_id) { form.elements.certificate_id.setAttribute("aria-invalid", "true"); form.elements.certificate_id.focus(); }
+            return showError("We could not match that certificate ID to the email above, or the certificate is not currently eligible. Check both, or clear the certificate ID to register at the standard fee. Nothing has been charged.");
+          }
+          if (r.code === "benefit_not_available") return showError("That certificate does not carry a benefit for this session. Clear the certificate ID to register at the standard fee. Nothing has been charged.");
           if (codes[r.code]) return closeForm(codes[r.code][0], codes[r.code][1], [{ href: "/workshops", text: "See other sessions", quiet: true }]);
           if (r._status === 400) return showError("Check your details and try again.");
           return showError("We couldn't save your registration just now. Nothing has been charged. Try again, or " + contact() + ".");

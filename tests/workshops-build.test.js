@@ -19,7 +19,9 @@ test("the real content publishes exactly one bookable session: Get Paid for Auto
   assert.deepEqual(live.map((s) => s.slug), ["what-to-charge-for-automation"]);
   const s = live[0];
   assert.deepEqual([s.starts_at, s.duration_minutes, s.price_ghs, s.capacity, s.kind, s.time_zone],
-    ["2026-12-12T11:30:00Z", 180, 250, 25, "workshop", "Africa/Accra"]);
+    ["2026-12-12T11:30:00Z", 180, 350, 25, "workshop", "Africa/Accra"]);
+  // 25 general places + 5 reserved for graduates = 30. GHS 280 with a Foundations certificate; graduates free.
+  assert.deepEqual([s.reserved_graduate_seats, s.foundations_discount_pct, s.graduate_free, s.admission], [5, 20, true, "invite"]);
   assert.equal(ws.when(s).accra, "11:30 AM");
   assert.equal(ws.when(s).lagos, "12:30 PM");
 });
@@ -49,7 +51,7 @@ test("series pages: the directory, one detail page with a form, nine coming-soon
   assert.doesNotMatch(dir, /data-ws-form/);
   const w01 = read("workshops/what-to-charge-for-automation");
   assert.match(w01, /data-ws-form/);
-  assert.match(w01, /data-price="250"/);
+  assert.match(w01, /data-price="350"/);
   assert.match(w01, /Get Paid for Automation, workshop 01, with Johnathan Lightfoot/);
   assert.match(w01, /11:30 AM in Accra<br>12:30 PM in Lagos/);
   for (const p of paths.filter((x) => x !== "/workshops" && x !== "/workshops/what-to-charge-for-automation")) {
@@ -156,7 +158,7 @@ test("refund policy: unapproved publishes nothing and the form keeps /refund-pol
   assert.equal(fs.existsSync(path.join(before, "workshops/refund-policy")), false);
   assert.match(fs.readFileSync(path.join(before, "workshops/sample-webinar/index.html"), "utf8"), /href="\/refund-policy">refund policy/);
 
-  const approved = Object.assign({}, policy, { approved: true, version: "2026-12-01" });
+  const approved = Object.assign({}, policy, { approved: true, legal_review: "complete", version: "2026-12-01" });
   const after = fs.mkdtempSync(path.join(os.tmpdir(), "ws-pol-"));
   assert.ok(ws.render([s], after, [], approved).includes(ws.POLICY_HREF));
   assert.match(fs.readFileSync(path.join(after, "workshops/sample-webinar/index.html"), "utf8"), /href="\/workshops\/refund-policy">refund policy/);
@@ -169,7 +171,10 @@ test("refund policy: approval needs a dated version that matches the terms versi
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ws-pol-"));
   const draft = ws.loadPolicy(contentDir);
   fs.writeFileSync(path.join(dir, "refund-policy.json"), JSON.stringify(Object.assign({}, draft, { approved: true })));
+  assert.throws(() => ws.loadPolicy(dir), /legal_review complete/);
+  fs.writeFileSync(path.join(dir, "refund-policy.json"), JSON.stringify(Object.assign({}, draft, { approved: true, legal_review: "complete" })));
   assert.throws(() => ws.loadPolicy(dir), /effective date/);
+  assert.equal(draft.legal_review, "pending", "the workshop refund policy awaits legal review");
   // When the owner approves the wording, TERMS_VERSION in functions/api/_workshops.js
   // must change in the same commit, so every registration records the policy it agreed to.
   if (draft.approved) {

@@ -80,6 +80,12 @@ function validate(s, file, now) {
   if (s.run_of_show && !s.run_of_show.every(function (r) { return r && r.at && r.title; })) problems.push("each run_of_show item needs at and title");
   if (s.instructor && !INSTRUCTORS[s.instructor]) problems.push("unknown instructor " + s.instructor);
   if (s.admission !== undefined && !["link", "invite"].includes(s.admission)) problems.push("admission must be link or invite");
+  // Certificate-holder prices. The database row carries the same values and
+  // decides every price; these only describe it on the page.
+  if (s.foundations_discount_pct !== undefined && !(Number.isInteger(s.foundations_discount_pct) && s.foundations_discount_pct >= 0 && s.foundations_discount_pct <= 100)) problems.push("foundations_discount_pct must be a whole number from 0 to 100");
+  if (s.reserved_graduate_seats !== undefined && !(Number.isInteger(s.reserved_graduate_seats) && s.reserved_graduate_seats >= 0)) problems.push("reserved_graduate_seats must be a whole number");
+  if (s.graduate_free !== undefined && typeof s.graduate_free !== "boolean") problems.push("graduate_free must be true or false");
+  if (s.graduate_free && !s.reserved_graduate_seats) problems.push("graduate_free needs reserved_graduate_seats");
   problems.push.apply(problems, privateProblems(s));
   if (s.status === "published") {
     walkStrings(s, function (text) {
@@ -178,6 +184,9 @@ function loadPolicy(dir) {
   (p.sections || []).forEach(function (sec, i) {
     if (!sec || !sec.heading || !Array.isArray(sec.paragraphs) || !sec.paragraphs.length) problems.push("section " + (i + 1) + " needs heading and paragraphs");
   });
+  if (p.legal_review !== undefined && !["pending", "complete"].includes(p.legal_review)) problems.push("legal_review must be pending or complete");
+  // The owner approves the wording only after the legal review is complete.
+  if (p.approved && p.legal_review !== "complete") problems.push("an approved policy needs legal_review complete");
   if (p.approved) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(p.version))) problems.push("an approved policy's version is its effective date, YYYY-MM-DD");
     walkStrings(p, function (text) {
@@ -248,6 +257,11 @@ function duration(min) {
   return min + " minutes";
 }
 function fee(s) { return s.price_ghs === 0 ? "Free" : "GHS\u00a0" + s.price_ghs.toLocaleString("en-GB"); }
+// Same rounding as workshop_register: to the pesewa.
+function foundationsFee(s) {
+  return "GHS\u00a0" + (Math.round(s.price_ghs * (100 - s.foundations_discount_pct)) / 100).toLocaleString("en-GB");
+}
+function hasBenefits(s) { return s.price_ghs > 0 && (s.foundations_discount_pct > 0 || s.graduate_free === true); }
 function kindLabel(s) { return s.kind === "workshop" ? "Workshop" : "Webinar"; }
 function cta(s) { return s.price_ghs === 0 ? "Register for free" : "Register and pay " + fee(s); }
 
@@ -280,8 +294,11 @@ function factsList(s, w) {
   return '<dl class="ws-facts">\n' +
     '  <dt>When</dt><dd><span class="ws-date">' + esc(w.long) + '</span><small>' + esc(w.accra) + ' in Accra<br>' + esc(w.lagos) + ' in Lagos</small></dd>\n' +
     '  <dt>Length</dt><dd>' + esc(duration(s.duration_minutes)) + ', ' + esc(s.format) + '</dd>\n' +
-    '  <dt>Fee</dt><dd>' + esc(fee(s)) + (s.price_ghs > 0 ? '<small>MoMo or card, through Paystack</small>' : '') + '</dd>\n' +
-    (s.capacity ? '  <dt>Places</dt><dd>' + esc(s.capacity) + ' people</dd>\n' : '') +
+    '  <dt>Fee</dt><dd>' + esc(fee(s)) + (s.price_ghs > 0 ? '<small>MoMo or card, through Paystack</small>' : '') +
+      (s.foundations_discount_pct > 0 ? '<small>' + esc(foundationsFee(s)) + ' with a Foundations certificate</small>' : '') +
+      (s.graduate_free ? '<small>Free for eligible Intermediate graduates</small>' : '') + '</dd>\n' +
+    (s.capacity ? '  <dt>Places</dt><dd>' + esc(s.capacity + (s.reserved_graduate_seats || 0)) + ' people' +
+      (s.reserved_graduate_seats ? '<small>' + esc(s.capacity) + ' open places and ' + esc(s.reserved_graduate_seats) + ' reserved for Intermediate graduates</small>' : '') + '</dd>\n' : '') +
     '  <dt>For</dt><dd>' + esc(s.audience) + '</dd>\n</dl>';
 }
 
@@ -312,6 +329,12 @@ function form(s, policy) {
     '  <div class="ws-field"><label for="ws-email">Email <span class="ws-hint">' + (s.admission === "invite" ? "Your confirmation goes here" : "Your joining link goes here") + '</span></label><input id="ws-email" name="email" type="email" autocomplete="email" inputmode="email" required maxlength="160"></div>\n' +
     (s.admission === "invite"
       ? '  <div class="ws-field"><label for="ws-attend">Google account to join with <span class="ws-hint">Only this account can get into the meeting. It can differ from the email above</span></label><input id="ws-attend" name="attend_email" type="email" autocomplete="email" inputmode="email" required maxlength="160"></div>\n'
+      : '') +
+    (hasBenefits(s)
+      ? '  <div class="ws-field"><label for="ws-cert">Certificate ID <span class="ws-hint">Optional. ' +
+        (s.foundations_discount_pct > 0 ? 'Foundations certificate: ' + esc(foundationsFee(s)) + '. ' : '') +
+        (s.graduate_free ? 'Intermediate graduates: free. ' : '') +
+        'It must be issued to the email above</span></label><input id="ws-cert" name="certificate_id" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="40" placeholder="BPA-"></div>\n'
       : '') +
     '  <div class="ws-field"><label for="ws-wa">WhatsApp <span class="ws-hint">Optional</span></label><input id="ws-wa" name="whatsapp" type="tel" autocomplete="tel" inputmode="tel" maxlength="40" placeholder="+233"></div>\n' +
     '  <label class="ws-check" data-wa-consent hidden><input type="checkbox" name="whatsapp_consent"> <span>Send me session reminders on WhatsApp.</span></label>\n' +

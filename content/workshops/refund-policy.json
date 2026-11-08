@@ -16,7 +16,7 @@
       "paragraphs": [
         "You can cancel and receive a full refund of the amount you paid if you ask at least 48 hours before the workshop starts.",
         "If you registered less than seven days before the workshop, you can also cancel for a full refund at any time before it starts, even inside the last 48 hours.",
-        "A full refund means the whole amount you paid. We do not deduct Paystack's processing fee."
+        "A full refund means the whole amount you paid, whether that was the standard fee or the Foundations certificate price. We do not deduct Paystack's processing fee, which Paystack does not return to us."
       ]
     },
     {
@@ -47,7 +47,8 @@
       "heading": "Duplicate payments and payments held for review",
       "paragraphs": [
         "If you pay twice for the same registration, we refund the extra payment in full.",
-        "If the workshop fills while you are paying, or we cannot confirm your place automatically, your payment is held for review. We then either confirm your place or refund you in full. You do not need to pay again."
+        "If the workshop fills while you are paying, or we cannot confirm your place automatically, your payment is held for review. We then either confirm your place or refund you in full. You do not need to pay again.",
+        "A complimentary Intermediate graduate place carries no payment, so there is nothing to refund. If you cannot attend, tell us before the workshop so the reserved place can go to another graduate."
       ]
     },
     {
@@ -60,8 +61,9 @@
     {
       "heading": "How refunds are paid",
       "paragraphs": [
-        "Approved refunds are paid through Paystack, to the mobile money wallet or card you paid with, in cedis.",
-        "How long a refund takes to reach you depends on Paystack and on your mobile money provider or card issuer. Mobile money is usually faster than cards. Card refunds can take several business days to appear.",
+        "Approved refunds are paid through Paystack, in cedis, to the payment method you used.",
+        "Paystack says customers should receive a refund within 3 to 10 working days of it being issued. The exact time depends on your mobile money provider or card issuer.",
+        "Paystack can only process a refund within one year of the payment. Requests under this policy are made well within that time.",
         "A refund is not complete until Paystack confirms it has been processed. We tell you when that happens, and we will not tell you a refund has been sent before then."
       ]
     },
@@ -72,5 +74,6 @@
         "The version of this policy in force when you registered is the one that applies to your registration."
       ]
     }
-  ]
+  ],
+  "legal_review": "pending"
 }

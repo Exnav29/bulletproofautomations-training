@@ -35,7 +35,8 @@
   };
   var ATTENDANCE = { unknown: "Not recorded", attended: "Attended", no_show: "No-show" };
 
-  var ws = { sessions: {}, rows: [], attempts: {} };
+  var ws = { sessions: {}, rows: [], attempts: {}, referrers: [], payouts: {} };
+  var TIER = { standard: "", foundations: "Foundations price", graduate: "Graduate, complimentary" };
   var $ = function (id) { return document.getElementById(id); };
 
   function fill(select, labels) {
@@ -86,12 +87,21 @@
   function load() {
     show("ws-error", "");
     return Promise.all([
-      // admission and calendar_event_id arrive with migration 20261108120000; without it the page still loads.
+      // admission and calendar_event_id arrive with migration 20261109120000; without it the page still loads.
       getJson("/rest/v1/workshop_sessions?select=id,slug,kind,title,starts_at,status,price_ghs,capacity,admission,calendar_event_id&order=starts_at.desc")
         .catch(function () { return getJson("/rest/v1/workshop_sessions?select=id,slug,kind,title,starts_at,status,price_ghs,capacity&order=starts_at.desc"); }),
       getJson("/rest/v1/workshop_registrations?select=*&order=created_at.desc"),
-      getJson("/rest/v1/workshop_payment_attempts?select=registration_id,reference,status,amount_minor,received_minor,refunded_minor,mode,verified_via,created_at&order=created_at.asc")
+      getJson("/rest/v1/workshop_payment_attempts?select=registration_id,reference,status,amount_minor,received_minor,refunded_minor,mode,verified_via,created_at&order=created_at.asc"),
+      // Referral tables arrive with migration 20261109120000; without them the page still loads.
+      getJson("/rest/v1/workshop_referrers?select=*&order=created_at.asc").catch(function () { return []; }),
+      getJson("/rest/v1/workshop_referral_payouts?select=*").catch(function () { return []; }),
+      getJson("/rest/v1/workshop_sessions?select=id,referral_commission_ghs").catch(function () { return []; })
     ]).then(function (out) {
+      ws.referrers = out[3];
+      ws.payouts = {};
+      out[4].forEach(function (p) { ws.payouts[p.registration_id] = p; });
+      ws.commission = {};
+      out[5].forEach(function (s) { ws.commission[s.id] = Number(s.referral_commission_ghs || 0); });
       ws.sessions = {};
       out[0].forEach(function (s) { ws.sessions[s.id] = s; });
       ws.rows = out[1];
@@ -170,6 +180,7 @@
       var who = function (r, email) {
         var test = (ws.attempts[r.id] || []).some(function (a) { return a.mode === "test"; });
         return "<strong>" + esc(r.full_name) + "</strong> " + esc(email) + (test ? ' <span class="tag tag--bad">TEST</span>' : "") +
+          (r.price_tier === "graduate" ? ' <span class="tag">Graduate, complimentary</span>' : "") +
           " <small>(" + esc(STATUS[r.status] || r.status) + ")</small>";
       };
       return '<div class="ws-inv"><h4>' + esc(s.title) + " &mdash; " + esc(when(s.starts_at)) + "</h4>" +
@@ -202,7 +213,8 @@
       return "<tr>" +
         "<td><strong>" + esc(r.full_name) + "</strong><br><small>" + esc(r.email_normalized) + "</small>" +
           (r.whatsapp ? "<br><small>" + esc(r.whatsapp) + (r.whatsapp_consent ? " (consented)" : "") + "</small>" : "") + "</td>" +
-        "<td>" + esc(s.title || "—") + "</td>" +
+        "<td>" + esc(s.title || "—") + (TIER[r.price_tier] ? "<br><small>" + esc(TIER[r.price_tier]) + (r.benefit_credential_id ? " · " + esc(r.benefit_credential_id) : "") + "</small>" : "") +
+          (r.referral_code ? "<br><small>Referral " + esc(r.referral_code) + "</small>" : "") + "</td>" +
         "<td>" + esc(STATUS[r.status] || r.status) + (r.review_reason ? "<br><small>" + esc(REASON[r.review_reason] || r.review_reason) + "</small>" : "") +
           (test ? ' <span class="tag tag--bad">TEST</span>' : "") + "</td>" +
         "<td>" + esc(PAYMENT[r.payment_status] || r.payment_status) + "</td>" +
@@ -226,7 +238,65 @@
 
     campaigns(rows);
     invites();
+    referrals();
   }
+
+  /* Commission is derived, never stored as owed:
+   *   due        confirmed, paid, not complimentary, arrived with a code, not yet paid out
+   *   paid       a payout is recorded
+   *   review     paid out, but the registration has since been refunded or cancelled
+   * Test checkouts never earn a commission. */
+  function commissionState(r) {
+    var test = (ws.attempts[r.id] || []).some(function (a) { return a.mode === "test"; });
+    var qualifies = !test && r.status === "confirmed" && r.payment_status === "paid" && r.price_tier !== "graduate" && Number(r.amount_paid_minor) > 0;
+    if (ws.payouts[r.id]) return qualifies ? "paid" : "review";
+    return qualifies ? "due" : "none";
+  }
+
+  function referrals() {
+    var due = 0;
+    $("ws-referrals").innerHTML = ws.referrers.length ? ws.referrers.map(function (x) {
+      var mine = ws.rows.filter(function (r) { return r.referral_code === x.code; });
+      var lines = mine.map(function (r) {
+        var st = commissionState(r), s = ws.sessions[r.session_id] || {};
+        var amount = ws.commission[r.session_id] || 0;
+        if (st === "due") due += 1;
+        var label = { due: "Due: GHS " + amount, paid: "Paid (" + esc(ws.payouts[r.id].payout_reference) + ")",
+          review: "Paid, but the registration was refunded or cancelled: review", none: "Not earned (" + esc(STATUS[r.status] || r.status) + ")" }[st];
+        return "<li>" + esc(r.full_name) + ", " + esc(s.title || "") + ": " + label +
+          (st === "due" ? ' <button class="mini" type="button" data-ws-payout="' + esc(r.id) + '">Record payout</button>' : "") + "</li>";
+      }).join("");
+      return '<div class="ws-inv"><h4>' + esc(x.code) + " &mdash; " + esc(x.credential_id) + " (" + esc(x.status) + ")</h4>" +
+        "<p><small>Link: " + esc(location.origin) + "/workshops/?ref=" + esc(x.code) + "</small> " +
+        '<button class="mini" type="button" data-ws-ref-toggle="' + esc(x.credential_id) + '" data-to="' + (x.status === "active" ? "suspend_referrer" : "activate_referrer") + '">' +
+        (x.status === "active" ? "Suspend" : "Reactivate") + "</button></p>" +
+        (lines ? "<ul>" + lines + "</ul>" : '<p class="msg msg--empty">No registrations with this code yet.</p>') + "</div>";
+    }).join("") : '<p class="msg msg--empty">No referral codes issued.</p>';
+    $("ws-ref-due").textContent = due;
+  }
+
+  document.addEventListener("click", function (e) {
+    var pay = e.target.closest && e.target.closest("[data-ws-payout]");
+    var toggle = e.target.closest && e.target.closest("[data-ws-ref-toggle]");
+    if (pay) {
+      var reference = window.prompt("Paid the commission by hand? Enter the MoMo or bank reference to record it. A registration can be paid once.");
+      if (!reference) return;
+      apiPost({ registration_id: pay.getAttribute("data-ws-payout"), action: "record_payout", reference: reference.trim() })
+        .then(function (j) { show("ws-message", j.already ? "Already recorded." : "Payout recorded."); return load(); })
+        .catch(function (err) { show("ws-error", err.message); });
+    } else if (toggle) {
+      apiPost({ action: toggle.getAttribute("data-to"), credential_id: toggle.getAttribute("data-ws-ref-toggle") })
+        .then(function () { show("ws-message", "Saved."); return load(); })
+        .catch(function (err) { show("ws-error", err.message); });
+    }
+  });
+  $("ws-ref-new").addEventListener("click", function () {
+    var credential = window.prompt("Intermediate certificate ID of the graduate (the code is issued only if the certificate is valid, the entitlement is active and training fees are paid):");
+    if (!credential) return;
+    apiPost({ action: "create_referrer", credential_id: credential.trim() })
+      .then(function (j) { show("ws-message", (j.already ? "Already issued: " : "Issued: ") + j.code + ". Not shared with anyone yet."); return load(); })
+      .catch(function (err) { show("ws-error", err.message); });
+  });
 
   /* ONE definition of a paid webinar enrollment, shared with Meta:
    * a CONFIRMED registration with a payment Paystack verified (the attempt in

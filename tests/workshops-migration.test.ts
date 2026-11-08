@@ -16,6 +16,7 @@ const DOWN = await read('../supabase/migrations/rollback/20261103120000_workshop
 const pg = new PGlite()
 await pg.exec(await read('./fixtures/payment-ledger.sql'))
 await pg.exec(await read('./fixtures/supabase-stubs.sql'))
+await pg.exec(await read('./fixtures/graduate-records.sql'))
 
 const q = async (sql: string, v: unknown[] = []) => (await pg.query<Row>(sql, v)).rows
 const j = async (sql: string, v: unknown[] = []): Promise<any> => (await pg.query<{ j: any }>(`select ${sql} as j`, v)).rows[0].j
@@ -184,25 +185,43 @@ Deno.test('privileges: anon and authenticated cannot execute RPCs or read tokens
   assertEquals(rpc[0], { a: false, b: false, c: false, d: false, e: false })
 })
 
-Deno.test('admission migration: additive, reversible, and closed to anon and authenticated', async () => {
-  const ADM_UP = await read('../supabase/migrations/20261108120000_workshop_admission.sql')
-  const ADM_DOWN = await read('../supabase/migrations/rollback/20261108120000_workshop_admission_down.sql')
+Deno.test('release 2 (admission + benefits): additive, idempotent, reversible to the exact original functions, closed to anon', async () => {
+  const UP2 = await read('../supabase/migrations/20261109120000_workshop_admission_benefits.sql')
+  const DOWN2 = await read('../supabase/migrations/rollback/20261109120000_workshop_admission_benefits_down.sql')
   const cols = async (t: string) => (await q(`select column_name from information_schema.columns where table_name = $1 order by ordinal_position`, [t])).map((r) => r.column_name).join(',')
-  const before = { s: await cols('workshop_sessions'), r: await cols('workshop_registrations'), p: await cols('payment_events') }
-  await pg.exec(ADM_UP)
-  await pg.exec(ADM_UP) // idempotent
-  assert((await cols('workshop_sessions')).endsWith(',admission,calendar_event_id'))
-  assert((await cols('workshop_registrations')).endsWith(',attend_email,invited_email,invited_at,invite_removed_at'))
-  assertEquals(await cols('payment_events'), before.p, 'the shared ledger is untouched')
-  for (const fn of ['public.workshop_set_attend_email(uuid,text)', 'public.workshop_admin_admission(text,uuid,text,text)']) {
+  // Compared without line endings: a Windows checkout loads CRLF files, CI loads LF.
+  const body = async (fn: string) => String((await q(`select prosrc from pg_proc where proname = $1`, [fn]))[0].prosrc).replace(/\r\n/g, '\n')
+  const before = {
+    s: await cols('workshop_sessions'), r: await cols('workshop_registrations'), p: await cols('payment_events'),
+    e: await cols('enrollments'), c: await cols('credentials'),
+    reg: await body('workshop_register'), start: await body('workshop_start_attempt'), seats: await body('workshop_seats_in_use'),
+  }
+  await pg.exec(UP2)
+  await pg.exec(UP2) // idempotent
+  for (const c of ['admission', 'calendar_event_id', 'foundations_discount_pct', 'graduate_free', 'reserved_graduate_seats', 'referral_commission_ghs']) {
+    assert((await cols('workshop_sessions')).split(',').includes(c), c)
+  }
+  for (const c of ['attend_email', 'invited_email', 'price_tier', 'benefit_credential_id', 'referral_code']) {
+    assert((await cols('workshop_registrations')).split(',').includes(c), c)
+  }
+  assertEquals([await cols('payment_events'), await cols('enrollments'), await cols('credentials')], [before.p, before.e, before.c],
+    'the training ledger, enrollments and the certificate register are untouched')
+  for (const fn of ['workshop_set_attend_email(uuid,text)', 'workshop_admin_admission(text,uuid,text,text)', 'workshop_benefit_tier(text,text)',
+    'workshop_obligations_met(uuid)', 'workshop_admin_referral(text,text,text,uuid,text)', 'workshop_register(text,text,text,text,boolean,text,text,jsonb,boolean,numeric,timestamptz)']) {
     for (const role of ['anon', 'authenticated']) {
-      assertEquals((await q(`select has_function_privilege($1, $2, 'execute') ok`, [role, fn]))[0].ok, false, role + ' ' + fn)
+      assertEquals((await q(`select has_function_privilege($1, $2, 'execute') ok`, [role, 'public.' + fn]))[0].ok, false, role + ' ' + fn)
     }
   }
-  // Existing sessions default to emailed joining details.
+  for (const t of ['workshop_referrers', 'workshop_referral_payouts']) {
+    assertEquals((await q(`select has_table_privilege('anon', $1, 'select') ok`, ['public.' + t]))[0].ok, false, t)
+  }
+  // Defaults leave every existing session exactly as it behaved.
   await session()
-  assertEquals((await q(`select admission from public.workshop_sessions`))[0].admission, 'link')
-  await pg.exec(ADM_DOWN)
+  assertEquals((await q(`select admission, foundations_discount_pct, graduate_free, reserved_graduate_seats from public.workshop_sessions`))[0],
+    { admission: 'link', foundations_discount_pct: 0, graduate_free: false, reserved_graduate_seats: 0 })
+  await pg.exec(DOWN2)
   assertEquals([await cols('workshop_sessions'), await cols('workshop_registrations')], [before.s, before.r])
-  await pg.exec(ADM_UP)
+  assertEquals([await body('workshop_register'), await body('workshop_start_attempt'), await body('workshop_seats_in_use')],
+    [before.reg, before.start, before.seats], 'rollback restores the original function bodies exactly')
+  await pg.exec(UP2)
 })

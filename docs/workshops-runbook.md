@@ -21,13 +21,14 @@ project (owner-approved); see "Where it stands". Live checkout is off._
 | Get Paid for Automation, workshop 01 | Page file published; database row **`draft`**, so it shows "Registration isn't open yet" and cannot take a booking |
 | Workshop 01 joining details | **Stored on the row** (8 November 2026): Google Meet link and joining instructions. Never in this repository, which is public |
 | Webinar and workshop refund policy | **Drafted, not approved**: `content/workshops/refund-policy.json`, `"approved": false`. Nothing published |
-| Admission by Calendar invitation | **Built, migration not applied.** `20261108120000_workshop_admission.sql` is on the branch only. Until it is applied every session reads as `link` |
+| Release 2: admission, prices, benefits, referrals | **Built and tested, not applied.** `20261109120000_workshop_admission_benefits.sql` is on the branch only. Until it is applied every session reads as `link` at its own `price_ghs` |
+| Workshop 01 price | **GHS 350** on the draft row (9 November 2026); test transactions untouched |
 
 ## Joining: Google Meet by Calendar invitation
 
 Each workshop has its own Google Calendar event and its own Meet link, on the owner's calendar,
 with Meet's access restricted to invited guests. A session with `admission = 'invite'`
-(migration `20261108120000_workshop_admission.sql`) is joined **only** by Google accounts on that
+(migration `20261109120000_workshop_admission_benefits.sql`) is joined **only** by Google accounts on that
 event. Nothing in this repository creates or edits a Calendar event.
 
 **What the participant gives us.** The paid form asks for the Google account they will join with
@@ -45,11 +46,11 @@ invitation-only session it derives:
 
 | List | Who | What the admin does |
 |---|---|---|
-| Add to the event | `confirmed` (Paystack-verified, or admitted from review) with an account not on the event | Copy the addresses, add them as guests on that session's event, choose **Send** when Calendar asks, then click "Added in Calendar" |
+| Add to the event | `confirmed` and either paid (Paystack-verified, or admitted from review) or a complimentary graduate place still matching an active entitlement, with an account not on the event | Copy the addresses, add them as guests on that session's event, choose **Send** when Calendar asks, then click "Added in Calendar" |
 | Remove from the event | An account on the event whose registration is no longer `confirmed` (refund requested, refunded, cancelled) or that was replaced | Remove the guest in Calendar, then click "Removed in Calendar" |
 | Paid, no Google account yet | `confirmed` without an account | Email them; set it with "Set Google account" |
 
-The database refuses to record an invitation for a registration that is not `confirmed`, a second
+The database refuses to record an invitation for a registration that is not `confirmed` and paid or legitimately free, a graduate place whose entitlement has lapsed, a second
 registration with the same account, or a new account while the old one is still on the event.
 "Added" twice is a no-op. Account changes are made only on a request from the registered email.
 
@@ -91,44 +92,64 @@ The site cannot test Google's side. Do this on workshop 01's event:
 4. Sign out of Google and open the link. The same result as B.
 5. Remove A, then try A again. A should now be treated like B.
 6. Check that A's invitation shows no other guests.
-7. Run a call with three or more people past 60 minutes. A free personal account ends group calls
-   at 60 minutes.
+7. Run a call with three or more people past 60 minutes, hosted by the account that owns the event.
 
 Record the results in the PR before opening registration.
+
+## Prices, certificate benefits, reserved places and referrals
+
+Part 2 of migration `20261109120000_workshop_admission_benefits.sql`. The database decides every price; the page
+only describes it.
+
+| Who | Price | Checked against |
+|---|---|---|
+| Anyone | `price_ghs` (GHS 350) | — |
+| Foundations certificate holder | `price_ghs` less `foundations_discount_pct` (20%: GHS 280) | `public.credentials`: `foundations`, valid, issued, not expired, `holder_email` = registration email |
+| Intermediate graduate | Free when `graduate_free`, in one of `reserved_graduate_seats` | PR #54's `private.studio_graduate_webinar_entitlements_by_certificate` = `active`, credential valid and issued, `holder_email` = registration email, and the training enrollment paid in full with no installment owing |
+
+- **The certificate ID and the email must both match.** Certificate IDs are public (LinkedIn), so an ID alone proves nothing. A claim that does not match registers nobody and charges nothing (`benefit_not_matched`).
+- **Places:** `capacity` is the **general** places (25). Graduates count only against `reserved_graduate_seats` (5), so the total is 30. Unused reserved places are not released to general registrants.
+- **Checkout** charges the price stored on the registration when it was created. A payment of any other amount is held as a mismatch, never confirmed.
+- **Invitations:** a complimentary graduate place is invited exactly like a paid one. The graduate is re-checked against the certificate register and entitlement at the moment of invitation.
+- **Referrals:** codes are issued from `/admin/workshops/` only to eligible graduates, one each (eight characters, A–Z and 2–9).
+  - A link is `/workshops/?ref=CODE` and is remembered for the browser tab.
+  - A code counts only when it is active, is not the referrer's own registration, and is not a complimentary place.
+  - Commission is `referral_commission_ghs` (GHS 50) on a confirmed, fully paid registration. It is **derived**, not stored as owed.
+  - The admin pays by MoMo, then records the reference. Each registration can be paid once.
+  - A refund after payout shows as "review"; nothing is clawed back automatically. No Paystack split or subaccount is used.
+- Verified read-only on 9 November 2026: the rules match exactly the **2** active graduate entitlements and **10** valid Foundations certificates.
 
 ## Go-live: Get Paid for Automation, workshop 01
 
 Each line needs owner approval. Order matters: the row opens registration, so it goes last.
 
-1. **Meeting length and access.** Run the access test above, including the 60-minute check.
-2. **Refund policy.** The owner approves the wording in `content/workshops/refund-policy.json`.
-   Then, in one commit: set `"approved": true` and `"version"` to the effective date (`YYYY-MM-DD`),
-   and set `TERMS_VERSION` in `functions/api/_workshops.js` to the same date. The build then
-   publishes `/workshops/refund-policy` and points every paid form's checkbox at it. A test fails
-   if the two versions differ.
-3. **Apply `20261108120000_workshop_admission.sql`** (additive; rollback in `migrations/rollback/`),
-   then set workshop 01 to join by invitation:
-   `update public.workshop_sessions set admission = 'invite', calendar_event_id = '<event id>' where slug = 'what-to-charge-for-automation';`
-   **This must happen before registration opens.** Without it the email would fall back to printing
-   the joining link, which only invited accounts can use.
-4. **Rehearsal (optional, test mode).** Merge this branch into `webinar-e2e-test`, set the test
-   session to `admission = 'invite'` and `published`, register with a Google account you control,
-   pay once with Paystack test MoMo, add the account from `/admin/workshops/` (on a test event, not
-   workshop 01's), check both emails, then set the session back to `draft`.
-5. **Merge PR #61.** This publishes `/workshops` (the series, workshop 01 and nine coming-soon pages)
-   with registration still closed.
-6. **Repoint the dispatcher** to production:
+1. **Google Meet.** On the host account, confirm it is a Google One plan of **2 TB or more**. Google's help says those plans host group calls of up to 100 people for up to 24 hours; 100 GB Basic and free accounts stop at 60 minutes. Then run the access test above, with a real call of three or more people past 60 minutes.
+2. **Refund policy: legal review, then approval.** In `content/workshops/refund-policy.json` set `"legal_review": "complete"`, `"approved": true` and `"version"` to the effective date. Set `TERMS_VERSION` in `functions/api/_workshops.js` to the same date, in the same commit. The build refuses approval without the legal review, and a test fails if the versions differ.
+3. **Back up**, then **apply `20261109120000_workshop_admission_benefits.sql`**. It is additive: new columns with defaults, two new tables, new functions, and three workshop functions replaced in place with unchanged signatures. Rollback is `rollback/20261109120000_workshop_admission_benefits_down.sql`, which restores those three functions verbatim. Check afterwards: the 19 protected checks are unchanged, and the cohort `paystack-webhook` checksum is unchanged.
+4. **Configure workshop 01** (the row is `draft`; its price is already 350):
+   ```sql
+   update public.workshop_sessions
+      set admission = 'invite', calendar_event_id = '<event id>', capacity = 25, reserved_graduate_seats = 5,
+          foundations_discount_pct = 20, graduate_free = true, referral_commission_ghs = 50
+    where slug = 'what-to-charge-for-automation' and status = 'draft';
+   ```
+   **This must happen before registration opens.** Without it, emails fall back to printing the joining link.
+5. **Rehearsal (test mode, recommended).** Merge this branch into `webinar-e2e-test` and configure the test session the same way. Then:
+   - Register once at the standard price, once with a Foundations certificate, and once as a graduate (with your own records), paying with Paystack test MoMo.
+   - Add the accounts from `/admin/workshops/` to a **test** Calendar event.
+   - Set the test session back to `draft`.
+6. **Merge PR #61.** This publishes `/workshops` with registration still closed.
+7. **Repoint the dispatcher** to production:
    `select cron.alter_job((select jobid from cron.job where jobname = 'workshop-dispatch'), command := replace((select command from cron.job where jobname = 'workshop-dispatch'), 'webinar-e2e-test.bulletproofautomations-training.pages.dev', 'training.bulletproofautomations.com'));`
-7. **Live keys:**
+8. **Live keys:**
    - Webinars business: set the **live** webhook URL (same function URL as test).
-   - Supabase secret `WORKSHOP_PAYSTACK_SECRET_KEY` = Webinars **live** key.
-   - Cloudflare **Production** `WORKSHOP_PAYSTACK_SECRET_KEY` = the same live key, and
-     `WORKSHOP_PAID_CHECKOUT=on`. Redeploy.
+   - Supabase secret `WORKSHOP_PAYSTACK_SECRET_KEY` = the Webinars **live** key.
+   - Cloudflare **Production** `WORKSHOP_PAYSTACK_SECRET_KEY` = the same key, and `WORKSHOP_PAID_CHECKOUT=on`. Redeploy.
    - Never put the live key in Preview.
-8. **Open registration:**
+9. **Open registration:**
    `update public.workshop_sessions set status = 'published' where slug = 'what-to-charge-for-automation';`
-   The page switches to the form without a deploy. To close it again, set it back to `draft`.
    From then on, work the invitation panel daily.
+10. **Referral codes, separately.** Issue them from `/admin/workshops/` only when you decide to share them. Issuing a code publishes nothing.
 
 
 Workshops 02 to 10 have no database row and no form. Scheduling one later means a session file with
@@ -271,7 +292,7 @@ and redeploy.
 3. Keep `workshop-paystack-webhook` deployed while any webinar payment or refund may still arrive.
    The training side never needs rolling back.
 4. Export first, then run the rollback SQL only if the data is no longer needed:
-   `20261108120000_workshop_admission_down.sql` first, then `20261103120000_workshops_down.sql`.
+   `20261109120000_workshop_admission_benefits_down.sql` first, then `20261103120000_workshops_down.sql`.
 
 ## Meta ads: URL parameters
 

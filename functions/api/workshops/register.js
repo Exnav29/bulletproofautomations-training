@@ -55,6 +55,14 @@ export async function onRequestPost(context) {
   // the payment email. Required for an invitation-only session.
   const attendEmail = str(body.attend_email, 160).toLowerCase();
   if (attendEmail && !looksLikeEmail(attendEmail)) return refuse("attend-email-invalid");
+  // A Foundations or Intermediate certificate ID claims a benefit. The database
+  // decides: it must belong to the registration email in the certificate
+  // register, so a certificate ID alone (they are public) proves nothing.
+  const certificateId = str(body.certificate_id, 40).toUpperCase();
+  if (certificateId && !/^[A-Z0-9][A-Z0-9-]{5,39}$/.test(certificateId)) return refuse("certificate-id-invalid");
+  // A referrer's code, from the link they shared. Unknown or inactive codes
+  // are dropped by the database, never refused, so a stale link still works.
+  const referralCode = /^[A-Za-z2-9]{8}$/.test(str(body.ref, 16)) ? str(body.ref, 16).toUpperCase() : "";
 
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return refuse("supabase-not-configured", 503);
   if (!attendEmail && await sessionAdmission(env, slug) === "invite") {
@@ -75,7 +83,8 @@ export async function onRequestPost(context) {
     p_whatsapp_consent: whatsapp ? body.whatsapp_consent === true : false,
     p_terms_version: TERMS_VERSION,
     p_token_hash: await sha256Hex(token),
-    p_attribution: cleanAttribution(body.attribution, request, adConsent),
+    p_attribution: Object.assign(cleanAttribution(body.attribution, request, adConsent),
+      { benefit_credential_id: certificateId || null, referral_code: referralCode || null }),
     p_ad_consent: adConsent,
     p_displayed_price: displayedPrice,
     p_displayed_starts_at: displayedStart
@@ -90,6 +99,8 @@ export async function onRequestPost(context) {
   if (r.outcome === "closed") return json({ ok: false, code: "closed" }, 409);
   if (r.outcome === "full") return json({ ok: false, code: "full" }, 409);
   if (r.outcome === "stale_page") return json({ ok: false, code: "stale_page" }, 409);
+  if (r.outcome === "benefit_not_matched") return json({ ok: false, code: "benefit_not_matched" }, 409);
+  if (r.outcome === "benefit_not_available") return json({ ok: false, code: "benefit_not_available" }, 409);
   if (r.outcome !== "created" && r.outcome !== "existing") return refuse("register-unexpected", 502);
 
   // First write wins (the RPC only fills an empty value), so re-submitting the
@@ -101,7 +112,8 @@ export async function onRequestPost(context) {
 
   const ids = eventIds(r.registration_id);
   const origin = new URL(request.url).origin;
-  const base = { ok: true, token: token, registration: r.outcome, events: {} };
+  const base = { ok: true, token: token, registration: r.outcome, events: {},
+    price_ghs: Number(r.price_ghs), price_tier: r.price_tier || "standard" };
 
   if (r.status !== "pending_payment" || r.payment_status === "needs_review") {
     const state = stateFor(r.status, r.payment_status);
