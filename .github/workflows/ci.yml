@@ -21,15 +21,20 @@ jobs:
         run: npm run build
       - name: Validate HTML
         run: npx --yes html-validate "dist/**/*.html"
-      # Webinar pages render only from published content, and none is published yet,
-      # so build the test fixtures separately to validate the generated markup.
-      - name: Validate generated webinar pages (test fixtures, never deployed)
+      # Webinar pages render only from published content. The fixtures cover the
+      # states the real content does not (a free session, several sessions); the
+      # real build must publish Get Paid for Automation with exactly one bookable
+      # workshop and nine coming-soon pages that carry no registration form.
+      - name: Validate generated webinar pages (test fixtures and the real series)
         run: |
           WORKSHOP_CONTENT_DIR=tests/fixtures/workshops npm run build
           test -f dist/workshops/sample-webinar/index.html
           npx --yes html-validate "dist/workshops/**/*.html"
           npm run build
-          test ! -e dist/workshops
+          test -f dist/workshops/index.html
+          test "$(grep -l 'data-ws-form' dist/workshops/*/index.html | wc -l)" -eq 1
+          grep -q 'data-ws-form' dist/workshops/what-to-charge-for-automation/index.html
+          test "$(grep -l 'data-ws-page="planned"' dist/workshops/*/index.html | wc -l)" -eq 9
       - name: Check admin JavaScript and certificate archive
         run: |
           node --check assets/js/admin-console.js
@@ -151,7 +156,10 @@ jobs:
           # Root-relative links resolve against the BUILT site, not production. Against
           # production a link to a route this PR adds (e.g. /admin/workshops/) fails
           # until merge, and a route production happens to serve passes even if this
-          # build dropped it. External links are still checked online.
+          # build dropped it. External links are still checked online. The /workshops
+          # pages' own absolute canonical and og:url addresses are excluded: production
+          # cannot serve them before merge. Every root-relative link to them is still
+          # checked against dist.
           args: >-
             --root-dir ${{ github.workspace }}/dist
             --index-files index.html
@@ -161,6 +169,7 @@ jobs:
             --retry-wait-time 2
             --accept '100..=103,200..=299,403'
             --exclude '^https://n8n\.bulletproofautomations\.com/webhook/nfc-lead-capture$'
+            --exclude '^https://training\.bulletproofautomations\.com/workshops'
             './dist/**/*.html'
         env:
           GITHUB_TOKEN: ${{ github.token }}
