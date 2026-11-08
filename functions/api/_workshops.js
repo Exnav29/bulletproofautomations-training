@@ -184,6 +184,22 @@ export function rest(env, path, init) {
   }));
 }
 
+/* Call a Postgres function that returns void. PostgREST answers those with an
+   empty body, which the shared rpc() parses as JSON and throws on, so these
+   calls check the status only. Never throws: a failure is reported, and the
+   caller's row stays where it was (an email left "sending" is reclaimed after
+   ten minutes; a sent one is never resent, because it is marked sent first). */
+export async function rpcVoid(env, name, args) {
+  try {
+    const res = await rest(env, "rpc/" + name, { method: "POST", body: JSON.stringify(args) });
+    if (!res.ok) return { ok: false, reason: "rpc-" + name + "-" + res.status };
+    await res.text();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: "rpc-" + name + "-unreachable" };
+  }
+}
+
 /* ---------------------------------------------------------------------------
    Server-side verification of one reference against Paystack, applied through
    the same idempotent RPC the webhook uses. Returns the RPC outcome, or null
@@ -378,7 +394,7 @@ export async function processOutbox(env, origin, limits) {
       const sent = await sendConversions(env, origin, events, function (ids) { return loadForMeta(env, ids); });
       for (const ev of events) {
         const ok = sent.ok && !sent.failedIds.includes(ev.id);
-        await rpc(env, "workshop_finish_meta_event", { p_id: ev.id, p_ok: ok, p_error: ok ? null : sent.reason || "send-failed" });
+        await rpcVoid(env, "workshop_finish_meta_event", { p_id: ev.id, p_ok: ok, p_error: ok ? null : sent.reason || "send-failed" });
         if (ok) report.meta.sent += 1; else report.meta.failed += 1;
       }
     }
@@ -403,7 +419,7 @@ async function loadForMeta(env, registrationIds) {
 
 async function deliverNotification(env, origin, n) {
   const finish = async function (ok, error) {
-    await rpc(env, "workshop_finish_notification", { p_id: n.id, p_ok: ok, p_error: error || null });
+    await rpcVoid(env, "workshop_finish_notification", { p_id: n.id, p_ok: ok, p_error: error || null });
   };
   const regRes = await rest(env, "workshop_registrations?select=*&id=eq." + encodeURIComponent(n.registration_id) + "&limit=1");
   const reg = regRes.ok ? (await regRes.json().catch(function () { return []; }))[0] : null;

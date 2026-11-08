@@ -19,7 +19,7 @@ import { json, refuse, readJson, str, rpc } from "../_shared.js";
 import { resolveTier, channelsFor } from "../_regions.js";
 import {
   WORKSHOP_APP, TERMS_VERSION, mintWorkshopReference, newToken, sha256Hex,
-  checkoutMode, cleanAttribution, eventIds, processOutbox, initializeWorkshopCheckout
+  checkoutMode, cleanAttribution, eventIds, processOutbox, initializeWorkshopCheckout, rpcVoid
 } from "../_workshops.js";
 
 function looksLikeEmail(value) {
@@ -140,7 +140,7 @@ export async function onRequestPost(context) {
   if (!init.ok) {
     // The attempt keeps its reference; it is marked, not deleted. A retry mints a new one.
     console.log("workshop-initialize-failed:", init.reason);
-    await rpc(env, "workshop_attempt_init_failed", { p_reference: reference, p_note: init.reason });
+    await rpcVoid(env, "workshop_attempt_init_failed", { p_reference: reference, p_note: init.reason });
     return json(Object.assign(base, { state: "pending_payment", checkout: "unavailable", retry: true }));
   }
 
