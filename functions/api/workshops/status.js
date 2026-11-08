@@ -14,7 +14,7 @@
  * No name, email or WhatsApp is ever returned. */
 
 import { json, readJson, rpc } from "../_shared.js";
-import { sha256Hex, looksLikeToken, looksLikeReference, verifyAndApply, eventIds, processOutbox } from "../_workshops.js";
+import { sha256Hex, looksLikeToken, looksLikeReference, verifyAndApply, eventIds, processOutbox, sessionAdmission } from "../_workshops.js";
 
 const UNKNOWN = { ok: true, state: "unknown" };
 
@@ -75,7 +75,9 @@ export async function onRequestPost(context) {
     review_reason: s.review_reason || null,
     email_sent: s.email_sent === true,
     amount_ghs: Number(s.amount_ghs),
-    session: s.session,
+    // How this session is joined, so the page never offers a calendar file
+    // that would duplicate a Google Calendar invitation.
+    session: s.session ? Object.assign({}, s.session, { admission: await sessionAdmission(env, s.session.slug) }) : s.session,
     events: events
   });
 }

@@ -247,6 +247,21 @@ export function formatWhen(session) {
     ghana: span("Africa/Accra") + " (GMT)", lagos: span("Africa/Lagos") + " (WAT)" };
 }
 
+/* "invite": the session is joined only by Google accounts on its Calendar
+   event (migration 20261108120000). "link": joining instructions are emailed.
+   A database without the admission column, or any failure, reads as "link",
+   so registration and payment never depend on this lookup. */
+export async function sessionAdmission(env, slug) {
+  try {
+    const res = await rest(env, "workshop_sessions?select=admission&slug=eq." + encodeURIComponent(slug) + "&limit=1");
+    if (!res.ok) { await res.text(); return "link"; }
+    const row = (await res.json().catch(function () { return []; }))[0];
+    return row && row.admission === "invite" ? "invite" : "link";
+  } catch (err) {
+    return "link";
+  }
+}
+
 /* The first https link in a session's private joining instructions: the
    button in the email and the LOCATION of the calendar file. */
 export function joinUrl(session) {
@@ -337,10 +352,22 @@ export function emailFor(kind, registration, session, links, env) {
     ["Duration", session.duration_minutes + " minutes"],
     ["Format", session.format]
   ];
-  const join = session.join_instructions
-    ? String(session.join_instructions).trim()
-    : "We will email your joining link before the session starts.";
-  const url = joinUrl(session);
+  // An invitation-only session never prints a joining link: it works only for
+  // the Google account on the Calendar event, and Google sends that account
+  // the invitation with the link. Printing it here would hand people a link
+  // they cannot use, and a calendar file would duplicate the invitation.
+  const invite = session.admission === "invite";
+  const attend = registration.attend_email || "";
+  const join = invite
+    ? (attend
+      ? "You join with a Google Calendar invitation. We add " + attend + " to the workshop's invitation after your payment is confirmed, and Google emails that account an invitation with the Google Meet link.\n\n" +
+        "Open the Meet link from that invitation while signed in to " + attend + ". Other Google accounts cannot get in.\n\n" +
+        "To use a different Google account, reply to this email before the workshop and tell us which one."
+      : "You join with a Google Calendar invitation, and we do not have the Google account you will join with yet. Reply to this email with that Google account so we can add it. Only accounts on the invitation can get in.")
+    : session.join_instructions
+      ? String(session.join_instructions).trim()
+      : "We will email your joining link before the session starts.";
+  const url = invite ? null : joinUrl(session);
   const joinLabel = url && /^https:\/\/meet\.google\.com\//.test(url) ? "Join on Google Meet" : "Open the joining link";
   // Escaped first, then any https link made clickable, so nothing in the
   // stored text can inject markup.
@@ -393,7 +420,7 @@ export function emailFor(kind, registration, session, links, env) {
     (showJoin ? '<div style="padding:16px;background:#f3efe5;border-radius:10px;font-size:15px;line-height:1.55;margin-bottom:18px">' +
       '<strong>How to join</strong><br>' + joinHtml + "</div>" : "") +
     (showJoin && url ? '<p style="margin:0 0 14px"><a href="' + esc(url) + '" style="display:inline-block;background:#116149;color:#fff;text-decoration:none;padding:12px 16px;border-radius:10px;font-weight:700">' + esc(joinLabel) + "</a></p>" : "") +
-    (showJoin ? '<p style="margin:0;font-size:14px;line-height:1.6">Add it to your calendar: ' +
+    (showJoin && !invite ? '<p style="margin:0;font-size:14px;line-height:1.6">Add it to your calendar: ' +
       '<a href="' + esc(googleCalendarLink(session)) + '" style="color:#116149;font-weight:700">Google Calendar</a>' +
       (links.calendar ? ' or <a href="' + esc(links.calendar) + '" style="color:#116149;font-weight:700">other calendars (.ics)</a>' : "") + "</p>" : "") +
     '<p style="font-size:13px;line-height:1.5;color:#52615b;margin:22px 0 0">' + esc(help) + '</p>' +
@@ -403,8 +430,8 @@ export function emailFor(kind, registration, session, links, env) {
     "</div></body></html>";
   const text = lead + "\n\n" + session.title + "\n" + facts.map(function (f) { return f[0] + ": " + f[1]; }).join("\n") +
     "\n\n" + body + (showJoin ? "\n\nHow to join:\n" + join : "") +
-    (showJoin ? "\n\nAdd to Google Calendar: " + googleCalendarLink(session) : "") +
-    (showJoin && links.calendar ? "\nAdd to other calendars (.ics): " + links.calendar : "") +
+    (showJoin && !invite ? "\n\nAdd to Google Calendar: " + googleCalendarLink(session) : "") +
+    (showJoin && !invite && links.calendar ? "\nAdd to other calendars (.ics): " + links.calendar : "") +
     "\n\n" + help + "\n\nBulletproof Automations Training";
   return { subject: subject, html: html, text: text };
 }

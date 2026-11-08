@@ -12,6 +12,7 @@
   "format": "live online",
   "price_ghs": 250,
   "capacity": 25,
+  "admission": "invite",
   "audience": "Automation practitioners who want to price paid work with confidence",
   "why": [
     "You can build automations and deliver projects. Then a client asks how much the work will cost, and the number you give is a guess.",
@@ -51,7 +52,7 @@
     { "q": "Is this a certification?", "a": "No. It is a training workshop. It does not award, and does not count towards, any Bulletproof Automations certification." },
     { "q": "Do I have to take the whole series?", "a": "No. Each workshop in Get Paid for Automation stands alone. Take the ones you need, in any order." },
     { "q": "How do I pay?", "a": "Register on this page, then pay GHS 250 on Paystack's secure checkout by mobile money or card. Your place is confirmed when Paystack confirms the payment, and your confirmation email follows." },
-    { "q": "How do I join?", "a": "Live on Google Meet. Your joining link comes in your confirmation email once Paystack confirms your payment, with a calendar entry you can add. Join from a laptop if you can, a few minutes before 11:30 AM Ghana time, using the name you registered with so we can let you in." },
+    { "q": "How do I join?", "a": "Live on Google Meet, by invitation. When you register, give us the Google account you will join with. Once Paystack confirms your payment, we add that account to the workshop's Google Calendar invitation, and Google emails it the Meet link. Only invited accounts can get in, so join signed in to that account, from a laptop if you can." },
     { "q": "Will this make me money?", "a": "It will help you price work accurately and explain your price with confidence. It cannot guarantee clients, contracts or income. Those depend on your market, your skills and your effort." }
   ]
 }

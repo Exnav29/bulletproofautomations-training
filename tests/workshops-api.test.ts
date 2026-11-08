@@ -11,7 +11,7 @@ import { loadDatabase, serveDatabase } from './helpers/postgrest.ts'
 type Row = Record<string, any>
 const u = (p: string) => new URL(p, import.meta.url)
 const pg = await loadDatabase([u('./fixtures/payment-ledger.sql'), u('./fixtures/supabase-stubs.sql'),
-  u('../supabase/migrations/20261103120000_workshops.sql')])
+  u('../supabase/migrations/20261103120000_workshops.sql'), u('../supabase/migrations/20261108120000_workshop_admission.sql')])
 const DB = serveDatabase(pg, 54341)
 
 const register = (await import('../functions/api/workshops/register.js')).onRequestPost
@@ -443,4 +443,101 @@ Deno.test('Meet: a refund before the email goes out stops it, and a refunded reg
   assertEquals([out.json.report.emails.sent, out.json.report.emails.skipped], [0, 1])
   assertEquals(mail.length, 0)
   assertEquals((await call(calendar, '/api/workshops/calendar?t=' + r.json.token, null)).status, 404)
+})
+
+// --- admission by Google Calendar invitation ------------------------------------------------
+
+const adminEnv = { Authorization: 'Bearer admin-jwt' }
+const admit = (id: string, action: string, email?: string) =>
+  call(adminAction, '/api/admin/workshops', { registration_id: id, action, ...(email ? { email } : {}) }, ENV, adminEnv)
+const regRow = async (email = 'ama@example.com') =>
+  (await rows(`select * from public.workshop_registrations where email_normalized = $1`, [email]))[0]
+
+Deno.test('invite: an invitation-only session refuses a registration without a Google account, and writes nothing', opts, async () => {
+  await reset({ ...W01, admission: 'invite' })
+  const r = await call(register, '/api/workshops/register', form({ testOptIn: true }))
+  assertEquals([r.status, r.json.code], [400, 'attend_email_required'])
+  assertEquals((await rows(`select count(*)::int n from public.workshop_registrations`))[0].n, 0)
+  assertEquals(paystack.initialized.length, 0)
+  const bad = await call(register, '/api/workshops/register', form({ testOptIn: true, attend_email: 'not-an-email' }))
+  assertEquals(bad.status, 400)
+})
+
+Deno.test('invite: the Google account is stored once; re-submitting with the same payment email cannot redirect it', opts, async () => {
+  await reset({ ...W01, admission: 'invite' })
+  await call(register, '/api/workshops/register', form({ testOptIn: true, attend_email: 'Ama.Meet@Gmail.com ' }))
+  assertEquals((await regRow()).attend_email, 'ama.meet@gmail.com')
+  const again = await call(register, '/api/workshops/register', form({ testOptIn: true, attend_email: 'intruder@gmail.com' }))
+  assertEquals(again.json.registration, 'existing')
+  assertEquals((await regRow()).attend_email, 'ama.meet@gmail.com', 'first write wins')
+})
+
+Deno.test('invite: the confirmation explains the invitation, carries no Meet link and no calendar file', opts, async () => {
+  await reset({ ...W01, admission: 'invite', starts_at: '2026-12-12T11:30:00Z' })
+  const r = await call(register, '/api/workshops/register', form({ testOptIn: true, attend_email: 'ama.meet@gmail.com' }))
+  await pg.query(`select public.workshop_apply_charge(p_reference => $1, p_amount_minor => 25000, p_currency => 'GHS',
+    p_domain => 'test', p_paid_at => now(), p_via => 'webhook')`, [r.json.reference])
+  assertEquals((await dispatchNow()).json.report.emails.sent, 1)
+  const m = mail[0]
+  assert(!JSON.stringify(m).includes('meet.google.com'), 'no joining link before the invitation exists')
+  assert(!m.text.includes('calendar.google.com') && !m.text.includes('/api/workshops/calendar'), 'no second calendar entry')
+  assert(m.text.includes('ama.meet@gmail.com') && m.text.includes('Google Calendar invitation'))
+  assert(m.text.includes('Ghana time: 11:30 AM–2:30 PM (GMT)') && m.text.includes('Lagos time: 12:30 PM–3:30 PM (WAT)'))
+  const tokenRow = (await rows(`select count(*)::int n from public.workshop_status_tokens`))[0].n
+  assert(tokenRow >= 1)
+  // The browser's own token: no .ics for an invitation-only session.
+  assertEquals((await call(calendar, '/api/workshops/calendar?t=' + r.json.token, null)).status, 404)
+  const st = await call(status, '/api/workshops/status', { token: r.json.token, reference: r.json.reference })
+  assertEquals([st.json.state, st.json.session.admission], ['confirmed', 'invite'])
+  assert(!st.text.includes('ama.meet@gmail.com') && !st.text.includes('meet.google.com'), 'status reveals no account or link')
+})
+
+Deno.test('invite: only a paid, confirmed registration can be marked invited; refunds and account changes surface as removals', opts, async () => {
+  await reset({ ...W01, admission: 'invite' })
+  const r = await call(register, '/api/workshops/register', form({ testOptIn: true, attend_email: 'ama.meet@gmail.com' }))
+  const id = (await regRow()).id
+  // Not admin: refused. Unpaid: refused.
+  assertEquals((await call(adminAction, '/api/admin/workshops', { registration_id: id, action: 'mark_invited' })).status, 403)
+  const early = await admit(id, 'mark_invited')
+  assertEquals(early.status, 409)
+  assert(early.json.error.includes('confirmed, paid'))
+  // Paid: invited once; a second click changes nothing.
+  await pg.query(`select public.workshop_apply_charge(p_reference => $1, p_amount_minor => 25000, p_currency => 'GHS',
+    p_domain => 'test', p_paid_at => now(), p_via => 'webhook')`, [r.json.reference])
+  assertEquals((await admit(id, 'mark_invited')).json.ok, true)
+  assertEquals((await admit(id, 'mark_invited')).json.already, true)
+  let row = await regRow()
+  assertEquals([row.invited_email, row.attend_email], ['ama.meet@gmail.com', 'ama.meet@gmail.com'])
+  // Account change: the old account must come off the event before the new one goes on.
+  assertEquals((await admit(id, 'set_attend_email', 'ama.work@gmail.com')).json.ok, true)
+  assertEquals((await admit(id, 'mark_invited')).status, 409, 'remove the old account first')
+  assertEquals((await admit(id, 'mark_removed')).json.ok, true)
+  assertEquals((await admit(id, 'mark_invited')).json.ok, true)
+  row = await regRow()
+  assertEquals(row.invited_email, 'ama.work@gmail.com')
+  // The same Google account cannot be invited for a second registration.
+  const k = await call(register, '/api/workshops/register', form({ testOptIn: true, email: 'kofi@example.com', attend_email: 'ama.work@gmail.com' }))
+  await pg.query(`select public.workshop_apply_charge(p_reference => $1, p_amount_minor => 25000, p_currency => 'GHS',
+    p_domain => 'test', p_paid_at => now(), p_via => 'webhook')`, [k.json.reference])
+  const kofi = (await regRow('kofi@example.com')).id
+  assertEquals((await admit(kofi, 'mark_invited')).status, 409)
+  // Refund: the registration stops being confirmed while its account is still on
+  // the event, which is exactly the "remove" condition the admin list shows.
+  await pg.query(`select public.workshop_apply_refund(p_reference => $1, p_amount_minor => 25000, p_domain => 'test')`, [r.json.reference])
+  row = await regRow()
+  assert(row.status !== 'confirmed' && row.invited_email === 'ama.work@gmail.com', 'refunded and still on the event: listed for removal')
+  assertEquals((await admit(id, 'mark_removed')).json.ok, true)
+  assertEquals((await regRow()).invited_email, null)
+  // A refunded registration cannot be invited again.
+  assertEquals((await admit(id, 'mark_invited')).status, 409)
+})
+
+Deno.test('invite: a link session refuses admission actions and still asks for no Google account', opts, async () => {
+  await reset({ ...W01 })
+  const r = await call(register, '/api/workshops/register', form({ testOptIn: true }))
+  assertEquals(r.status, 200)
+  const id = (await regRow()).id
+  const out = await admit(id, 'mark_invited')
+  assertEquals(out.status, 409)
+  assert(out.json.error.includes('not set to join by invitation'))
 })

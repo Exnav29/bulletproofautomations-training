@@ -5,7 +5,7 @@
  * cancelled or unpaid registration gets 404, the same as a wrong token. */
 
 import { rpc } from "../_shared.js";
-import { sha256Hex, looksLikeToken, calendarFile, rest } from "../_workshops.js";
+import { sha256Hex, looksLikeToken, calendarFile, rest, sessionAdmission } from "../_workshops.js";
 
 export async function onRequestGet({ request, env }) {
   const token = new URL(request.url).searchParams.get("t") || "";
@@ -13,6 +13,9 @@ export async function onRequestGet({ request, env }) {
   if (!looksLikeToken(token) || !env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return notFound;
   const found = await rpc(env, "workshop_status_for_token", { p_token_hash: await sha256Hex(token), p_reference: null });
   if (!found.ok || !found.data || found.data.state !== "known" || found.data.status !== "confirmed") return notFound;
+  // An invitation-only session is already on the participant's calendar
+  // through Google's invitation; a second event would be a duplicate.
+  if (await sessionAdmission(env, found.data.session.slug) === "invite") return notFound;
   const res = await rest(env, "workshop_sessions?select=id,slug,title,starts_at,duration_minutes,join_instructions&slug=eq." +
     encodeURIComponent(found.data.session.slug) + "&limit=1");
   const session = res.ok ? (await res.json().catch(function () { return []; }))[0] : null;

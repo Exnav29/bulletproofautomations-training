@@ -177,3 +177,18 @@ test("refund policy: approval needs a dated version that matches the terms versi
     assert.equal(draft.version, terms);
   }
 });
+
+test("invitation-only sessions ask for the Google account to join with; others do not", () => {
+  const live = ws.loadSessions(contentDir).filter((s) => s.status === "published");
+  assert.equal(live[0].admission, "invite", "workshop 01 is joined by Google Calendar invitation");
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), "ws-adm-"));
+  ws.render(live, out, ws.loadSeries(contentDir, ws.loadSessions(contentDir)), ws.loadPolicy(contentDir));
+  const w01 = fs.readFileSync(path.join(out, "workshops/what-to-charge-for-automation/index.html"), "utf8");
+  assert.match(w01, /name="attend_email" type="email"[^>]*required/);
+  assert.match(w01, /Google account to join with/);
+  assert.doesNotMatch(w01, /calendar file/, "the invitation is the calendar entry");
+  const other = fs.mkdtempSync(path.join(os.tmpdir(), "ws-adm-"));
+  ws.render([ws.validate(sample(), file("sample-webinar"))], other);
+  assert.doesNotMatch(fs.readFileSync(path.join(other, "workshops/sample-webinar/index.html"), "utf8"), /attend_email/);
+  assert.throws(() => ws.validate(Object.assign(sample(), { admission: "door" }), file("sample-webinar")), /admission must be/);
+});

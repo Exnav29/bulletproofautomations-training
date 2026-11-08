@@ -86,7 +86,9 @@
   function load() {
     show("ws-error", "");
     return Promise.all([
-      getJson("/rest/v1/workshop_sessions?select=id,slug,kind,title,starts_at,status,price_ghs,capacity&order=starts_at.desc"),
+      // admission and calendar_event_id arrive with migration 20261108120000; without it the page still loads.
+      getJson("/rest/v1/workshop_sessions?select=id,slug,kind,title,starts_at,status,price_ghs,capacity,admission,calendar_event_id&order=starts_at.desc")
+        .catch(function () { return getJson("/rest/v1/workshop_sessions?select=id,slug,kind,title,starts_at,status,price_ghs,capacity&order=starts_at.desc"); }),
       getJson("/rest/v1/workshop_registrations?select=*&order=created_at.desc"),
       getJson("/rest/v1/workshop_payment_attempts?select=registration_id,reference,status,amount_minor,received_minor,refunded_minor,mode,verified_via,created_at&order=created_at.asc")
     ]).then(function (out) {
@@ -136,7 +138,59 @@
     }
     if (r.review_reason === "duplicate_payment") b.push('<button class="mini" type="button" data-ws="resolve_duplicate" data-id="' + esc(r.id) + '">Note duplicate refund</button>');
     if (r.status === "pending_payment" && r.payment_status === "pending") b.push('<button class="mini" type="button" data-ws="cancel" data-id="' + esc(r.id) + '">Cancel</button>');
+    if (isInvite(r) && r.status === "confirmed") b.push('<button class="mini" type="button" data-ws-account="' + esc(r.id) + '">Google account</button>');
     return b.join(" ");
+  }
+
+  /* Admission by Google Calendar invitation. Nothing is stored about what to
+   * do next; it is derived here from the registration and what is on the event:
+   *   add     confirmed, with a Google account that is not on the event yet
+   *   remove  an account on the event whose registration is no longer
+   *           confirmed (refund, cancellation) or that was replaced
+   * Removals are listed first: a changed account is removed, then added. */
+  function isInvite(r) { var s = ws.sessions[r.session_id]; return !!(s && s.admission === "invite"); }
+  function toAdd(r) { return isInvite(r) && r.status === "confirmed" && !!r.attend_email && r.attend_email !== r.invited_email; }
+  function toRemove(r) { return isInvite(r) && !!r.invited_email && (r.status !== "confirmed" || r.attend_email !== r.invited_email); }
+  function noAccount(r) { return isInvite(r) && r.status === "confirmed" && !r.attend_email; }
+
+  function invites() {
+    var ids = Object.keys(ws.sessions).filter(function (id) { return ws.sessions[id].admission === "invite"; });
+    var total = 0;
+    var html = ids.map(function (id) {
+      var s = ws.sessions[id];
+      var mine = ws.rows.filter(function (r) { return r.session_id === id; });
+      var add = mine.filter(toAdd), remove = mine.filter(toRemove), missing = mine.filter(noAccount);
+      var onEvent = mine.filter(function (r) { return r.invited_email && !toRemove(r); }).length;
+      var seen = {}, dupes = [];
+      mine.filter(function (r) { return r.status === "confirmed" && r.attend_email; }).forEach(function (r) {
+        if (seen[r.attend_email]) dupes.push(r.attend_email);
+        seen[r.attend_email] = true;
+      });
+      total += add.length + remove.length + missing.length;
+      var who = function (r, email) {
+        var test = (ws.attempts[r.id] || []).some(function (a) { return a.mode === "test"; });
+        return "<strong>" + esc(r.full_name) + "</strong> " + esc(email) + (test ? ' <span class="tag tag--bad">TEST</span>' : "") +
+          " <small>(" + esc(STATUS[r.status] || r.status) + ")</small>";
+      };
+      return '<div class="ws-inv"><h4>' + esc(s.title) + " &mdash; " + esc(when(s.starts_at)) + "</h4>" +
+        "<p><small>Google Calendar event ID: " + esc(s.calendar_event_id || "not recorded") + ". On the event now: " + onEvent + ".</small></p>" +
+        (dupes.length ? '<p class="msg msg--bad">The same Google account is on more than one confirmed registration: ' + esc(dupes.join(", ")) + ". Invite it once.</p>" : "") +
+        (remove.length ? "<p><strong>Remove from the event</strong></p><ul>" + remove.map(function (r) {
+          return "<li>" + who(r, r.invited_email) + ' <button class="mini" type="button" data-ws="mark_removed" data-id="' + esc(r.id) + '">Removed in Calendar</button></li>';
+        }).join("") + "</ul>" : "") +
+        (add.length ? "<p><strong>Add to the event</strong> " +
+          '<button class="mini" type="button" data-ws-copy="' + esc(add.map(function (r) { return r.attend_email; }).join(", ")) + '">Copy ' + add.length + " address" + (add.length === 1 ? "" : "es") + "</button></p><ul>" +
+          add.map(function (r) {
+            return "<li>" + who(r, r.attend_email) + ' <button class="mini" type="button" data-ws="mark_invited" data-id="' + esc(r.id) + '">Added in Calendar</button></li>';
+          }).join("") + "</ul>" : "") +
+        (missing.length ? "<p><strong>Paid, no Google account yet</strong></p><ul>" + missing.map(function (r) {
+          return "<li>" + who(r, r.email_normalized) + ' <button class="mini" type="button" data-ws-account="' + esc(r.id) + '">Set Google account</button></li>';
+        }).join("") + "</ul>" : "") +
+        (!add.length && !remove.length && !missing.length ? '<p class="msg msg--empty">Nothing to do for this session.</p>' : "") +
+        "</div>";
+    }).join("");
+    $("ws-inv-count").textContent = total;
+    $("ws-invites").innerHTML = html || '<p class="msg msg--empty">No session is set to join by invitation.</p>';
   }
 
   function render() {
@@ -171,6 +225,7 @@
     }).join("") + "</ul>" : '<p class="msg msg--empty">Nothing waiting.</p>';
 
     campaigns(rows);
+    invites();
   }
 
   /* ONE definition of a paid webinar enrollment, shared with Meta:
@@ -228,8 +283,30 @@
   var CONFIRM = {
     request_refund: "Mark this registration for a refund? Issue the refund in the Paystack dashboard; the seat is released when Paystack reports it processed.",
     cancel: "Cancel this unpaid registration?",
-    resolve_duplicate: "Record that the duplicate payment will be refunded in Paystack?"
+    resolve_duplicate: "Record that the duplicate payment will be refunded in Paystack?",
+    mark_invited: "Have you added this Google account as a guest on the event in Google Calendar, with guests unable to see the guest list or invite others?",
+    mark_removed: "Have you removed this Google account from the event's guests in Google Calendar?"
   };
+
+  document.addEventListener("click", function (e) {
+    var copy = e.target.closest && e.target.closest("[data-ws-copy]");
+    if (copy) {
+      var text = copy.getAttribute("data-ws-copy");
+      (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject(new Error("no clipboard")))
+        .then(function () { show("ws-message", "Copied. Paste into the event's guest field in Google Calendar."); })
+        .catch(function () { window.prompt("Copy these addresses:", text); });
+      return;
+    }
+    var acct = e.target.closest && e.target.closest("[data-ws-account]");
+    if (!acct) return;
+    var id = acct.getAttribute("data-ws-account");
+    var r = ws.rows.filter(function (x) { return x.id === id; })[0] || {};
+    var email = window.prompt("Google account this participant will join with. Change it only on a request from their registered email (" + (r.email_normalized || "") + ").", r.attend_email || "");
+    if (!email) return;
+    apiPost({ registration_id: id, action: "set_attend_email", email: email.trim() })
+      .then(function () { show("ws-message", "Google account saved. Check the invitation lists."); return load(); })
+      .catch(function (err) { show("ws-error", err.message); });
+  });
 
   document.addEventListener("click", function (e) {
     var btn = e.target.closest && e.target.closest("[data-ws]");

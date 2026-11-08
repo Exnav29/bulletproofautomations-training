@@ -154,11 +154,18 @@
         input.setAttribute("aria-invalid", ok ? "false" : "true");
         if (!ok) bad.push(input);
       });
+      // Invitation-only sessions: the Google account that will be invited.
+      if (form.elements.attend_email) {
+        var attend = form.elements.attend_email;
+        var attendOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(attend.value.trim());
+        attend.setAttribute("aria-invalid", attendOk ? "false" : "true");
+        if (!attendOk) bad.push(attend);
+      }
       var phone = form.elements.whatsapp.value.trim();
       var phoneOk = !phone || phone.replace(/\D/g, "").length >= 7;
       form.elements.whatsapp.setAttribute("aria-invalid", phoneOk ? "false" : "true");
       if (!phoneOk) bad.push(form.elements.whatsapp);
-      if (bad.length) { showError("Check the highlighted details: your name, a working email address" + (phoneOk ? "" : ", and a full WhatsApp number") + "."); bad[0].focus(); return false; }
+      if (bad.length) { showError("Check the highlighted details: your name, a working email address" + (form.elements.attend_email ? ", the Google account you will join with" : "") + (phoneOk ? "" : ", and a full WhatsApp number") + "."); bad[0].focus(); return false; }
       if (!form.elements.ack_terms.checked) { showError(price > 0 ? "Tick the box to agree to the privacy notice and refund policy." : "Tick the box to agree to the privacy notice."); form.elements.ack_terms.focus(); return false; }
       showError("");
       return true;
@@ -193,6 +200,7 @@
         slug: slug,
         full_name: form.elements.full_name.value.trim(),
         email: form.elements.email.value.trim(),
+        attend_email: form.elements.attend_email ? form.elements.attend_email.value.trim() : "",
         whatsapp: form.elements.whatsapp.value.trim(),
         whatsapp_consent: form.elements.whatsapp_consent ? form.elements.whatsapp_consent.checked : false,
         ack_terms: form.elements.ack_terms.checked,
@@ -212,6 +220,7 @@
             stale_page: ["The details have changed", "Refresh this page to see the current date and fee, then register."],
             not_found: ["Registration isn't open", "This session isn't taking registrations. Nothing has been charged."]
           };
+          if (r.code === "attend_email_required") return showError("Add the Google account you will join with. Only that account can get into the meeting.");
           if (codes[r.code]) return closeForm(codes[r.code][0], codes[r.code][1], [{ href: "/workshops", text: "See other sessions", quiet: true }]);
           if (r._status === 400) return showError("Check your details and try again.");
           return showError("We couldn't save your registration just now. Nothing has been charged. Try again, or " + contact() + ".");
@@ -294,11 +303,19 @@
         ledeEl.textContent = (s.session ? s.session.title + ". " : "") + (paidSession ? "Paystack confirmed your payment of " + ghs(s.amount_ghs) + "." : "");
         if (paidSession) setStep(list, "pay", "done", "Confirmed by Paystack");
         // Only claim the email went out when the server says it did.
-        if (s.email_sent) setStep(list, "email", "done", "Sent with your joining link. Check spam if it isn't there in ten minutes.");
-        else setStep(list, "email", "active", "We're sending your joining link to the email you registered with. Check spam if it isn't there in ten minutes.");
-        setStep(list, "join", "active", joinText + ". Join five minutes early.");
+        var invite = s.session && s.session.admission === "invite";
+        if (invite) {
+          setStep(list, "email", s.email_sent ? "done" : "active", (s.email_sent ? "Confirmation sent. " : "We're sending your confirmation. ") +
+            "We add the Google account you gave us to the workshop's Google Calendar invitation, and Google emails it the Meet link.");
+          setStep(list, "join", "active", joinText + ". Open the Meet link from the invitation, signed in to that Google account.");
+        } else {
+          if (s.email_sent) setStep(list, "email", "done", "Sent with your joining link. Check spam if it isn't there in ten minutes.");
+          else setStep(list, "email", "active", "We're sending your joining link to the email you registered with. Check spam if it isn't there in ten minutes.");
+          setStep(list, "join", "active", joinText + ". Join five minutes early.");
+        }
         var actions = el("div", { class: "ws-actions" });
-        actions.appendChild(el("a", { class: "ws-btn", href: "/api/workshops/calendar?t=" + encodeURIComponent(access.token) }, "Add to calendar"));
+        // The invitation already puts an invitation-only session in the calendar.
+        if (!invite) actions.appendChild(el("a", { class: "ws-btn", href: "/api/workshops/calendar?t=" + encodeURIComponent(access.token) }, "Add to calendar"));
         actions.appendChild(el("a", { class: "ws-btn ws-btn--quiet", href: "/workshops" }, "Other sessions"));
         bodyEl.appendChild(actions);
         if (s.events && s.events.purchase) track("Purchase", s.events.purchase.id, { content_ids: [session], currency: "GHS", value: s.events.purchase.value });

@@ -19,7 +19,7 @@ import { json, refuse, readJson, str, rpc } from "../_shared.js";
 import { resolveTier, channelsFor } from "../_regions.js";
 import {
   WORKSHOP_APP, TERMS_VERSION, mintWorkshopReference, newToken, sha256Hex,
-  checkoutMode, cleanAttribution, eventIds, processOutbox, initializeWorkshopCheckout, rpcVoid
+  checkoutMode, cleanAttribution, eventIds, processOutbox, initializeWorkshopCheckout, rpcVoid, sessionAdmission
 } from "../_workshops.js";
 
 function looksLikeEmail(value) {
@@ -51,8 +51,15 @@ export async function onRequestPost(context) {
   if (!looksLikeEmail(email)) return refuse("email-invalid");
   if (whatsapp && whatsapp.replace(/\D/g, "").length < 7) return refuse("whatsapp-invalid");
   if (body.ack_terms !== true) return refuse("terms-not-accepted");
+  // The Google account the participant will join with, which may differ from
+  // the payment email. Required for an invitation-only session.
+  const attendEmail = str(body.attend_email, 160).toLowerCase();
+  if (attendEmail && !looksLikeEmail(attendEmail)) return refuse("attend-email-invalid");
 
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return refuse("supabase-not-configured", 503);
+  if (!attendEmail && await sessionAdmission(env, slug) === "invite") {
+    return json({ ok: false, code: "attend_email_required" }, 400);
+  }
 
   const adConsent = body.ad_consent === true;
   const displayedPrice = typeof body.displayed_price === "number" && isFinite(body.displayed_price) ? body.displayed_price : null;
@@ -84,6 +91,13 @@ export async function onRequestPost(context) {
   if (r.outcome === "full") return json({ ok: false, code: "full" }, 409);
   if (r.outcome === "stale_page") return json({ ok: false, code: "stale_page" }, 409);
   if (r.outcome !== "created" && r.outcome !== "existing") return refuse("register-unexpected", 502);
+
+  // First write wins (the RPC only fills an empty value), so re-submitting the
+  // form with someone else's payment email cannot redirect their invitation.
+  if (attendEmail) {
+    const saved = await rpcVoid(env, "workshop_set_attend_email", { p_registration_id: r.registration_id, p_email: attendEmail });
+    if (!saved.ok) console.log("workshop-attend-email-not-saved:", saved.reason);
+  }
 
   const ids = eventIds(r.registration_id);
   const origin = new URL(request.url).origin;

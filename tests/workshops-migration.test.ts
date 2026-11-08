@@ -183,3 +183,26 @@ Deno.test('privileges: anon and authenticated cannot execute RPCs or read tokens
                               has_table_privilege('authenticated', 'public.workshop_registrations', 'update') e`)
   assertEquals(rpc[0], { a: false, b: false, c: false, d: false, e: false })
 })
+
+Deno.test('admission migration: additive, reversible, and closed to anon and authenticated', async () => {
+  const ADM_UP = await read('../supabase/migrations/20261108120000_workshop_admission.sql')
+  const ADM_DOWN = await read('../supabase/migrations/rollback/20261108120000_workshop_admission_down.sql')
+  const cols = async (t: string) => (await q(`select column_name from information_schema.columns where table_name = $1 order by ordinal_position`, [t])).map((r) => r.column_name).join(',')
+  const before = { s: await cols('workshop_sessions'), r: await cols('workshop_registrations'), p: await cols('payment_events') }
+  await pg.exec(ADM_UP)
+  await pg.exec(ADM_UP) // idempotent
+  assert((await cols('workshop_sessions')).endsWith(',admission,calendar_event_id'))
+  assert((await cols('workshop_registrations')).endsWith(',attend_email,invited_email,invited_at,invite_removed_at'))
+  assertEquals(await cols('payment_events'), before.p, 'the shared ledger is untouched')
+  for (const fn of ['public.workshop_set_attend_email(uuid,text)', 'public.workshop_admin_admission(text,uuid,text,text)']) {
+    for (const role of ['anon', 'authenticated']) {
+      assertEquals((await q(`select has_function_privilege($1, $2, 'execute') ok`, [role, fn]))[0].ok, false, role + ' ' + fn)
+    }
+  }
+  // Existing sessions default to emailed joining details.
+  await session()
+  assertEquals((await q(`select admission from public.workshop_sessions`))[0].admission, 'link')
+  await pg.exec(ADM_DOWN)
+  assertEquals([await cols('workshop_sessions'), await cols('workshop_registrations')], [before.s, before.r])
+  await pg.exec(ADM_UP)
+})

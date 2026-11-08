@@ -79,6 +79,7 @@ function validate(s, file, now) {
   if (s.capacity !== undefined && s.capacity !== null && !(Number.isInteger(s.capacity) && s.capacity > 0)) problems.push("capacity must be a positive whole number");
   if (s.run_of_show && !s.run_of_show.every(function (r) { return r && r.at && r.title; })) problems.push("each run_of_show item needs at and title");
   if (s.instructor && !INSTRUCTORS[s.instructor]) problems.push("unknown instructor " + s.instructor);
+  if (s.admission !== undefined && !["link", "invite"].includes(s.admission)) problems.push("admission must be link or invite");
   problems.push.apply(problems, privateProblems(s));
   if (s.status === "published") {
     walkStrings(s, function (text) {
@@ -292,7 +293,9 @@ function trace(s, w) {
   const steps = [
     ['register', 'Your details', 'About a minute'],
     paid ? ['pay', 'Pay ' + fee(s), 'On Paystack\'s secure page, with mobile money or card'] : null,
-    ['email', 'Confirmation email', 'Your joining link and a calendar file'],
+    s.admission === "invite"
+      ? ['email', 'Confirmation, then your invitation', 'We add your Google account to the workshop invitation, and Google emails you the Meet link']
+      : ['email', 'Confirmation email', 'Your joining link and a calendar file'],
     ['join', 'Join live', w.long + ', ' + w.accra + ' in Accra']
   ].filter(Boolean);
   return '<ol class="ws-trace" data-trace>\n' + steps.map(function (st, i) {
@@ -306,7 +309,10 @@ function trace(s, w) {
 function form(s, policy) {
   return '<form class="ws-form" data-ws-form novalidate>\n' +
     '  <div class="ws-field"><label for="ws-name">Full name</label><input id="ws-name" name="full_name" type="text" autocomplete="name" required maxlength="120"></div>\n' +
-    '  <div class="ws-field"><label for="ws-email">Email <span class="ws-hint">Your joining link goes here</span></label><input id="ws-email" name="email" type="email" autocomplete="email" inputmode="email" required maxlength="160"></div>\n' +
+    '  <div class="ws-field"><label for="ws-email">Email <span class="ws-hint">' + (s.admission === "invite" ? "Your confirmation goes here" : "Your joining link goes here") + '</span></label><input id="ws-email" name="email" type="email" autocomplete="email" inputmode="email" required maxlength="160"></div>\n' +
+    (s.admission === "invite"
+      ? '  <div class="ws-field"><label for="ws-attend">Google account to join with <span class="ws-hint">Only this account can get into the meeting. It can differ from the email above</span></label><input id="ws-attend" name="attend_email" type="email" autocomplete="email" inputmode="email" required maxlength="160"></div>\n'
+      : '') +
     '  <div class="ws-field"><label for="ws-wa">WhatsApp <span class="ws-hint">Optional</span></label><input id="ws-wa" name="whatsapp" type="tel" autocomplete="tel" inputmode="tel" maxlength="40" placeholder="+233"></div>\n' +
     '  <label class="ws-check" data-wa-consent hidden><input type="checkbox" name="whatsapp_consent"> <span>Send me session reminders on WhatsApp.</span></label>\n' +
     '  <label class="ws-check"><input type="checkbox" name="ack_terms" required> <span>I agree to the <a href="/privacy">privacy notice</a>' +

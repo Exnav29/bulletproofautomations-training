@@ -21,55 +21,115 @@ project (owner-approved); see "Where it stands". Live checkout is off._
 | Get Paid for Automation, workshop 01 | Page file published; database row **`draft`**, so it shows "Registration isn't open yet" and cannot take a booking |
 | Workshop 01 joining details | **Stored on the row** (8 November 2026): Google Meet link and joining instructions. Never in this repository, which is public |
 | Webinar and workshop refund policy | **Drafted, not approved**: `content/workshops/refund-policy.json`, `"approved": false`. Nothing published |
+| Admission by Calendar invitation | **Built, migration not applied.** `20261108120000_workshop_admission.sql` is on the branch only. Until it is applied every session reads as `link` |
 
-## Joining details (Google Meet)
+## Joining: Google Meet by Calendar invitation
 
-Each workshop has its own Google Calendar event and its own Meet link, on the owner's calendar. The
-link is stored **only** in `workshop_sessions.join_instructions` on that workshop's row:
+Each workshop has its own Google Calendar event and its own Meet link, on the owner's calendar,
+with Meet's access restricted to invited guests. A session with `admission = 'invite'`
+(migration `20261108120000_workshop_admission.sql`) is joined **only** by Google accounts on that
+event. Nothing in this repository creates or edits a Calendar event.
 
-- `anon` and `authenticated` have no grant on the row (the admin can read it signed in), and no
-  public endpoint selects the column: not `/api/workshops/session`, the status RPC or the pages.
-- It goes out in the confirmation email, which the dispatcher sends only while the registration is
-  still `confirmed`. A registration refunded or cancelled before the email goes out gets nothing.
-- The `.ics` from `/api/workshops/calendar` carries it too, served only by token and only while the
-  registration is `confirmed`. Refunded, cancelled and unpaid registrations get 404.
-- The build fails on a meeting link or a `join_instructions` field in any content file, and CI
-  fails if one reaches `dist/`.
-- Participants are not added to the Calendar event, so Google sends no invitations. Everyone joins
-  by "ask to join", and the host admits them against the roll in `/admin/workshops/`. That is
-  the real control on a forwarded link.
+**What the participant gives us.** The paid form asks for the Google account they will join with
+(`attend_email`), which may differ from the payment email. The server refuses an invitation-only
+registration without one. The first value wins: re-submitting the form with someone else's
+payment email cannot redirect their invitation. Later changes go through the admin.
 
-For a later workshop, store **its own** link on **its own** row. Never reuse workshop 01's.
+**What they receive.** The confirmation email explains the invitation and names the account. It
+carries **no Meet link and no calendar file**: the link only works for invited accounts, and the
+Google invitation is the calendar entry, so a second one would duplicate it. Google sends the
+invitation, with the Meet link, when the admin adds the guest.
+
+**Admitting people (manual, in `/admin/workshops/`, panel "Google Calendar invitations").** For each
+invitation-only session it derives:
+
+| List | Who | What the admin does |
+|---|---|---|
+| Add to the event | `confirmed` (Paystack-verified, or admitted from review) with an account not on the event | Copy the addresses, add them as guests on that session's event, choose **Send** when Calendar asks, then click "Added in Calendar" |
+| Remove from the event | An account on the event whose registration is no longer `confirmed` (refund requested, refunded, cancelled) or that was replaced | Remove the guest in Calendar, then click "Removed in Calendar" |
+| Paid, no Google account yet | `confirmed` without an account | Email them; set it with "Set Google account" |
+
+The database refuses to record an invitation for a registration that is not `confirmed`, a second
+registration with the same account, or a new account while the old one is still on the event.
+"Added" twice is a no-op. Account changes are made only on a request from the registered email.
+
+**Event settings, once per event:** guests cannot see the guest list and cannot invite others, so
+participants never see each other's addresses. Keep the Meet access setting restricted to invited
+guests. Do not add anyone who has not appeared under "Add to the event".
+
+**Joining instructions stay private.** `join_instructions` and `calendar_event_id` live only on the
+session row: `anon` and `authenticated` have no grant, and no public endpoint selects them. An
+invitation-only session never prints `join_instructions`. The build fails on a meeting link or a
+join field in any content file, and CI fails if one reaches `dist/`.
+
+### Can invitations be automated?
+
+**Yes, technically, but not with what exists today, and it needs the owner's authorization.** The
+events live on a personal Google account, so a Google service account cannot reach them:
+domain-wide delegation exists only for Workspace. Automation would need:
+
+1. a Google Cloud project with the Calendar API enabled, at no cost;
+2. an OAuth client and consent screen, published "In production". In "Testing" the refresh token
+   expires after 7 days. An unverified app is allowed for the owner's own account, behind
+   Google's warning screen;
+3. the owner signing in once to grant `calendar.events` on that account, with the refresh token
+   stored as a Supabase or Cloudflare secret, never in this repository;
+4. code calling `events.patch` on each event's `calendar_event_id` to add or remove the derived
+   guests, with `sendUpdates=all`.
+
+The manual panel is the first version because it needs none of that. If automated later, the same
+derived lists and `workshop_admin_admission` records stay as they are; only the clicking changes.
+
+### Access test before taking money (owner, with two Google accounts)
+
+The site cannot test Google's side. Do this on workshop 01's event:
+
+1. Add account A as a guest.
+2. Open the Meet link signed in to A. A should go straight in, or be admitted without being asked.
+3. Open it signed in to account B, which is not invited. B should be refused, or held at "Ask to
+   join" with nobody able to let it in except the host.
+4. Sign out of Google and open the link. The same result as B.
+5. Remove A, then try A again. A should now be treated like B.
+6. Check that A's invitation shows no other guests.
+7. Run a call with three or more people past 60 minutes. A free personal account ends group calls
+   at 60 minutes.
+
+Record the results in the PR before opening registration.
 
 ## Go-live: Get Paid for Automation, workshop 01
 
 Each line needs owner approval. Order matters: the row opens registration, so it goes last.
 
-1. **Meeting length.** A free personal Google account limits Meet calls with three or more
-   people to 60 minutes. Confirm the host account can run a 3-hour group call (a Google One plan
-   with longer group calls, or a Workspace account) **before** taking money. Test it with two other
-   people for more than 60 minutes.
+1. **Meeting length and access.** Run the access test above, including the 60-minute check.
 2. **Refund policy.** The owner approves the wording in `content/workshops/refund-policy.json`.
    Then, in one commit: set `"approved": true` and `"version"` to the effective date (`YYYY-MM-DD`),
    and set `TERMS_VERSION` in `functions/api/_workshops.js` to the same date. The build then
    publishes `/workshops/refund-policy` and points every paid form's checkbox at it. A test fails
    if the two versions differ.
-3. **Rehearsal (optional, test mode).** Merge this branch into `webinar-e2e-test`, set the test
-   session to `published`, pay once with Paystack test MoMo, check the email in a real inbox,
-   then set it back to `draft`.
-4. **Merge PR #61.** This publishes `/workshops` (the series, workshop 01 and nine coming-soon pages)
+3. **Apply `20261108120000_workshop_admission.sql`** (additive; rollback in `migrations/rollback/`),
+   then set workshop 01 to join by invitation:
+   `update public.workshop_sessions set admission = 'invite', calendar_event_id = '<event id>' where slug = 'what-to-charge-for-automation';`
+   **This must happen before registration opens.** Without it the email would fall back to printing
+   the joining link, which only invited accounts can use.
+4. **Rehearsal (optional, test mode).** Merge this branch into `webinar-e2e-test`, set the test
+   session to `admission = 'invite'` and `published`, register with a Google account you control,
+   pay once with Paystack test MoMo, add the account from `/admin/workshops/` (on a test event, not
+   workshop 01's), check both emails, then set the session back to `draft`.
+5. **Merge PR #61.** This publishes `/workshops` (the series, workshop 01 and nine coming-soon pages)
    with registration still closed.
-5. **Repoint the dispatcher** to production:
+6. **Repoint the dispatcher** to production:
    `select cron.alter_job((select jobid from cron.job where jobname = 'workshop-dispatch'), command := replace((select command from cron.job where jobname = 'workshop-dispatch'), 'webinar-e2e-test.bulletproofautomations-training.pages.dev', 'training.bulletproofautomations.com'));`
-6. **Live keys:**
+7. **Live keys:**
    - Webinars business: set the **live** webhook URL (same function URL as test).
    - Supabase secret `WORKSHOP_PAYSTACK_SECRET_KEY` = Webinars **live** key.
    - Cloudflare **Production** `WORKSHOP_PAYSTACK_SECRET_KEY` = the same live key, and
      `WORKSHOP_PAID_CHECKOUT=on`. Redeploy.
    - Never put the live key in Preview.
-7. **Open registration:**
+8. **Open registration:**
    `update public.workshop_sessions set status = 'published' where slug = 'what-to-charge-for-automation';`
    The page switches to the form without a deploy. To close it again, set it back to `draft`.
+   From then on, work the invitation panel daily.
+
 
 Workshops 02 to 10 have no database row and no form. Scheduling one later means a session file with
 real values, a matching row, and pointing its series entry at the session
@@ -210,7 +270,8 @@ and redeploy.
 2. Set sessions to `draft` (or delete their files) and merge. The pages disappear.
 3. Keep `workshop-paystack-webhook` deployed while any webinar payment or refund may still arrive.
    The training side never needs rolling back.
-4. Export first, then run the rollback SQL only if the data is no longer needed.
+4. Export first, then run the rollback SQL only if the data is no longer needed:
+   `20261108120000_workshop_admission_down.sql` first, then `20261103120000_workshops_down.sql`.
 
 ## Meta ads: URL parameters
 
