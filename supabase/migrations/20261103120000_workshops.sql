@@ -1,11 +1,10 @@
 -- Webinars and workshops: sessions, registrations, immutable payment attempts,
 -- notification and Meta outboxes, and the RPCs that are the ONLY write path.
 --
--- STATUS: NOT APPLIED. Written 3 November 2026 for review. Apply only with the
--- owner's explicit approval, after the read-only pre-flight in
--- docs/workshops-runbook.md (live catalog check: no existing workshop_* objects,
--- payment_events columns as in tests/fixtures/payment-ledger.sql, PR #54's
--- private.studio_graduate_webinar_entitlements untouched).
+-- STATUS: APPLIED to production and recorded in supabase_migrations.schema_migrations
+-- as 20261103120000 (checked read-only on 9 November 2026). Never apply it again.
+-- Release 2 is 20261109120000_workshop_admission_benefits.sql; see
+-- docs/workshops-runbook.md, "Release 2 deployment checklist".
 -- Rollback: supabase/migrations/rollback/20261103120000_workshops_down.sql
 --
 -- Design rules (docs/PRD-WEBINARS-WORKSHOPS.md and the 3 November review):

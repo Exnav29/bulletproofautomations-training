@@ -1,7 +1,7 @@
 # Webinars and workshops: deployment, verification and rollback
 
-_Updated 8 November 2026. Steps 1 to 3, 5 and 6 have been run against the existing Supabase
-project (owner-approved); see "Where it stands". Live checkout is off._
+_Updated 9 November 2026, from a read-only inspection of the production database on that date.
+Live checkout is off, and no workshop registration is open._
 
 - Product contract: `docs/PRD-WEBINARS-WORKSHOPS.md` (PR #59).
 - Design: `docs/workshops-design.md`.
@@ -9,20 +9,40 @@ project (owner-approved); see "Where it stands". Live checkout is off._
 
 **The production training webhook (v9) is not changed and is not redeployed at any step.**
 
-## Where it stands (8 November 2026)
+## Where it stands (9 November 2026)
 
-| Step | State |
+Checked read-only against the existing Supabase project, not taken from earlier notes.
+
+| Piece | Production state |
 |---|---|
-| 1-2. Migration | **Applied** to the existing project after a verified backup. 19 protected checks (cohort, installments, `payment_events`, credentials, certificates, schema) unchanged |
-| 3. Webinar webhook | **Deployed** as `workshop-paystack-webhook` with the Webinars **test** key only. Registered as the Webinars business's **test** webhook |
-| 5. Dispatcher | **Scheduled**: cron job `workshop-dispatch`, every minute, token in Vault (`workshop_dispatch_token`). It points at the **preview** `webinar-e2e-test` until merge |
-| 6. Test-mode rehearsal | **Done on the existing project** (owner decision, no second project): MoMo and card payments, a cancelled checkout and retry, signed webhooks, automatic confirmation emails. Test rows use `BPA-WTEST-` and are excluded from revenue |
-| Test session `test-webinar-checkout` | Set to `draft`: not visible, not bookable |
-| Get Paid for Automation, workshop 01 | Page file published; database row **`draft`**, so it shows "Registration isn't open yet" and cannot take a booking |
-| Workshop 01 joining details | **Stored on the row** (8 November 2026): Google Meet link and joining instructions. Never in this repository, which is public |
-| Webinar and workshop refund policy | **Drafted, not approved**: `content/workshops/refund-policy.json`, `"approved": false`. Nothing published |
-| Release 2: admission, prices, benefits, referrals | **Built and tested, not applied.** `20261109120000_workshop_admission_benefits.sql` is on the branch only. Until it is applied every session reads as `link` at its own `price_ghs` |
-| Workshop 01 price | **GHS 350** on the draft row (9 November 2026); test transactions untouched |
+| Release 1, `20261103120000_workshops.sql` | **Applied, and recorded in `supabase_migrations.schema_migrations`.** All 8 `workshop_*` tables and their functions exist. **Never apply it again.** Its rollback is for removing the whole feature only |
+| Release 2, `20261109120000_workshop_admission_benefits.sql` | **Not applied.** No release 2 column, table or function exists. Until it is applied, every session reads as `link` at its own `price_ghs` |
+| Webinar webhook `workshop-paystack-webhook` | **Deployed** with the Webinars business's **test** key only, and registered as that business's **test** webhook |
+| Dispatcher | **Scheduled**: cron job `workshop-dispatch`, every minute, token in Vault. Points at the **preview** `webinar-e2e-test` until merge |
+| Test session `test-webinar-checkout` | `draft`. 3 confirmed test registrations and 4 test-mode attempts (`BPA-WTEST-`). No live attempt exists anywhere |
+| Workshop 01, `what-to-charge-for-automation` | `draft`, GHS 350, 25 places, joining details stored on the row (never in this repository, which is public), no registrations |
+| Certificate records release 2 reads | PR #54's entitlement view exists: **2** active graduate entitlements and **10** valid Foundations certificates |
+| Refund policy | **Drafted, not approved**: `content/workshops/refund-policy.json`, `"approved": false`, `"legal_review": "pending"`. Nothing published |
+
+## Test and live never mix (release 2, part 3)
+
+Every session is either **test** (`is_test = true`) or **live**. The database enforces the split itself,
+so a mistake in a deployment's settings cannot cross it:
+
+| Rule | Where it is enforced |
+|---|---|
+| A test-mode deployment (Pages holding a `sk_test_` key, such as Preview) can see, quote and register only on test sessions. Any other deployment, including production, sees only live sessions | `workshop_register` and `workshop_quote`, from the mode the Pages Function derives from its own key. The browser cannot set it |
+| Test money is taken only on a test session, and live money only on a live session | `workshop_start_attempt` refuses with `mode_not_allowed` |
+| So a rehearsal can never hold or use any of a live workshop's 25 general or 5 reserved places | Places are counted per session |
+| A test registration's commission is never payable, and no payout can be recorded for one: not from the admin page, not through the function, and not by a direct insert with the service key | `workshop_commission_payable`, `workshop_admin_referral` (`test_registration`), and a trigger on `workshop_referral_payouts` |
+| A registration counts as test if its session is test **or** any of its checkouts was in test mode | `workshop_is_test_registration` |
+| Admin revenue, campaign results, commissions due and place counts leave test rows out, and show test sessions with a TEST SESSION label and their own separate places | `/admin/workshops/` |
+| No two sessions can share a Google Calendar event, so a rehearsal can never point at a real workshop's guest list | Unique index on `calendar_event_id` |
+| A session cannot switch between test and live once anyone has registered | Trigger on `workshop_sessions.is_test` |
+
+When release 2 is applied, existing sessions are classified from their own payments:
+`test-webinar-checkout` (test payments only) becomes a test session, and workshop 01 (no payments)
+stays live. A session with both kinds of payment would stop the migration; the preflight checks there is none.
 
 ## Joining: Google Meet by Calendar invitation
 
@@ -122,6 +142,7 @@ the figure it showed, so a changed price is refused rather than charged.
   - **Graduate:** an active entitlement, a valid issued certificate, and training fees and every installment paid.
 - **Recovery for a changed email:** "Authorise another email for a certificate" in `/admin/workshops/`. Verify the person yourself first. The authorisation covers one certificate, one session and 7 days, with the reason recorded. The holder then asks for their code at the new address.
 - **Referral codes and links:** one per eligible graduate, issued from `/admin/workshops/`. You choose the code (4–16 letters and digits) or one is generated. A code is refused if it contains the certificate number.
+  - A code is issued **prepared**: it works only on test sessions, so the link and typed entry can be rehearsed before registration opens. "Activate for live workshops" makes it valid on workshop 01; do that only when you give it to the graduate. "Suspend" makes it valid nowhere.
   - The link is `/workshops/<slug>?ref=CODE`, which fills in the code; a customer can also type it.
   - Unknown, suspended or expired codes are refused, as is a code whose graduate is no longer eligible. So is the referrer's own email, which reads as "invalid" so the owner of a code can't be looked up.
 - **Places:** `capacity` is the 25 general places; graduates count only against `reserved_graduate_seats` (5). Both are checked while the session row is locked. When the general places are gone, the page stays open for a confirmed graduate only. The API reports yes/no, never a count. Reserved places are never released.
@@ -129,69 +150,265 @@ the figure it showed, so a changed price is refused rather than charged.
   - Pay by MoMo yourself, then record the reference: once per registration.
   - A refund after payout shows "review"; there is no automatic clawback.
   - "Void" removes a fraudulent or mistaken sale's commission, with a reason.
-  - Test-mode payments never show as due.
+  - A test registration's commission is never payable, and the database refuses to record a payout for one (see "Test and live never mix").
 - **Admin reporting** shows the advertised price, discount and its kind, customer payment, commission and net retained separately, with totals, plus general and reserved places used.
 - Verified read-only on 9 November 2026: the eligibility rules match exactly the **2** active graduate entitlements and **10** valid Foundations certificates.
 
+## Release 2 deployment checklist
 
-## Go-live: Get Paid for Automation, workshop 01
+One pass, in this order. **Each numbered step needs the owner's approval.** Steps 1 to 4 change
+nothing anyone can see: workshop 01 stays `draft`, live checkout stays off, and no referral code works
+on a live workshop.
 
-Each line needs owner approval. Order matters: the row opens registration, so it goes last.
+Run SQL in the Supabase SQL editor of the existing project. The three check files are read-only and
+can be re-run at any time.
 
-1. **Google Meet (operational checks on the owner's paid account, configured for restricted admission).** Run the access test above: an invited account gets in, an uninvited or signed-out one does not, a removed account no longer does. Also run a call of three or more people past 60 minutes, hosted by the account that owns the events.
-2. **Refund policy: legal review, then approval.** In `content/workshops/refund-policy.json` set `"legal_review": "complete"`, `"approved": true` and `"version"` to the effective date. Set `TERMS_VERSION` in `functions/api/_workshops.js` to the same date, in the same commit. The build refuses approval without the legal review, and a test fails if the versions differ.
-3. **Back up**, then **apply `20261109120000_workshop_admission_benefits.sql`**. It is additive: new columns with defaults, two new tables, new functions, and three workshop functions replaced in place with unchanged signatures. Rollback is `rollback/20261109120000_workshop_admission_benefits_down.sql`, which restores those three functions verbatim. Check afterwards: the 19 protected checks are unchanged, and the cohort `paystack-webhook` checksum is unchanged.
-4. **Configure workshop 01** (the row is `draft`; its price is already 350):
+### 1. Preflight (read-only)
+
+Run `supabase/checks/20261109120000_preflight.sql` and **save the output**.
+
+- Every `ok_` value must be `true`. In particular: release 1 is recorded, release 2 is not, and no
+  session has both test and live payments.
+- `will_become_test_sessions` must be `["test-webinar-checkout"]` and `live_attempts` must be `0`.
+- `active_graduate_entitlements` is expected to be `2` and `valid_foundations_certificates` `10`. A
+  different number is not a blocker, but find out why before step 4.
+- Keep `snapshot` and `release1_bodies`. Run this **immediately** before step 3: cohort activity
+  changes `snapshot` from day to day.
+
+**Stop if any `ok_` is false.** Do not reapply `20261103120000_workshops.sql` under any circumstances.
+
+### 2. Back up
+
+Take a backup in the dashboard, or at minimum export `workshop_sessions`,
+`workshop_registrations`, `workshop_payment_attempts`, `workshop_payment_events` and
+`workshop_notifications`.
+
+### 3. Apply release 2, once
+
+Paste `supabase/migrations/20261109120000_workshop_admission_benefits.sql` into the SQL editor
+between `begin;` and the history insert below, then `commit;`, so it runs as one transaction and is
+recorded once:
+
+```sql
+begin;
+-- … the whole of 20261109120000_workshop_admission_benefits.sql …
+insert into supabase_migrations.schema_migrations (version, name) values ('20261109120000', 'workshop_admission_benefits');
+commit;
+```
+
+**Do not use `supabase db push`.** Several older files in `supabase/migrations/` carry different
+version numbers from the ones recorded in production's history (for example, the repository's
+`20261016175227_certificate_issuance_studio.sql` was recorded as `20261016180950`), so a push would
+try to apply migrations that are already in place.
+
+The file can safely be re-run (`if not exists`, `create or replace`). If it stops on "both test and
+live payments", nothing was applied.
+
+### 4. Postflight (read-only)
+
+Run `supabase/checks/20261109120000_postflight.sql`.
+
+- Every `ok_` must be `true`.
+- `sessions` must be `[["test-webinar-checkout", true], ["what-to-charge-for-automation", false]]`.
+- `referrers` must be `0`.
+- **`snapshot` must equal step 1's `snapshot` exactly.** It covers the training ledger, enrollments,
+  installments, credentials, PR #54's entitlements, every existing workshop registration, payment and
+  notification, and every non-workshop function.
+- Also confirm the cohort `paystack-webhook` checksum is unchanged.
+
+### Rollback, if anything in step 4 is wrong
+
+1. **Export `workshop_referral_payouts` and `workshop_benefit_email_grants` first**, if anything has
+   been written to them. They record commissions paid and recovery decisions.
+2. Run `supabase/migrations/rollback/20261109120000_workshop_admission_benefits_down.sql`, then delete
+   its history row:
    ```sql
-   update public.workshop_sessions
-      set admission = 'invite', calendar_event_id = '<event id>', capacity = 25, reserved_graduate_seats = 5,
-          foundations_discount_pct = 20, graduate_free = true, referral_discount_ghs = 50, referral_commission_ghs = 50
-    where slug = 'what-to-charge-for-automation' and status = 'draft';
+   delete from supabase_migrations.schema_migrations where version = '20261109120000';
    ```
-   **This must happen before registration opens.** Without it, emails fall back to printing the joining link.
-5. **Rehearsal (test mode, recommended).** Merge this branch into `webinar-e2e-test` and configure the test session the same way. Then:
-   - Register at each price: standard (350), with a referral code (300), with a Foundations certificate (280, using the emailed code), Foundations and referral (280), and as a graduate (free), paying with Paystack test MoMo. Check each email and the admin reporting.
-   - Add the accounts from `/admin/workshops/` to a **test** Calendar event.
-   - Set the test session back to `draft`.
-6. **Merge PR #61.** This publishes `/workshops` with registration still closed.
-7. **Repoint the dispatcher** to production:
-   `select cron.alter_job((select jobid from cron.job where jobname = 'workshop-dispatch'), command := replace((select command from cron.job where jobname = 'workshop-dispatch'), 'webinar-e2e-test.bulletproofautomations-training.pages.dev', 'training.bulletproofautomations.com'));`
-8. **Live keys:**
-   - Webinars business: set the **live** webhook URL (same function URL as test).
-   - Supabase secret `WORKSHOP_PAYSTACK_SECRET_KEY` = the Webinars **live** key.
-   - Cloudflare **Production** `WORKSHOP_PAYSTACK_SECRET_KEY` = the same key, and `WORKSHOP_PAID_CHECKOUT=on`. Redeploy.
-   - Never put the live key in Preview.
-9. **Open registration:**
-   `update public.workshop_sessions set status = 'published' where slug = 'what-to-charge-for-automation';`
-   From then on, work the invitation panel daily.
-10. **Referral codes, separately.** Issue them from `/admin/workshops/` only when you decide to share them. Issuing a code publishes nothing.
+3. Run `supabase/checks/20261109120000_rollback_check.sql`.
+   - Every `ok_` must be `true`.
+   - `release1_bodies` must equal step 1's.
+   - `snapshot` must equal step 1's.
 
+Release 1 is untouched by this rollback. Rehearsed end to end on a production-shaped database: see
+`tests/workshops-migration.test.ts`, "release 2 deployment checks".
 
-Workshops 02 to 10 have no database row and no form. Scheduling one later means a session file with
-real values, a matching row, and pointing its series entry at the session
-(`content/workshops/README.md`).
+### 5. Rehearsal (test mode, owner)
 
-Their dates are held in the owner's Google Calendar, which is the schedule of record. They are
-deliberately **not** in this repository or on the coming-soon pages: each opens only when its fee,
-places and terms are approved, and the 26 December and 2 January dates need marketing approval
-before anyone advertises them. A calendar date never opens registration. Only the database row
-does.
+See "Release 2 rehearsal" below. It needs release 2 applied, and touches only test rows on a test session.
 
-## What exists on the branch
+### 6. Configure workshop 01
 
-| Piece | Where | Production state |
-|---|---|---|
-| Schema, functions, RLS, webinar ledger | `supabase/migrations/20261103120000_workshops.sql` (+ rollback) | **Not applied** |
-| Webinar webhook (new, separate) | `supabase/functions/workshop-paystack-webhook/index.ts` | **Not deployed** |
-| Training webhook | `supabase/functions/paystack-webhook/` | Unchanged; byte-identical to `main` |
-| Pages Functions | `functions/api/workshops/*`, `functions/api/admin/workshops.js` | Deploy with the site on merge. Inert until the tables exist |
-| Public pages | Generated from `content/workshops/*.json` | **Nothing published** |
-| Admin | `/admin/workshops/` | Deploys on merge |
-| Ad tracking | `workshop-tracking.js`, `_meta.js` | Inert until the Meta IDs are set |
+The row is still `draft`, at GHS 350 and 25 places. Paste the real event ID here, never into this
+repository:
 
-## Release sequence (each step needs explicit owner approval)
+```sql
+update public.workshop_sessions
+   set admission = 'invite', calendar_event_id = '<workshop 01 event id>', reserved_graduate_seats = 5,
+       foundations_discount_pct = 20, graduate_free = true, referral_discount_ghs = 50, referral_commission_ghs = 50
+ where slug = 'what-to-charge-for-automation' and status = 'draft' and not is_test;
+```
 
-### 0. Paystack: the webinar business (owner, dashboard)
+**This must happen before registration opens.** Without it, emails fall back to printing the joining link.
+
+### 7. Google Meet checks (owner, on workshop 01's event)
+
+Run the access test above. The rehearsal (step 5) can already have run it on the rehearsal event.
+
+### 8. Refund policy
+
+Legal review first, then the owner's approval of the wording. In
+`content/workshops/refund-policy.json` set `"legal_review": "complete"`, `"approved": true` and
+`"version"` to the effective date. Set `TERMS_VERSION` in `functions/api/_workshops.js` to the same
+date in the same commit. The build refuses approval without the legal review, and a test fails if the
+versions differ.
+
+### 9. Merge PR #61
+
+This publishes `/workshops` with registration still closed.
+
+### 10. Repoint the dispatcher to production
+
+```sql
+select cron.alter_job((select jobid from cron.job where jobname = 'workshop-dispatch'),
+  command := replace((select command from cron.job where jobname = 'workshop-dispatch'),
+    'webinar-e2e-test.bulletproofautomations-training.pages.dev', 'training.bulletproofautomations.com'));
+```
+
+### 11. Live keys
+
+- Webinars business: set the **live** webhook URL (the same function URL as test).
+- Supabase secret `WORKSHOP_PAYSTACK_SECRET_KEY` = the Webinars **live** key.
+- Cloudflare **Production** `WORKSHOP_PAYSTACK_SECRET_KEY` = the same key, and `WORKSHOP_PAID_CHECKOUT=on`. Redeploy.
+- **Never put the live key in Preview.** Preview keeps the test key, so it keeps seeing only test sessions.
+
+### 12. Open registration
+
+```sql
+update public.workshop_sessions set status = 'published' where slug = 'what-to-charge-for-automation' and not is_test;
+```
+
+From then on, work the invitation panel daily.
+
+### 13. Referral codes: activate when you share them
+
+Codes are issued **prepared** and work only on test sessions. When you are ready to give a graduate their code, click "Activate for live workshops" in `/admin/workshops/`. Until then, nothing about the code is public and it cannot be used on workshop 01.
+
+## Release 2 rehearsal (test mode, on the existing project)
+
+Exercises all five prices in a browser, with real verification emails, Paystack **test**
+transactions, the confirmation dispatcher, the admin reports and the Calendar invitation status. It
+uses the existing Supabase project and the existing Webinars test configuration: Preview's test key,
+the test webhook and the dispatcher, which already points at the preview. **No other Supabase project is created.**
+
+A local dry run of exactly this journey already passes, with stand-ins for Paystack and the mail
+API: `tests/local-stack/journey-release2.js`, 33 checks.
+
+**What keeps it away from real people:**
+
+- **Its own session.** The rehearsal session is a test session, so Preview can book it and production cannot. None of workshop 01's places are touched.
+- **Certificate codes go to your addresses only.**
+  - The Foundations price uses your own certificate (`BPA-FND-2026-4GGY96`, registered to `johnathan@bulletproofautomations.com`).
+  - The graduate place and the second Foundations registration use admin email grants. A grant is scoped to the rehearsal session and sends the code to an address you choose.
+  - No graduate receives anything.
+- **Referral codes stay prepared.** The referral code you issue stays prepared throughout, so it never works on workshop 01.
+- **Invitations go to a separate event.** They are added to a separate test Calendar event, never to workshop 01's.
+
+### Before you start
+
+- **Approvals:** release 2 is applied (steps 1 to 4), and you have approved creating the rehearsal row (R1).
+- **Five inboxes you control**, all different, called A to E below. A must be `johnathan@bulletproofautomations.com`, because your Foundations certificate is registered to it. The others can be any addresses you read, such as `info@`. Do not use a graduate's or customer's address.
+- **Two Google accounts you control:** one to invite and one left uninvited.
+- **A new Google Calendar event** on the owner's calendar, titled "TEST rehearsal – not a real workshop":
+  - Meet access restricted to invited guests.
+  - Guests cannot see the guest list.
+  - Nobody invited yet.
+  - Note its event ID.
+
+### R1. Create the rehearsal session (SQL, approval)
+
+```sql
+insert into public.workshop_sessions (slug, kind, title, starts_at, duration_minutes, time_zone, format, price_ghs,
+  capacity, status, is_test, admission, calendar_event_id, reserved_graduate_seats, foundations_discount_pct,
+  graduate_free, referral_discount_ghs, referral_commission_ghs)
+values ('rehearsal-what-to-charge', 'workshop', 'TEST SESSION: Get Paid for Automation rehearsal',
+  '2026-12-12T11:30:00Z', 180, 'Africa/Accra', 'live online', 350, 25, 'published', true, 'invite',
+  '<rehearsal event id>', 5, 20, true, 50, 50)
+on conflict (slug) do nothing;
+```
+
+It mirrors workshop 01's settings and date, so the emails show the real Ghana and Lagos times. It is
+`published` because only a test deployment can see it.
+
+### R2. Put the page on the preview only
+
+On branch `webinar-e2e-test`, which is never merged:
+
+1. Merge this PR's branch in.
+2. Copy `docs/workshops-rehearsal/rehearsal-what-to-charge.json` to `content/workshops/`.
+3. Push.
+
+Then check:
+
+- `https://webinar-e2e-test.bulletproofautomations-training.pages.dev/api/workshops/session?slug=rehearsal-what-to-charge` answers `"status":"open"`.
+- The same URL with `slug=what-to-charge-for-automation` answers **404**. Workshop 01 is a draft, so this is 404 regardless. Once it is published (step 12), Preview must still answer 404 for it, because Preview cannot see a live session.
+
+### R3. Prepare the codes and grants (preview's `/admin/workshops/`)
+
+1. **Issue a referral code** for one graduate certificate (graduate G1), with the code you intend to give them later. It shows **Prepared: rehearsal only**. Do not activate it.
+2. **Authorise another email** for the *other* graduate certificate (G2): session `rehearsal-what-to-charge`, inbox E, reason "rehearsal".
+3. **Authorise another email** for your Foundations certificate `BPA-FND-2026-4GGY96`: session `rehearsal-what-to-charge`, inbox D, reason "rehearsal".
+
+### R4. The five paths
+
+Open `/workshops/rehearsal-what-to-charge/?paystack=test` on the preview. For a referral path, add `&ref=<code>` to that address, or type the code into the field. Pay with Paystack's test mobile money on one path and a test card on another.
+
+| # | Inbox | Certificate | Referral | Page and Paystack must show | Then |
+|---|---|---|---|---|---|
+| 1 | B | none | none | You pay GHS 350; Paystack GHS 350 | |
+| 2 | C | none | the link `&ref=<code>` | Advertised GHS 350, less GHS 50 referral discount, you pay GHS 300; Paystack GHS 300 | Repeat the price check by typing the code in lower case (do not submit) |
+| 3 | A | `BPA-FND-2026-4GGY96`, code from inbox A | none | Less GHS 70, Foundations certificate price, you pay GHS 280; Paystack GHS 280 | In admin, "Request refund", then refund it in the Paystack **test** dashboard. Wait for "Refunded". This releases the certificate for path 4 and rehearses a refund |
+| 4 | D | `BPA-FND-2026-4GGY96`, code from inbox D | typed | You pay GHS 280, and "Discounts don't combine; your referral is still recorded"; Paystack GHS 280, never 230 | |
+| 5 | E | G2's certificate, code from inbox E | none | Complimentary graduate place, button "Register for free"; no Paystack page | |
+
+For every path, check:
+
+- **The verification email** (paths 3 to 5) arrives within two minutes, at the address typed. G2 receives nothing.
+- **The confirmation email** arrives within two minutes of payment, by the dispatcher. It has no Meet link and no calendar file, explains the Google invitation and names the account. It shows "11:30 AM–2:30 PM (GMT)" and "12:30 PM–3:30 PM (WAT)", and names any discount.
+- **The confirmation page** says the place is confirmed.
+
+### R5. Admin reports (preview's `/admin/workshops/`)
+
+- **The rehearsal session:** shows **TEST SESSION**, with "general 3 of 25, reserved graduate 1 of 5" after the path 3 refund.
+- **Workshop 01:** 0 places used.
+- **Referrals:**
+  - Paths 2 and 4 show advertised, discount, customer paid and "Test registration: never payable".
+  - **Commissions due is 0**, and no "Record payout" button appears.
+- **Results by campaign:** "No live registrations yet".
+- **Invitations:** four to add (paths 1, 2, 4 and 5), under the warning "Rehearsal only. Add these addresses to the rehearsal Calendar event".
+
+### R6. Invitations
+
+1. Add the four Google accounts to the **rehearsal** event and choose Send. Then click "Added in Calendar" for each.
+2. Run the access test (above) on the rehearsal event: invited in, uninvited and signed-out refused, removed refused, and guests can't see each other.
+3. Run the 3-person call past 60 minutes here too, if not yet done.
+4. Refund one path in the Paystack test dashboard. It must move to "Remove from the event".
+
+### R7. Tidy up
+
+- Set the rehearsal session to `completed`.
+- Revoke the two email grants.
+- Delete the rehearsal Calendar event.
+- Leave the referral code **prepared**.
+
+The rehearsal rows stay in the database, permanently marked test and excluded from every figure.
+
+## Release 1 (applied): reference only
+
+These were done once, with the owner's approval. **Do not repeat them.** They are kept because the
+settings they describe still apply.
+
+### Paystack: the webinar business (owner, dashboard)
 
 Switch the dashboard to **Bulletproof Automations Webinars** (check the business name and ID at
 the top left before copying anything), then:
@@ -200,29 +417,11 @@ the top left before copying anything), then:
    training business's keys. The code refuses equal keys, but check by eye too.
 2. **Settings → Preferences → Payment channels:** confirm Mobile Money (MTN, Telecel, AirtelTigo)
    and Card are enabled in both test and live.
-3. **Webhook URLs** (after step 3 below): test and live both point at
+3. **Webhook URLs**: test and live both point at
    `https://<project-ref>.supabase.co/functions/v1/workshop-paystack-webhook`. **Do not change the
    training business's webhook URL.**
 
-### 1. Read-only pre-flight on the live database
-
-```sql
-select table_name from information_schema.tables where table_schema = 'public' and table_name like 'workshop%';  -- none
-select column_name from information_schema.columns where table_name = 'payment_events' order by ordinal_position; -- note it; must be identical after step 2
-select to_regclass('private.studio_graduate_webinar_entitlements');  -- PR #54, untouched
-select version from supabase_migrations.schema_migrations order by version desc limit 5;  -- 20261103120000 absent
-```
-
-### 2. Apply the migration (additive)
-
-Apply once. Then confirm `payment_events` has the same columns as in step 1, and:
-
-```sql
-select has_table_privilege('anon', 'public.workshop_registrations', 'select');  -- false
-select has_table_privilege('anon', 'public.workshop_payment_events', 'select'); -- false
-```
-
-### 3. Deploy the webinar webhook (new function)
+### The webinar webhook (deployed)
 
 Set Edge Function secrets: `WORKSHOP_PAYSTACK_SECRET_KEY` (webinar live), `WORKSHOP_PAYSTACK_TEST_SECRET_KEY`
 (webinar test). `PROJECT_URL` and `SERVICE_ROLE_KEY` already exist. Then:
@@ -237,12 +436,12 @@ Probe it:
   `workshop_payment_events` and nothing in `payment_events`.
 - A 503 `not-configured` means a key is missing, the wrong type, or equal to a training key.
 
-Register the URL in the webinar business (step 0.3).
+The URL is registered as the webinar business's test webhook.
 
 **Rollback:** unregister the URL in the webinar business and delete the function. The training
 webhook is unaffected either way.
 
-### 4. Cloudflare Pages variables (Production and Preview separately, then redeploy)
+### Cloudflare Pages variables (Production and Preview separately, then redeploy)
 
 | Variable | Purpose |
 |---|---|
@@ -254,7 +453,7 @@ webhook is unaffected either way.
 | `META_PIXEL_ID`, `META_CAPI_ACCESS_TOKEN`, `META_TEST_EVENT_CODE` | Optional ad measurement |
 | `WORKSHOP_PAYSTACK_API_BASE`, `MAIL_API_BASE`, `WORKSHOP_CONTENT_DIR` | **Local testing only.** Never set them on Cloudflare (the code ignores the first two outside test or localhost, and the last on Cloudflare) |
 
-### 5. Dispatcher (pg_cron + pg_net)
+### Dispatcher (pg_cron + pg_net, scheduled)
 
 ```sql
 insert into public.workshop_dispatch_config (secret_hash) values (encode(extensions.digest('<secret>', 'sha256'), 'hex'));
@@ -262,31 +461,7 @@ insert into public.workshop_dispatch_config (secret_hash) values (encode(extensi
 
 Then create the schedule shown at the end of the migration (check `cron.job` first).
 
-### 6. Test-mode rehearsal on an isolated preview database (before any live charge)
-
-A Cloudflare preview uses the **Preview** variables. Make sure they point at an isolated database
-before testing:
-
-1. Create a separate Supabase project. Load `tests/fixtures/payment-ledger.sql`, then the
-   workshop migration.
-2. Deploy `workshop-paystack-webhook` there with the **webinar business's test key**.
-3. Register that function's URL as the webinar business's **test** webhook.
-4. Point Cloudflare **Preview** `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY`
-   at it, and set Preview `WORKSHOP_PAYSTACK_SECRET_KEY` to the webinar **test** key.
-5. Insert one `workshop_sessions` row, and the matching `content/workshops/<slug>.json` on the
-   preview branch only.
-6. Insert a cohort enrollment that uses **the same email** you will test with.
-7. On the preview URL, open `/workshops/<slug>?paystack=test`. Register, then pay with Paystack's
-   test **mobile money** and, separately, a test **card**.
-8. Then check all of these:
-   - the registration is `confirmed` in `/admin/workshops/`;
-   - `workshop_payment_events` has a signed, matched row;
-   - `payment_events` is **empty**;
-   - the same-email cohort row is unchanged;
-   - the confirmation email arrives;
-   - a cancelled checkout followed by a retry pays once.
-
-### 7. Publish a session
+## Publish a later session (workshops 02 to 10)
 
 1. Add `content/workshops/<slug>.json` with real values only. The build refuses placeholders,
    TBC and past dates.
@@ -295,10 +470,15 @@ before testing:
 3. Merge. This publishes the page, the nav link and the sitemap entries. While the row is `draft`
    the page says registration isn't open yet and the API refuses bookings.
 
-### 8. Go live (separate approval)
+Workshops 02 to 10 have no database row and no form. Scheduling one later means a session file with
+real values, a matching row, and pointing its series entry at the session
+(`content/workshops/README.md`).
 
-Set Production `WORKSHOP_PAYSTACK_SECRET_KEY` to the webinar **live** key, then `WORKSHOP_PAID_CHECKOUT=on`,
-and redeploy.
+Their dates are held in the owner's Google Calendar, which is the schedule of record. They are
+deliberately **not** in this repository or on the coming-soon pages: each opens only when its fee,
+places and terms are approved, and the 26 December and 2 January dates need marketing approval
+before anyone advertises them. A calendar date never opens registration. Only the database row
+does.
 
 ## Rollback of the whole feature
 

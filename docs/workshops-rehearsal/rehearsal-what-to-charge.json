@@ -1,0 +1,111 @@
+{
+  "_note": "PREVIEW-ONLY REHEARSAL SESSION. Copy into content/workshops/ on branch webinar-e2e-test only, never on main or PR #61. Its database row is is_test = true. Not a real workshop.",
+  "slug": "rehearsal-what-to-charge",
+  "status": "published",
+  "kind": "workshop",
+  "title": "TEST SESSION: Get Paid for Automation rehearsal",
+  "summary": "This is a test page for rehearsing workshop 01 registration at every price, Paystack test-mode payment, verification codes, the confirmation email and Google Calendar invitations. It is not a real workshop and no session will take place.",
+  "directory_line": "Test only. Not a real workshop; no session will take place.",
+  "description": "Preview-only rehearsal of workshop 01 registration. Payments use the Paystack test environment; no real money moves.",
+  "starts_at": "2026-12-12T11:30:00Z",
+  "time_zone": "Africa/Accra",
+  "duration_minutes": 180,
+  "format": "live online",
+  "price_ghs": 350,
+  "capacity": 25,
+  "admission": "invite",
+  "reserved_graduate_seats": 5,
+  "foundations_discount_pct": 20,
+  "graduate_free": true,
+  "referral_discount_ghs": 50,
+  "audience": "The site owner, rehearsing the workshop 01 registration flow",
+  "why": [
+    "You can build automations and deliver projects. Then a client asks how much the work will cost, and the number you give is a guess.",
+    "Guess low and you work for less than it costs you to deliver, especially once discovery, testing, revisions and support are counted. Guess high without a reason, and the client compares you with someone cheaper and stops replying.",
+    "This workshop replaces the guess with a method. You work out what a project costs you to deliver, what the problem is worth to the client and which pricing approach fits, so the price you quote is one you can explain and defend."
+  ],
+  "outcomes": [
+    "Identify the business problem an automation project solves.",
+    "Estimate your actual costs of delivering the work.",
+    "Compare hourly, fixed-project and value-informed pricing.",
+    "Recognize common underpricing and overpricing mistakes.",
+    "Account for discovery, testing, revisions, support and project risk.",
+    "Develop a defensible quotation for an automation project.",
+    "Explain your proposed price to a prospective client."
+  ],
+  "leave_with": [
+    "A pricing worksheet for Excel or Google Sheets that works out your real cost of delivery, a cost-based price, a fixed-project price with risk included, and a check against the value to the client.",
+    "A project quotation template with the problem, deliverables, exclusions, assumptions, fees, payment terms and change requests already laid out.",
+    "One realistic automation project, priced by you in the clinic, with the reasoning to back the number.",
+    "The pricing mistakes that cost automation practitioners the most, and how to avoid each one."
+  ],
+  "run_of_show": [
+    {
+      "at": "0:00",
+      "title": "Why automation work is hard to price",
+      "detail": "Introduction, and the pricing problems participants bring with them"
+    },
+    {
+      "at": "0:15",
+      "title": "What a project costs you, and what it is worth to the client",
+      "detail": "Your real hourly cost, delivery effort, tools, and the cost of the client's problem"
+    },
+    {
+      "at": "1:00",
+      "title": "Choosing an approach and building the quote",
+      "detail": "Hourly, fixed-project and value-informed pricing; discovery, testing, revisions, support and risk; protecting your margin"
+    },
+    {
+      "at": "1:45",
+      "title": "Break",
+      "detail": "15 minutes"
+    },
+    {
+      "at": "2:00",
+      "title": "Project pricing clinic",
+      "detail": "Price a realistic automation project yourself, explain your number, then questions"
+    }
+  ],
+  "good_fit": "You are rehearsing the registration flow on the preview site.",
+  "not_fit": "You want to attend the real workshop. This test session will not take place. Workshops are training; certification is assessed separately.",
+  "bring": "a laptop with Excel or Google Sheets and, if you have one, a project you have recently quoted or are about to quote.",
+  "instructor": "johnathan",
+  "faq": [
+    {
+      "q": "Am I technically ready for this?",
+      "a": "If you have built and delivered at least one working automation, on any platform, yes. The workshop does not teach building. It assumes you can already do the work and teaches you to price it."
+    },
+    {
+      "q": "Does it matter which automation platform I use?",
+      "a": "No. The examples draw on n8n, Make, Zapier, Microsoft Power Automate and Power Apps, custom integrations and AI automation, but pricing works the same way whichever tool does the work."
+    },
+    {
+      "q": "Are the examples relevant to Ghana?",
+      "a": "Yes. The worked examples and the clinic project come from the kind of work Ghanaian small businesses and service providers commission, priced in cedis, alongside an international freelance example priced in US dollars."
+    },
+    {
+      "q": "Is this a certification?",
+      "a": "No. It is a training workshop. It does not award, and does not count towards, any Bulletproof Automations certification."
+    },
+    {
+      "q": "Do I have to take the whole series?",
+      "a": "No. Each workshop in Get Paid for Automation stands alone. Take the ones you need, in any order."
+    },
+    {
+      "q": "How do I pay?",
+      "a": "Register on this page, then pay GHS 350 on Paystack's secure checkout by mobile money or card. Your place is confirmed when Paystack confirms the payment, and your confirmation email follows."
+    },
+    {
+      "q": "Is there a lower price?",
+      "a": "Three ways, and they never combine. With an Intermediate graduate's referral code or link you pay GHS 300. Holders of a valid Bulletproof Automation Foundations Certificate pay GHS 280. Intermediate graduates with a valid issued certificate, whose training fees are fully paid, attend free in one of five places reserved for them. If more than one applies, you get the lowest price. A certificate price needs a one-time code, which we email to the address on your certificate, and it is yours alone: it cannot be passed to someone else."
+    },
+    {
+      "q": "How do I join?",
+      "a": "Live on Google Meet, by invitation. When you register, give us the Google account you will join with. Once Paystack confirms your payment, we add that account to the workshop's Google Calendar invitation, and Google emails it the Meet link. Only invited accounts can get in, so join signed in to that account, from a laptop if you can."
+    },
+    {
+      "q": "Will this make me money?",
+      "a": "It will help you price work accurately and explain your price with confidence. It cannot guarantee clients, contracts or income. Those depend on your market, your skills and your effort."
+    }
+  ]
+}

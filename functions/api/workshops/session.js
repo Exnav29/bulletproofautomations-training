@@ -4,7 +4,7 @@
  * counter), no join instructions. */
 
 import { json, rpc } from "../_shared.js";
-import { rest } from "../_workshops.js";
+import { rest, workshopMode } from "../_workshops.js";
 
 export async function onRequestGet({ request, env }) {
   const slug = new URL(request.url).searchParams.get("slug") || "";
@@ -17,6 +17,16 @@ export async function onRequestGet({ request, env }) {
   const row = (await res.json().catch(function () { return []; }))[0];
   if (!row) return json({ ok: false, code: "not_found" }, 404);
 
+  // Release 2 columns. A database without them has no reserved places and no
+  // test sessions, so a failed read changes nothing.
+  const g = await rest(env, "workshop_sessions?select=reserved_graduate_seats,graduate_free,is_test&id=eq." + encodeURIComponent(row.id) + "&limit=1");
+  const gr = g.ok ? (await g.json().catch(function () { return []; }))[0] : (await g.text(), null);
+  // A test session exists only for a test-mode deployment, and a live one only
+  // for the others: the same rule the database applies to registration.
+  if (gr && typeof gr.is_test === "boolean" && gr.is_test !== (workshopMode(env) === "test")) {
+    return json({ ok: false, code: "not_found" }, 404);
+  }
+
   const open = row.status === "published" && Date.parse(row.starts_at) > Date.now();
   let full = false;
   if (open && row.capacity) {
@@ -25,11 +35,8 @@ export async function onRequestGet({ request, env }) {
   }
   // Reserved Intermediate graduate places are separate from the general ones,
   // so a session can be full for everyone else and still open to a graduate.
-  // A database without the release 2 columns simply has none.
   let graduateOpen = false;
   if (open) {
-    const g = await rest(env, "workshop_sessions?select=reserved_graduate_seats,graduate_free&id=eq." + encodeURIComponent(row.id) + "&limit=1");
-    const gr = g.ok ? (await g.json().catch(function () { return []; }))[0] : (await g.text(), null);
     if (gr && gr.graduate_free === true && Number(gr.reserved_graduate_seats) > 0) {
       const usedG = await rpc(env, "workshop_graduate_seats_in_use", { p_session_id: row.id });
       graduateOpen = usedG.ok && Number(usedG.data) < Number(gr.reserved_graduate_seats);

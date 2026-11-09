@@ -19,7 +19,7 @@ import { json, refuse, readJson, str, rpc } from "../_shared.js";
 import { resolveTier, channelsFor } from "../_regions.js";
 import {
   WORKSHOP_APP, TERMS_VERSION, mintWorkshopReference, newToken, sha256Hex, looksLikeToken,
-  checkoutMode, cleanAttribution, eventIds, processOutbox, initializeWorkshopCheckout, rpcVoid, sessionAdmission
+  checkoutMode, workshopMode, cleanAttribution, eventIds, processOutbox, initializeWorkshopCheckout, rpcVoid, sessionAdmission
 } from "../_workshops.js";
 
 function looksLikeEmail(value) {
@@ -88,7 +88,10 @@ export async function onRequestPost(context) {
     p_token_hash: await sha256Hex(token),
     p_attribution: Object.assign(cleanAttribution(body.attribution, request, adConsent),
       { benefit_token_hash: verification ? await sha256Hex(verification) : null, referral_code: referralCode || null,
-        expected_price: expectedPrice }),
+        expected_price: expectedPrice,
+        // From this deployment's own key, never from the browser: a test-mode
+        // deployment registers only on test sessions, and nothing else does.
+        deployment_mode: workshopMode(env) }),
     p_ad_consent: adConsent,
     p_displayed_price: displayedPrice,
     p_displayed_starts_at: displayedStart
@@ -150,6 +153,10 @@ export async function onRequestPost(context) {
   if (s.outcome === "already_paid") return json(Object.assign(base, { state: stateFor(s.status, "paid") }));
   if (s.outcome === "full") return json({ ok: false, code: "full" }, 409);
   if (s.outcome === "closed") return json({ ok: false, code: "closed" }, 409);
+  if (s.outcome === "mode_not_allowed") {
+    console.log("workshop-start-refused: checkout mode does not match the session");
+    return json(Object.assign(base, { state: "pending_payment", checkout: "unavailable" }));
+  }
   if (s.outcome !== "started") return json(Object.assign(base, { state: "needs_attention" }));
 
   const region = resolveTier(request, env, body.declared_country);

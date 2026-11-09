@@ -88,7 +88,7 @@
     show("ws-error", "");
     return Promise.all([
       // admission and calendar_event_id arrive with migration 20261109120000; without it the page still loads.
-      getJson("/rest/v1/workshop_sessions?select=id,slug,kind,title,starts_at,status,price_ghs,capacity,admission,calendar_event_id,reserved_graduate_seats&order=starts_at.desc")
+      getJson("/rest/v1/workshop_sessions?select=id,slug,kind,title,starts_at,status,price_ghs,capacity,admission,calendar_event_id,reserved_graduate_seats,is_test&order=starts_at.desc")
         .catch(function () { return getJson("/rest/v1/workshop_sessions?select=id,slug,kind,title,starts_at,status,price_ghs,capacity&order=starts_at.desc"); }),
       getJson("/rest/v1/workshop_registrations?select=*&order=created_at.desc"),
       getJson("/rest/v1/workshop_payment_attempts?select=registration_id,reference,status,amount_minor,received_minor,refunded_minor,mode,verified_via,created_at&order=created_at.asc"),
@@ -158,6 +158,13 @@
    *   remove  an account on the event whose registration is no longer
    *           confirmed (refund, cancellation) or that was replaced
    * Removals are listed first: a changed account is removed, then added. */
+  /* Test, as the database decides it (workshop_is_test_registration): a test
+   * session, or any test-mode checkout. Test rows never count towards revenue,
+   * places, campaigns or commission. */
+  function isTest(r) {
+    var s = ws.sessions[r.session_id];
+    return !!(s && s.is_test === true) || (ws.attempts[r.id] || []).some(function (a) { return a.mode === "test"; });
+  }
   function isInvite(r) { var s = ws.sessions[r.session_id]; return !!(s && s.admission === "invite"); }
   function toAdd(r) { return isInvite(r) && r.status === "confirmed" && !!r.attend_email && r.attend_email !== r.invited_email; }
   function toRemove(r) { return isInvite(r) && !!r.invited_email && (r.status !== "confirmed" || r.attend_email !== r.invited_email); }
@@ -178,12 +185,13 @@
       });
       total += add.length + remove.length + missing.length;
       var who = function (r, email) {
-        var test = (ws.attempts[r.id] || []).some(function (a) { return a.mode === "test"; });
+        var test = isTest(r);
         return "<strong>" + esc(r.full_name) + "</strong> " + esc(email) + (test ? ' <span class="tag tag--bad">TEST</span>' : "") +
           (r.price_tier === "graduate" ? ' <span class="tag">Graduate, complimentary</span>' : "") +
           " <small>(" + esc(STATUS[r.status] || r.status) + ")</small>";
       };
-      return '<div class="ws-inv"><h4>' + esc(s.title) + " &mdash; " + esc(when(s.starts_at)) + "</h4>" +
+      return '<div class="ws-inv"><h4>' + esc(s.title) + " &mdash; " + esc(when(s.starts_at)) + (s.is_test ? ' <span class="tag tag--bad">TEST SESSION</span>' : "") + "</h4>" +
+        (s.is_test ? '<p class="msg msg--bad">Rehearsal only. Add these addresses to the rehearsal Calendar event, never to a workshop&rsquo;s real event.</p>' : "") +
         "<p><small>Google Calendar event ID: " + esc(s.calendar_event_id || "not recorded") + ". On the event now: " + onEvent + ".</small></p>" +
         (dupes.length ? '<p class="msg msg--bad">The same Google account is on more than one confirmed registration: ' + esc(dupes.join(", ")) + ". Invite it once.</p>" : "") +
         (remove.length ? "<p><strong>Remove from the event</strong></p><ul>" + remove.map(function (r) {
@@ -209,7 +217,7 @@
     $("ws-count").textContent = rows.length;
     $("ws-rows").innerHTML = rows.map(function (r) {
       var s = ws.sessions[r.session_id] || {};
-      var test = (ws.attempts[r.id] || []).some(function (a) { return a.mode === "test"; });
+      var test = isTest(r);
       return "<tr>" +
         "<td><strong>" + esc(r.full_name) + "</strong><br><small>" + esc(r.email_normalized) + "</small>" +
           (r.whatsapp ? "<br><small>" + esc(r.whatsapp) + (r.whatsapp_consent ? " (consented)" : "") + "</small>" : "") + "</td>" +
@@ -250,7 +258,7 @@
    *   review  paid out, but no longer payable (refunded, cancelled, voided): manual review, no automatic clawback */
   function payable(r) {
     var atts = ws.attempts[r.id] || [];
-    if (atts.some(function (a) { return a.mode === "test"; })) return false;
+    if (isTest(r)) return false;
     return Number(r.commission_ghs) > 0 && !!r.referrer_id && r.price_tier !== "graduate" && !r.commission_voided_at &&
       r.status === "confirmed" && r.payment_status === "paid" && Number(r.amount_paid_minor) === Math.round(Number(r.amount_ghs) * 100) &&
       atts.some(function (a) { return a.status === "succeeded"; }) &&
@@ -277,7 +285,8 @@
         totals.paid += paid; totals.commission += commission;
       }
       var label = { due: "Due", paid: "Paid (" + esc(ws.payouts[r.id] ? ws.payouts[r.id].payout_reference : "") + ")",
-        review: "Paid out, but no longer payable: review", none: r.commission_voided_at ? "Voided: " + esc(r.commission_void_reason || "") : "Not earned (" + esc(STATUS[r.status] || r.status) + ")" }[st];
+        review: "Paid out, but no longer payable: review",
+        none: isTest(r) ? "Test registration: never payable" : r.commission_voided_at ? "Voided: " + esc(r.commission_void_reason || "") : "Not earned (" + esc(STATUS[r.status] || r.status) + ")" }[st];
       return "<tr><td>" + esc(r.full_name) + "<br><small>" + esc(s.title || "") + "</small></td><td>" + esc(r.referral_code) + "</td>" +
         '<td class="num">' + cedis(r.list_price_ghs) + '</td><td>' + esc(DISCOUNT[r.discount_kind] || "None") + " " + cedis(r.discount_ghs) +
         '</td><td class="num">' + cedis(paid) + '</td><td class="num">' + cedis(commission) + '</td><td class="num">' + cedis(paid - commission) +
@@ -285,11 +294,23 @@
         (st === "due" ? ' <button class="mini" type="button" data-ws-payout="' + esc(r.id) + '">Record payout</button>' : "") +
         (st === "due" || st === "paid" ? ' <button class="mini" type="button" data-ws-void="' + esc(r.id) + '">Void</button>' : "") + "</td></tr>";
     }).join("");
+    /* A code is created "prepared": it works on test sessions only, so it can
+     * be rehearsed (link and typed) before registration opens. Activate it only
+     * when you are ready to give it to the graduate. */
+    var REF_STATE = { prepared: "Prepared: rehearsal only, not valid on live workshops", active: "Active: valid on live workshops", suspended: "Suspended: valid nowhere" };
+    var linkable = Object.keys(ws.sessions).map(function (id) { return ws.sessions[id]; })
+      .filter(function (s) { return s.status !== "cancelled" && s.status !== "completed" && ws.commission[s.id] > 0; });
     var codes = ws.referrers.map(function (x) {
-      return "<li><strong>" + esc(x.code) + "</strong> &mdash; " + esc(x.credential_id) + " (" + esc(x.status) +
-        (x.expires_at ? ", expires " + esc(when(x.expires_at)) : "") + ")<br><small>Link: " + esc(location.origin) + "/workshops/?ref=" + esc(x.code) + "</small> " +
-        '<button class="mini" type="button" data-ws-ref-toggle="' + esc(x.credential_id) + '" data-to="' + (x.status === "active" ? "suspend_referrer" : "activate_referrer") + '">' +
-        (x.status === "active" ? "Suspend" : "Reactivate") + "</button></li>";
+      var links = linkable.map(function (s) {
+        return "<br><small>" + (s.is_test ? "Rehearsal link (test-mode deployment only): " : "Link for " + esc(s.title) + ": ") +
+          esc(location.origin) + "/workshops/" + esc(s.slug) + "/?ref=" + esc(x.code) + "</small>";
+      }).join("");
+      var to = x.status === "active" ? "suspend_referrer" : "activate_referrer";
+      var label = x.status === "active" ? "Suspend" : x.status === "prepared" ? "Activate for live workshops" : "Reactivate";
+      return "<li><strong>" + esc(x.code) + "</strong> &mdash; " + esc(x.credential_id) + " (" + esc(REF_STATE[x.status] || x.status) +
+        (x.expires_at ? ", expires " + esc(when(x.expires_at)) : "") + ")" + links + " " +
+        '<button class="mini" type="button" data-ws-ref-toggle="' + esc(x.credential_id) + '" data-to="' + to + '" data-from="' + esc(x.status) + '">' +
+        label + "</button></li>";
     }).join("");
     $("ws-referrals").innerHTML = (codes ? "<ul>" + codes + "</ul>" : '<p class="msg msg--empty">No referral codes issued.</p>') +
       (table ? '<div class="roll-wrap"><table class="roll"><caption class="vh">Referred registrations</caption><thead><tr>' +
@@ -306,7 +327,7 @@
       if (!s.capacity) return "";
       var mine = ws.rows.filter(function (r) { return r.session_id === id && ["confirmed", "payment_received_review", "refund_pending"].indexOf(r.status) !== -1; });
       var grad = mine.filter(function (r) { return r.price_tier === "graduate"; }).length;
-      return "<li>" + esc(s.title) + ": general " + (mine.length - grad) + " of " + s.capacity +
+      return "<li>" + esc(s.title) + (s.is_test ? " (TEST SESSION, separate places)" : "") + ": general " + (mine.length - grad) + " of " + s.capacity +
         (s.reserved_graduate_seats ? ", reserved graduate " + grad + " of " + s.reserved_graduate_seats : "") + "</li>";
     }).join("");
   }
@@ -324,6 +345,8 @@
       var reason = window.prompt("Why is this commission void (for example, a fraudulent or mistaken sale)? This is recorded.");
       if (reason) apiPost({ registration_id: voided.getAttribute("data-ws-void"), action: "void_commission", value: reason.trim() }).then(done("Commission voided.")).catch(fail);
     } else if (toggle) {
+      if (toggle.getAttribute("data-from") === "prepared" &&
+          !window.confirm("Activate this code for live workshops? Do this only when you are ready to give it to the graduate: anyone holding it can then use it.")) return;
       apiPost({ action: toggle.getAttribute("data-to"), credential_id: toggle.getAttribute("data-ws-ref-toggle") }).then(done("Saved.")).catch(fail);
     }
   });
@@ -367,7 +390,7 @@
   function campaigns(rows) {
     var groups = {};
     rows.forEach(function (r) {
-      if ((ws.attempts[r.id] || []).some(function (a) { return a.mode === "test"; })) return; // test checkouts never count
+      if (isTest(r)) return; // test sessions and test checkouts never count
       var key = (r.utm_campaign || "(none)") + "\u0000" + (r.utm_content || "");
       var g = groups[key] = groups[key] || { c: r.utm_campaign || "(no campaign)", a: r.utm_content || "", n: 0, paid: 0, held: 0, rev: 0 };
       g.n += 1;

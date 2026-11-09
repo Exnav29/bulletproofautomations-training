@@ -158,7 +158,7 @@ async function register(email = EMAIL, opts: Row = {}): Promise<string> {
     `select public.workshop_register(p_slug => 'test-webinar', p_email => $1, p_full_name => 'Same Person',
        p_whatsapp => null, p_whatsapp_consent => false, p_terms_version => '2026-11-03',
        p_token_hash => null, p_attribution => $2::jsonb, p_ad_consent => $3) as j`,
-    [email, JSON.stringify({ utm_campaign: '1200001', utm_content: 'ad-7', fbp: 'fb.1.1.1' }), opts.consent ?? true])
+    [email, JSON.stringify({ utm_campaign: '1200001', utm_content: 'ad-7', fbp: 'fb.1.1.1', deployment_mode: opts.mode ?? 'off' }), opts.consent ?? true])
   assert(['created', 'existing'].includes(res.rows[0].j.outcome), JSON.stringify(res.rows[0].j))
   return res.rows[0].j.registration_id
 }
@@ -330,9 +330,10 @@ Deno.test({ name: 'test-signed event claiming the live domain is refused', ...op
 } })
 
 Deno.test({ name: 'test reference on a live charge is refused', ...opts, fn: async () => {
-  await reset()
+  // Test checkouts exist only on test sessions, registered from a test-mode deployment.
+  await reset({ is_test: true })
   const before = await cohortSnapshot()
-  const id = await register()
+  const id = await register(EMAIL, { mode: 'test' })
   const reference = await start(id, 'test')
   const r = await deliver(charge(reference))
   assertEquals(r.applied, false)
@@ -341,9 +342,9 @@ Deno.test({ name: 'test reference on a live charge is refused', ...opts, fn: asy
 } })
 
 Deno.test({ name: 'test-mode workshop charge settles its test registration only', ...opts, fn: async () => {
-  await reset()
+  await reset({ is_test: true })
   const before = await cohortSnapshot()
-  const id = await register()
+  const id = await register(EMAIL, { mode: 'test' })
   const reference = await start(id, 'test')
   const r = await deliver(charge(reference, 15000, { domain: 'test' }), TEST)
   assertEquals(r.outcome, 'confirmed')
@@ -553,7 +554,7 @@ Deno.test({ name: 'a referral-priced registration (GHS 300) is confirmed only by
       values ('BPA-TRN-2026-WEBHK1', 'Grad', 'grad@example.com', 'completion', 'valid', '00000000-0000-4000-8000-0000000000b1');
     with g as (insert into private.studio_graduates (data, credential_id, state) values ('{}', 'BPA-TRN-2026-WEBHK1', 'issued') returning id)
     insert into private.studio_graduate_webinar_entitlements (graduate_id) select id from g;
-    insert into public.workshop_referrers (code, credential_id, created_by) values ('GRAD50', 'BPA-TRN-2026-WEBHK1', 'test')`)
+    insert into public.workshop_referrers (code, credential_id, status, created_by) values ('GRAD50', 'BPA-TRN-2026-WEBHK1', 'active', 'test')`)
   const referred = async (email: string) => {
     const res = await pg.query<{ j: Row }>(
       `select public.workshop_register(p_slug => 'test-webinar', p_email => $1, p_full_name => 'Referred Person',

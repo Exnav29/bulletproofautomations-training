@@ -16,6 +16,14 @@
  *
  * The Pages Functions run separately under wrangler (see tests/local-stack/README.md).
  * Nothing here talks to any real service.
+ *
+ * RELEASE2=1 adds release 2 (20261109120000) and seeds the workshop 01 rehearsal
+ * session (docs/workshops-rehearsal/), is_test = true because wrangler holds a test key,
+ * with made-up certificate records shaped like production's: two Foundations holders, two
+ * Intermediate graduates with fees paid, and graduate KWAME's referral code, issued
+ * 'prepared' as the admin would issue it. :54350 then fronts the database with a stand-in
+ * for Supabase Auth's /auth/v1/user (local-admin-jwt is the admin), so /admin/workshops/
+ * runs in the browser against the same data.
  */
 import { loadDatabase, serveDatabase } from '../helpers/postgrest.ts'
 
@@ -25,8 +33,11 @@ const u = (p: string) => new URL(p, import.meta.url)
 const TEST_KEY = 'sk_test_webinar_local_stack_000000000000000000'
 const EMAIL = 'preview.tester@example.com'
 
+const RELEASE2 = Deno.env.get('RELEASE2') === '1'
 const pg = await loadDatabase([u('../fixtures/payment-ledger.sql'), u('../fixtures/supabase-stubs.sql'),
-  u('../../supabase/migrations/20261103120000_workshops.sql')])
+  ...(RELEASE2 ? [u('../fixtures/graduate-records.sql')] : []),
+  u('../../supabase/migrations/20261103120000_workshops.sql'),
+  ...(RELEASE2 ? [u('../../supabase/migrations/20261109120000_workshop_admission_benefits.sql')] : [])])
 await pg.exec(`
   insert into public.workshop_sessions (slug, kind, title, starts_at, duration_minutes, format, price_ghs, capacity, status, join_instructions)
   values ('sample-webinar', 'webinar', 'Stop chasing unpaid invoices by hand', '2099-11-21T11:30:00Z', 90, 'live on Zoom', 150, 40,
@@ -43,7 +54,53 @@ await pg.exec('alter table public.enrollments enable trigger enrollments_seed_in
 await pg.exec(`insert into public.payment_plan_installments (enrollment_id, installment_number, amount_ghs, status, paystack_reference)
   values ('00000000-0000-4000-8000-0000000000c1', 2, 350, 'sent', 'BPA-CAB-2026-INSTAL0002')`)
 
-serveDatabase(pg, 54350)
+if (RELEASE2) {
+  const w = JSON.parse(await Deno.readTextFile(u('../../docs/workshops-rehearsal/rehearsal-what-to-charge.json')))
+  await pg.query(`insert into public.workshop_sessions (slug, kind, title, starts_at, duration_minutes, time_zone, format, price_ghs,
+      capacity, status, is_test, admission, calendar_event_id, reserved_graduate_seats, foundations_discount_pct, graduate_free,
+      referral_discount_ghs, referral_commission_ghs)
+    values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'published', true, 'invite', 'rehearsalevent01', $10, $11, $12, $13, 50)`,
+    [w.slug, w.kind, w.title, w.starts_at, w.duration_minutes, w.time_zone, w.format, w.price_ghs, w.capacity,
+      w.reserved_graduate_seats, w.foundations_discount_pct, w.graduate_free, w.referral_discount_ghs])
+  await pg.exec(`insert into public.credentials (credential_id, holder_name, holder_email, credential, status) values
+    ('BPA-FND-2026-LOCAL1', 'Efua Local', 'efua.local@example.com', 'foundations', 'valid'),
+    ('BPA-FND-2026-LOCAL2', 'Esi Local', 'esi.local@example.com', 'foundations', 'valid')`)
+  await pg.exec('alter table public.enrollments disable trigger enrollments_seed_intermediate_payment_plan')
+  for (const [cid, email] of [['BPA-TRN-2026-LOCALK', 'kwame.local@example.com'], ['BPA-TRN-2026-LOCALA', 'abena.local@example.com']]) {
+    const e = (await pg.query<Row>(`insert into public.enrollments (full_name, email, whatsapp, city, experience_level, chosen_option,
+        amount_ghs, payment_plan, payment_status, amount_paid_ghs)
+      values ('Local Graduate', $1, '+233000000000', 'Accra', 'foundations_graduate', 'cohort_only', 750, true, 'paid', 750) returning id`, [email])).rows[0]
+    await pg.query(`insert into public.payment_plan_installments (enrollment_id, installment_number, amount_ghs, status)
+      values ($1, 1, 400, 'paid'), ($1, 2, 350, 'paid')`, [e.id])
+    await pg.query(`insert into public.credentials (credential_id, holder_name, holder_email, credential, status, enrollment_id)
+      values ($1, 'Local Graduate', $2, 'completion', 'valid', $3)`, [cid, email, e.id])
+    const g = (await pg.query<Row>(`insert into private.studio_graduates (data, credential_id, state)
+      values (jsonb_build_object('email', $1::text), $2, 'issued') returning id`, [email, cid])).rows[0]
+    await pg.query(`insert into private.studio_graduate_webinar_entitlements (graduate_id) values ($1)`, [g.id])
+  }
+  await pg.exec('alter table public.enrollments enable trigger enrollments_seed_intermediate_payment_plan')
+  await pg.exec(`insert into public.workshop_referrers (code, credential_id, status, created_by)
+    values ('KWAME50', 'BPA-TRN-2026-LOCALK', 'prepared', 'johnathan@bulletproofautomations.com')`)
+
+  serveDatabase(pg, 54360)
+  const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET,POST,PATCH,OPTIONS' }
+  Deno.serve({ port: 54350, hostname: '127.0.0.1', onListen() {} }, async (req) => {
+    const url = new URL(req.url)
+    if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors })
+    if (url.pathname === '/auth/v1/user') {
+      return req.headers.get('authorization') === 'Bearer local-admin-jwt'
+        ? Response.json({ email: 'johnathan@bulletproofautomations.com' }, { headers: cors })
+        : new Response('{}', { status: 401, headers: cors })
+    }
+    const res = await fetch('http://127.0.0.1:54360' + url.pathname + url.search,
+      { method: req.method, headers: req.headers, body: req.method === 'GET' ? undefined : await req.text() })
+    const h = new Headers(res.headers)
+    for (const [k, v] of Object.entries(cors)) h.set(k, v)
+    return new Response(await res.arrayBuffer(), { status: res.status, headers: h })
+  })
+} else {
+  serveDatabase(pg, 54350)
+}
 
 // --- Paystack stand-in --------------------------------------------------------------------
 const txns = new Map<string, Row>()
@@ -117,7 +174,10 @@ Deno.serve({ port: 54353, hostname: '127.0.0.1', onListen() {} }, async (req) =>
 Deno.serve({ port: 54352, hostname: '127.0.0.1', onListen() {} }, async () => {
   const q = async (sql: string) => (await pg.query<Row>(sql)).rows
   return Response.json({
-    registrations: await q(`select id, email_normalized, status, payment_status, review_reason, amount_paid_minor, utm_campaign, utm_content, ad_consent from public.workshop_registrations order by created_at`),
+    registrations: await q(`select * from public.workshop_registrations order by created_at`),
+    referrers: RELEASE2 ? await q(`select code, credential_id, status from public.workshop_referrers`) : [],
+    payouts: RELEASE2 ? await q(`select * from public.workshop_referral_payouts`) : [],
+    sessions: await q(`select * from public.workshop_sessions`),
     attempts: await q(`select registration_id, reference, status, amount_minor, received_minor, mode, verified_via, payment_event_id from public.workshop_payment_attempts order by created_at`),
     training_ledger: await q(`select * from public.payment_events`),
     payment_events: await q(`select event, reference, signature_valid, matched, match_note, id from public.workshop_payment_events order by received_at`),

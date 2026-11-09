@@ -29,7 +29,7 @@ const realFetch = globalThis.fetch
 globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url)
   const body = init?.body ? JSON.parse(String(init.body)) : null
-  if (url.host === 'paystack.mock') {
+  if (url.host === 'paystack.mock' || url.host === 'api.paystack.co') {
     if (url.pathname === '/transaction/initialize') {
       if (paystack.failInit) return Response.json({ status: false, message: 'declined' }, { status: 400 })
       paystack.initialized.push({ ...body, _auth: (init?.headers as Row)?.Authorization })
@@ -89,7 +89,8 @@ async function reset(over: Row = {}) {
   await pg.exec(`truncate public.workshop_meta_events, public.workshop_notifications, public.workshop_status_tokens,
     public.workshop_payment_attempts, public.workshop_registrations, public.workshop_sessions, public.workshop_dispatch_config cascade`)
   const row = { slug: 'automate-invoices', kind: 'webinar', title: 'Automate your invoices', duration_minutes: 90,
-    format: 'Online, live', price_ghs: 150, status: 'published', join_instructions: 'Zoom link: https://zoom.example/j/1',
+    // This suite runs as a test-mode deployment (sk_test_ key), so its sessions are test sessions.
+    format: 'Online, live', price_ghs: 150, status: 'published', is_test: true, join_instructions: 'Zoom link: https://zoom.example/j/1',
     starts_at: new Date(Date.now() + 5 * 86400000).toISOString(), ...over }
   const keys = Object.keys(row)
   await pg.query(`insert into public.workshop_sessions (${keys.join(',')}) values (${keys.map((_, i) => '$' + (i + 1)).join(',')})`,
@@ -151,14 +152,14 @@ Deno.test('validation: terms required; honeypot records nothing; stale price ref
 // --- paid -------------------------------------------------------------------------------
 
 Deno.test('paid: live key without WORKSHOP_PAID_CHECKOUT takes no money and starts no attempt', opts, async () => {
-  await reset()
+  await reset({ is_test: false })
   const r = await call(register, '/api/workshops/register', form(), { ...ENV, WORKSHOP_PAYSTACK_SECRET_KEY: 'sk_live_webinar_api_suite_only' })
   assertEquals([r.json.state, r.json.checkout], ['pending_payment', 'unavailable'])
   assertEquals((await rows(`select count(*)::int n from public.workshop_payment_attempts`))[0].n, 0)
 })
 
 Deno.test('paid: the training business key alone never opens webinar checkout', opts, async () => {
-  await reset()
+  await reset({ is_test: false })
   const env = { ...ENV, WORKSHOP_PAYSTACK_SECRET_KEY: undefined }
   const r = await call(register, '/api/workshops/register', form({ testOptIn: true }), env)
   assertEquals([r.json.state, r.json.checkout], ['pending_payment', 'unavailable'])
@@ -166,7 +167,7 @@ Deno.test('paid: the training business key alone never opens webinar checkout', 
 })
 
 Deno.test('paid: a webinar key equal to the training key is refused (same business = shared webhook)', opts, async () => {
-  await reset()
+  await reset({ is_test: false })
   const env = { ...ENV, WORKSHOP_PAYSTACK_SECRET_KEY: 'sk_test_same_key_everywhere', PAYSTACK_SECRET_KEY: 'sk_test_same_key_everywhere' }
   const r = await call(register, '/api/workshops/register', form({ testOptIn: true }), env)
   assertEquals([r.json.state, r.json.checkout], ['pending_payment', 'unavailable'])
@@ -577,8 +578,13 @@ async function seedRecords() {
     await pg.query(`insert into private.studio_graduate_webinar_entitlements (graduate_id) values ($1)`, [g.id])
   }
 }
+// A signed charge in the reference's own mode (BPA-WEB- live, BPA-WTEST- test).
+const domainOf = (reference: string) => reference.startsWith('BPA-WEB-') ? 'live' : 'test'
 const pay = (reference: string, minor: number) => pg.query(`select public.workshop_apply_charge(p_reference => $1,
-  p_amount_minor => $2, p_currency => 'GHS', p_domain => 'test', p_paid_at => now(), p_via => 'webhook')`, [reference, minor])
+  p_amount_minor => $2, p_currency => 'GHS', p_domain => $3, p_paid_at => now(), p_via => 'webhook')`, [reference, minor, domainOf(reference)])
+const refund = (reference: string, minor: number) => pg.query(`select public.workshop_apply_refund(p_reference => $1, p_amount_minor => $2,
+  p_domain => $3)`, [reference, minor, domainOf(reference)])
+const activate = (credential_id: string) => adminPost({ action: 'activate_referrer', credential_id })
 const reg = (over: Row) => call(register, '/api/workshops/register', form({ testOptIn: true, attend_email: 'meet@gmail.com', ...over }))
 const adminPost = (body: Row) => call(adminAction, '/api/admin/workshops', body, ENV, adminEnv)
 const issueCode = (credential_id: string, value = '') => adminPost({ action: 'create_referrer', credential_id, value })
@@ -598,16 +604,18 @@ const payable = async (email: string) => (await rows(`select public.workshop_com
   where email_normalized = $1`, [email]))[0].p
 
 Deno.test('release 1-2: standard GHS 350; referral GHS 300 with GHS 50 commission and GHS 250 retained', opts, async () => {
-  await reset({ ...RELEASE }); await seedRecords()
-  const std = await reg({ email: 'ama@example.com', expected_price: 350 })
+  // Commission is only ever payable on a live sale, so this runs as the live deployment.
+  await reset({ ...RELEASE, is_test: false }); await seedRecords()
+  const std = await liveReg({ email: 'ama@example.com', expected_price: 350 })
   assertEquals([std.json.state, std.json.price_ghs, paystack.initialized.at(-1)!.amount], ['checkout', 350, 35000])
   await pay(std.json.reference, 35000)
   assertEquals([(await regRow('ama@example.com')).status, (await regRow('ama@example.com')).commission_ghs], ['confirmed', '0.00'])
 
   assertEquals((await issueCode('BPA-TRN-2026-GRAD01', 'KWAME50')).json.code, 'KWAME50')
-  const q = await call(quote, '/api/workshops/quote', { slug: 'automate-invoices', email: 'kofi@example.com', ref: 'kwame50' })
+  await activate('BPA-TRN-2026-GRAD01')
+  const q = await call(quote, '/api/workshops/quote', { slug: 'automate-invoices', email: 'kofi@example.com', ref: 'kwame50' }, LIVE)
   assertEquals([q.json.list_price_ghs, q.json.discount_kind, q.json.discount_ghs, q.json.price_ghs], [350, 'referral', 50, 300])
-  const kofi = await reg({ email: 'kofi@example.com', ref: 'kwame50', expected_price: 300 })
+  const kofi = await liveReg({ email: 'kofi@example.com', ref: 'kwame50', expected_price: 300 })
   assertEquals([kofi.json.price_ghs, kofi.json.discount_kind, paystack.initialized.at(-1)!.amount], [300, 'referral', 30000])
   await pay(kofi.json.reference, 30000)
   const r = await regRow('kofi@example.com')
@@ -623,18 +631,18 @@ Deno.test('release 1-2: standard GHS 350; referral GHS 300 with GHS 50 commissio
 })
 
 Deno.test('release 3-4, 7: Foundations GHS 280; Foundations plus referral is still GHS 280 (never 230) with GHS 50 commission', opts, async () => {
-  await reset({ ...RELEASE }); await seedRecords()
-  await issueCode('BPA-TRN-2026-GRAD01', 'KWAME50')
+  await reset({ ...RELEASE, is_test: false }); await seedRecords()
+  await issueCode('BPA-TRN-2026-GRAD01', 'KWAME50'); await activate('BPA-TRN-2026-GRAD01')
   const t1 = await verifyCert('efua@example.com', 'BPA-FND-2026-AAAAAA')
   assert(t1)
-  const efua = await reg({ email: 'efua@example.com', verification: t1, expected_price: 280 })
+  const efua = await liveReg({ email: 'efua@example.com', verification: t1, expected_price: 280 })
   assertEquals([efua.json.price_ghs, efua.json.discount_kind, paystack.initialized.at(-1)!.amount], [280, 'foundations', 28000])
   assertEquals((await regRow('efua@example.com')).commission_ghs, '0.00')
 
   const t2 = await verifyCert('esi@example.com', 'BPA-FND-2026-BBBBBB')
-  const q = await call(quote, '/api/workshops/quote', { slug: 'automate-invoices', email: 'esi@example.com', ref: 'KWAME50', verification: t2 })
+  const q = await call(quote, '/api/workshops/quote', { slug: 'automate-invoices', email: 'esi@example.com', ref: 'KWAME50', verification: t2 }, LIVE)
   assertEquals([q.json.price_ghs, q.json.discount_kind, q.json.discount_ghs, q.json.referral], [280, 'foundations', 70, 'applied'])
-  const esi = await reg({ email: 'esi@example.com', ref: 'KWAME50', verification: t2, expected_price: 280 })
+  const esi = await liveReg({ email: 'esi@example.com', ref: 'KWAME50', verification: t2, expected_price: 280 })
   assertEquals([esi.json.price_ghs, paystack.initialized.at(-1)!.amount], [280, 28000], 'the larger discount, not both')
   await pay(esi.json.reference, 28000)
   const r = await regRow('esi@example.com')
@@ -770,37 +778,180 @@ Deno.test('release 10: general places full while a reserved graduate place remai
 })
 
 Deno.test('release 11: no commission on a refunded or duplicate purchase; a refund after payout is flagged, not clawed back', opts, async () => {
-  await reset({ ...RELEASE }); await seedRecords()
-  await issueCode('BPA-TRN-2026-GRAD01', 'KWAME50')
+  await reset({ ...RELEASE, is_test: false }); await seedRecords()
+  await issueCode('BPA-TRN-2026-GRAD01', 'KWAME50'); await activate('BPA-TRN-2026-GRAD01')
   // Refunded before payout: never payable.
-  const a = await reg({ email: 'a@example.com', ref: 'KWAME50', expected_price: 300 })
+  const a = await liveReg({ email: 'a@example.com', ref: 'KWAME50', expected_price: 300 })
   await pay(a.json.reference, 30000)
-  await pg.query(`select public.workshop_apply_refund(p_reference => $1, p_amount_minor => 30000, p_domain => 'test')`, [a.json.reference])
+  await refund(a.json.reference, 30000)
   assertEquals(await payable('a@example.com'), false)
   assertEquals((await adminPost({ action: 'record_payout', registration_id: (await regRow('a@example.com')).id, value: 'MOMO-A' })).status, 409)
   // Duplicate payment: not payable while the extra money is held.
-  const b = await reg({ email: 'b@example.com', ref: 'KWAME50', expected_price: 300 })
+  const b = await liveReg({ email: 'b@example.com', ref: 'KWAME50', expected_price: 300 })
   await pay(b.json.reference, 30000)
-  const again = await reg({ email: 'b@example.com', ref: 'KWAME50', expected_price: 300 })
+  const again = await liveReg({ email: 'b@example.com', ref: 'KWAME50', expected_price: 300 })
   await pg.query(`insert into public.workshop_payment_attempts (registration_id, reference, amount_minor, currency, mode)
-    values ($1, 'BPA-WTEST-2026-DUPLICATE1', 30000, 'GHS', 'test')`, [(await regRow('b@example.com')).id])
-  await pay('BPA-WTEST-2026-DUPLICATE1', 30000)
+    values ($1, 'BPA-WEB-2026-DUPLICATE1', 30000, 'GHS', 'live')`, [(await regRow('b@example.com')).id])
+  await pay('BPA-WEB-2026-DUPLICATE1', 30000)
   assertEquals((await regRow('b@example.com')).payment_status, 'needs_review')
   assertEquals(await payable('b@example.com'), false)
   assertEquals(again.json.registration, 'existing')
   // Paid out, then refunded: the payout stays on record, the commission is no longer payable, the admin reviews it.
-  const c = await reg({ email: 'c@example.com', ref: 'KWAME50', expected_price: 300 })
+  const c = await liveReg({ email: 'c@example.com', ref: 'KWAME50', expected_price: 300 })
   await pay(c.json.reference, 30000)
   const cid = (await regRow('c@example.com')).id
   assertEquals((await adminPost({ action: 'record_payout', registration_id: cid, value: 'MOMO-C' })).json.ok, true)
   assertEquals((await adminPost({ action: 'record_payout', registration_id: cid, value: 'MOMO-C2' })).json.already, true, 'paid once')
-  await pg.query(`select public.workshop_apply_refund(p_reference => $1, p_amount_minor => 30000, p_domain => 'test')`, [c.json.reference])
+  await refund(c.json.reference, 30000)
   assertEquals(await payable('c@example.com'), false)
   assertEquals((await rows(`select count(*)::int n from public.workshop_referral_payouts where registration_id = $1`, [cid]))[0].n, 1)
   // A voided (fraudulent) sale is not payable either.
-  const d = await reg({ email: 'd@example.com', ref: 'KWAME50', expected_price: 300 })
+  const d = await liveReg({ email: 'd@example.com', ref: 'KWAME50', expected_price: 300 })
   await pay(d.json.reference, 30000)
   await adminPost({ action: 'void_commission', registration_id: (await regRow('d@example.com')).id, value: 'Card reported stolen' })
   assertEquals(await payable('d@example.com'), false)
   assert(paystack.initialized.every((i) => !('subaccount' in i) && !('split' in i) && !('split_code' in i)), 'no Paystack split')
+})
+
+// --- release 2 corrections: test isolation --------------------------------------------------
+// A live deployment, simulated: a live key with live checkout on. A live key always talks to
+// api.paystack.co, which the fetch stand-in above intercepts, so nothing leaves this machine.
+const LIVE: Row = { ...ENV, WORKSHOP_PAYSTACK_SECRET_KEY: 'sk_live_webinar_api_suite_only', WORKSHOP_PAID_CHECKOUT: 'on' }
+const liveReg = (over: Row) => call(register, '/api/workshops/register', form({ attend_email: 'meet@gmail.com', ...over }), LIVE)
+const REHEARSAL = { slug: 'rehearsal-what-to-charge', is_test: true, calendar_event_id: 'rehearsalevent01' }
+async function addSession(over: Row) {
+  const row = { ...RELEASE, title: 'Rehearsal', format: 'Online, live', status: 'published', duration_minutes: 180,
+    starts_at: new Date(Date.now() + 5 * 86400000).toISOString(), ...over }
+  const keys = Object.keys(row)
+  await pg.query(`insert into public.workshop_sessions (${keys.join(',')}) values (${keys.map((_, i) => '$' + (i + 1)).join(',')})`,
+    keys.map((k) => (row as Row)[k]))
+}
+const seats = async (slug: string) => (await rows(`select public.workshop_seats_in_use(id) g, public.workshop_graduate_seats_in_use(id) r
+  from public.workshop_sessions where slug = $1`, [slug]))[0]
+
+Deno.test('isolation: a test-mode deployment cannot see, register on, hold or pay for a live workshop', opts, async () => {
+  await reset({ ...RELEASE, is_test: false }); await seedRecords()
+  // The Preview deployment (test key) and the live workshop.
+  const s = await call(session, '/api/workshops/session?slug=automate-invoices', null)
+  assertEquals(s.status, 404)
+  assertEquals((await call(quote, '/api/workshops/quote', { slug: 'automate-invoices', email: 'ama@example.com' })).status, 404)
+  const r = await reg({ email: 'ama@example.com', expected_price: 350 })
+  assertEquals([r.status, r.json.code], [409, 'closed'])
+  // The free graduate path, which takes no payment, is refused the same way.
+  const t = await verifyCert('abena@example.com', 'BPA-TRN-2026-GRAD02')
+  assertEquals((await reg({ email: 'abena@example.com', verification: t, expected_price: 0 })).json.code, 'closed')
+  assertEquals((await rows(`select count(*)::int n from public.workshop_registrations`))[0].n, 0)
+  assertEquals(await seats('automate-invoices'), { g: 0, r: 0 })
+  assertEquals(paystack.initialized.length, 0)
+  // Below the Pages Functions: a test checkout on a live registration is refused by the database.
+  const live = await liveReg({ email: 'kofi@example.com', expected_price: 350 })
+  assertEquals(live.json.state, 'checkout')
+  const out = (await rows(`select public.workshop_start_attempt($1, 'BPA-WTEST-2026-ABCDEFGHIJ', 'test') o`, [(await regRow('kofi@example.com')).id]))[0].o
+  assertEquals(out.outcome, 'mode_not_allowed')
+  assertEquals((await rows(`select count(*)::int n from public.workshop_payment_attempts where mode = 'test'`))[0].n, 0)
+})
+
+Deno.test('isolation: a live deployment cannot register on a test session; test registrations never use live places', opts, async () => {
+  await reset({ ...RELEASE, is_test: false, capacity: 2, reserved_graduate_seats: 1 }); await seedRecords()
+  await addSession({ ...REHEARSAL, capacity: 2, reserved_graduate_seats: 1 })
+  // The production deployment cannot see or book the rehearsal session.
+  assertEquals((await call(session, '/api/workshops/session?slug=rehearsal-what-to-charge', null, LIVE)).status, 404)
+  assertEquals((await liveReg({ slug: 'rehearsal-what-to-charge', email: 'x@example.com', expected_price: 350 })).json.code, 'closed')
+  // Fill the rehearsal session completely, general and reserved, in test mode.
+  for (const email of ['t1@example.com', 't2@example.com']) {
+    const t = await reg({ slug: 'rehearsal-what-to-charge', email, expected_price: 350 })
+    await pay(t.json.reference, 35000)
+  }
+  const tg = await call(benefit, '/api/workshops/benefit', { step: 'request', slug: 'rehearsal-what-to-charge', email: 'abena@example.com', certificate_id: 'BPA-TRN-2026-GRAD02' })
+  assertEquals(tg.json.ok, true)
+  const code = codeSentTo('abena@example.com')!
+  const tok = (await call(benefit, '/api/workshops/benefit', { step: 'confirm', slug: 'rehearsal-what-to-charge', email: 'abena@example.com', certificate_id: 'BPA-TRN-2026-GRAD02', code })).json.verification
+  assertEquals((await reg({ slug: 'rehearsal-what-to-charge', email: 'abena@example.com', verification: tok, expected_price: 0 })).json.state, 'confirmed')
+  assertEquals(await seats('rehearsal-what-to-charge'), { g: 2, r: 1 })
+  // The live workshop is untouched: every place still free, and both kinds still bookable.
+  assertEquals(await seats('automate-invoices'), { g: 0, r: 0 })
+  const live = await call(session, '/api/workshops/session?slug=automate-invoices', null, LIVE)
+  assertEquals([live.json.status, live.json.general_full, live.json.graduate_places_open], ['open', false, true])
+  // A graduate who rehearsed can still redeem the same certificate on the live workshop.
+  const t2 = await call(benefit, '/api/workshops/benefit', { step: 'request', slug: 'automate-invoices', email: 'abena@example.com', certificate_id: 'BPA-TRN-2026-GRAD02' })
+  assertEquals(t2.json.ok, true)
+  const code2 = codeSentTo('abena@example.com')!
+  const tok2 = (await call(benefit, '/api/workshops/benefit', { step: 'confirm', slug: 'automate-invoices', email: 'abena@example.com', certificate_id: 'BPA-TRN-2026-GRAD02', code: code2 })).json.verification
+  assertEquals((await liveReg({ email: 'abena@example.com', verification: tok2, expected_price: 0 })).json.state, 'confirmed')
+  assertEquals(await seats('automate-invoices'), { g: 0, r: 1 })
+  // Test rows are identified by the database itself.
+  const flags = await rows(`select r.email_normalized e, public.workshop_is_test_registration(r.id) t from public.workshop_registrations r
+    join public.workshop_sessions s on s.id = r.session_id order by s.slug, r.email_normalized`)
+  assertEquals(flags.map((f) => f.t), [false, true, true, true])
+})
+
+Deno.test('isolation: a commission on a test registration can never be paid, by any route', opts, async () => {
+  await reset({ ...RELEASE }); await seedRecords()
+  await issueCode('BPA-TRN-2026-GRAD01', 'KWAME50')
+  const t = await reg({ email: 'kofi@example.com', ref: 'KWAME50', expected_price: 300 })
+  await pay(t.json.reference, 30000)
+  const r = await regRow('kofi@example.com')
+  assertEquals([r.status, r.payment_status, r.commission_ghs], ['confirmed', 'paid', '50.00'], 'otherwise a qualifying sale')
+  assertEquals(await payable('kofi@example.com'), false)
+  // The admin endpoint.
+  const viaAdmin = await adminPost({ action: 'record_payout', registration_id: r.id, value: 'MOMO-1' })
+  assertEquals(viaAdmin.status, 409)
+  assert(viaAdmin.json.error.includes('test registration'))
+  // The database function, called directly.
+  const viaRpc = (await rows(`select public.workshop_admin_referral('johnathan@bulletproofautomations.com', 'record_payout',
+    p_registration_id => $1, p_value => 'MOMO-2') o`, [r.id]))[0].o
+  assertEquals(viaRpc, { ok: false, error: 'test_registration' })
+  // A direct insert into the payouts table, as the service role could do through the REST API.
+  let refused = ''
+  try {
+    await pg.query(`insert into public.workshop_referral_payouts (registration_id, referrer_id, amount_ghs, payout_reference, recorded_by)
+      values ($1, $2, 50, 'MOMO-3', 'sql')`, [r.id, r.referrer_id])
+  } catch (e) { refused = String((e as Error).message) }
+  assert(refused.includes('test registration'), refused)
+  assertEquals((await rows(`select count(*)::int n from public.workshop_referral_payouts`))[0].n, 0)
+  // A live sale becomes test, and unpayable, the moment any test checkout is recorded against it.
+  await activate('BPA-TRN-2026-GRAD01')
+  await addSession({ slug: 'live-twin', is_test: false, calendar_event_id: 'livetwinevent01' })
+  const lr = await liveReg({ slug: 'live-twin', email: 'esi@example.com', ref: 'KWAME50', expected_price: 300 })
+  await pay(lr.json.reference, 30000)
+  assertEquals(await payable('esi@example.com'), true)
+  await pg.query(`insert into public.workshop_payment_attempts (registration_id, reference, amount_minor, currency, mode)
+    values ($1, 'BPA-WTEST-2026-STRAYTEST1', 30000, 'GHS', 'test')`, [(await regRow('esi@example.com')).id])
+  assertEquals(await payable('esi@example.com'), false)
+  assertEquals((await adminPost({ action: 'record_payout', registration_id: (await regRow('esi@example.com')).id, value: 'MOMO-4' })).status, 409)
+})
+
+Deno.test('isolation: is_test is fixed once a session has registrations; no two sessions share a Calendar event', opts, async () => {
+  await reset({ ...RELEASE, calendar_event_id: 'realevent01' }); await seedRecords()
+  await reg({ email: 'ama@example.com', expected_price: 350 })
+  let msg = ''
+  try { await pg.exec(`update public.workshop_sessions set is_test = false where slug = 'automate-invoices'`) } catch (e) { msg = String((e as Error).message) }
+  assert(msg.includes('is_test cannot change'), msg)
+  msg = ''
+  try { await addSession({ slug: 'second', is_test: false, calendar_event_id: 'realevent01' }) } catch (e) { msg = String((e as Error).message) }
+  assert(msg.includes('workshop_sessions_calendar_event_once'), msg)
+  // A session with no registrations can still be reclassified (set up before it opens).
+  await addSession({ slug: 'empty', is_test: false, calendar_event_id: 'emptyevent01' })
+  await pg.exec(`update public.workshop_sessions set is_test = true where slug = 'empty'`)
+})
+
+Deno.test('referral codes are issued prepared: rehearsal only until activated, for links and typed codes alike', opts, async () => {
+  await reset({ ...RELEASE, is_test: false }); await seedRecords()
+  await addSession(REHEARSAL)
+  const issued = await issueCode('BPA-TRN-2026-GRAD01', 'KWAME50')
+  assertEquals([issued.json.code, issued.json.status], ['KWAME50', 'prepared'])
+  const liveQuote = () => call(quote, '/api/workshops/quote', { slug: 'automate-invoices', email: 'kofi@example.com', ref: 'KWAME50' }, LIVE)
+  const testQuote = () => call(quote, '/api/workshops/quote', { slug: 'rehearsal-what-to-charge', email: 'kofi@example.com', ref: 'KWAME50' })
+  // Prepared: works on the rehearsal session, refused on the live workshop.
+  assertEquals((await testQuote()).json.price_ghs, 300)
+  assertEquals((await liveQuote()).json.code, 'referral_invalid')
+  assertEquals((await liveReg({ email: 'kofi@example.com', ref: 'KWAME50', expected_price: 300 })).json.code, 'referral_invalid')
+  // A typed code and a link both arrive as the same field; a typed lower-case code is accepted.
+  assertEquals((await reg({ slug: 'rehearsal-what-to-charge', email: 'kofi@example.com', ref: 'kwame50', expected_price: 300 })).json.price_ghs, 300)
+  // Activated: valid on the live workshop.
+  assertEquals((await adminPost({ action: 'activate_referrer', credential_id: 'BPA-TRN-2026-GRAD01' })).json.ok, true)
+  assertEquals((await liveQuote()).json.price_ghs, 300)
+  // Suspended: valid nowhere.
+  await adminPost({ action: 'suspend_referrer', credential_id: 'BPA-TRN-2026-GRAD01' })
+  assertEquals([(await liveQuote()).json.code, (await testQuote()).json.code], ['referral_invalid', 'referral_invalid'])
 })

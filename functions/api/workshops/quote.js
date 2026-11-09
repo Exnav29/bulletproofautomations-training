@@ -5,7 +5,7 @@
  * be shared) but nothing about anyone's certificate. */
 
 import { json, refuse, readJson, str, rpc } from "../_shared.js";
-import { sha256Hex, looksLikeToken } from "../_workshops.js";
+import { sha256Hex, looksLikeToken, workshopMode } from "../_workshops.js";
 
 export async function onRequestPost({ request, env }) {
   const body = await readJson(request, 2048);
@@ -19,7 +19,8 @@ export async function onRequestPost({ request, env }) {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return refuse("supabase-not-configured", 503);
 
   const out = await rpc(env, "workshop_quote", {
-    p_slug: slug, p_email: email, p_referral_code: ref || null, p_token_hash: verification ? await sha256Hex(verification) : null
+    p_slug: slug, p_email: email, p_referral_code: ref || null, p_token_hash: verification ? await sha256Hex(verification) : null,
+    p_deployment_mode: workshopMode(env)
   });
   if (!out.ok) return json({ ok: false, code: "unavailable" }, 503);
   const q = out.data || {};

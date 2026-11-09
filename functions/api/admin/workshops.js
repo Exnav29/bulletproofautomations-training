@@ -20,6 +20,7 @@ const REFERRAL = new Set(["create_referrer", "suspend_referrer", "activate_refer
   "grant_email", "revoke_grant"]);
 const REFERRAL_ERRORS = {
   not_eligible_graduate: "That certificate is not an eligible Intermediate graduate: it must be valid and issued, with an active entitlement and training fees paid in full.",
+  test_registration: "This is a test registration. A commission on it can never be paid.",
   not_qualifying: "No commission is payable: it needs a confirmed registration, paid once in full and not refunded, with a valid referral, not voided and not complimentary.",
   reference_required: "Enter the MoMo or bank reference for the payout.",
   reason_required: "Give a reason (at least five characters).",
@@ -66,7 +67,7 @@ export async function onRequestPost(context) {
     if (!done.data || done.data.ok !== true) {
       return result({ ok: false, error: REFERRAL_ERRORS[done.data && done.data.error] || "The action was refused." }, 409);
     }
-    return result({ ok: true, already: done.data.already === true, code: done.data.code || null });
+    return result({ ok: true, already: done.data.already === true, code: done.data.code || null, status: done.data.status || null });
   }
   if (id && ADMISSION.has(action)) {
     const email = body && typeof body.email === "string" ? body.email.slice(0, 160) : null;

@@ -133,10 +133,15 @@ begin
     'amount_minor', att.amount_minor, 'currency', att.currency, 'session_id', s.id);
 end $$;
 
+drop trigger if exists workshop_payout_guard on public.workshop_referral_payouts;
+drop trigger if exists workshop_session_test_fixed on public.workshop_sessions;
 drop function if exists public.workshop_admin_referral(text, text, text, uuid, text, text, text, uuid);
 drop function if exists public.workshop_admin_admission(text, uuid, text, text);
 drop function if exists public.workshop_commission_payable(public.workshop_registrations);
-drop function if exists public.workshop_quote(text, text, text, text);
+drop function if exists public.workshop_payout_guard();
+drop function if exists public.workshop_is_test_registration(uuid);
+drop function if exists public.workshop_session_test_fixed();
+drop function if exists public.workshop_quote(text, text, text, text, text);
 drop function if exists public.workshop_price(uuid, text, text, text);
 drop function if exists public.workshop_benefit_confirm(text, text, text, text, text);
 drop function if exists public.workshop_benefit_request(text, text, text, text);
@@ -165,7 +170,9 @@ alter table public.workshop_registrations
   drop column if exists invited_email,
   drop column if exists attend_email;
 drop table if exists public.workshop_referrers;
+drop index if exists public.workshop_sessions_calendar_event_once;
 alter table public.workshop_sessions
+  drop column if exists is_test,
   drop column if exists referral_commission_ghs,
   drop column if exists referral_discount_ghs,
   drop column if exists reserved_graduate_seats,

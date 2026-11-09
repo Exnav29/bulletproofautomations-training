@@ -196,9 +196,35 @@ Deno.test('release 2 (admission + benefits): additive, idempotent, reversible to
     e: await cols('enrollments'), c: await cols('credentials'),
     reg: await body('workshop_register'), start: await body('workshop_start_attempt'), seats: await body('workshop_seats_in_use'),
   }
-  await pg.exec(UP2)
+  // Existing sessions are classified from their own payments. As production stands: a session with
+  // only test checkouts (test-webinar-checkout), and one with none (workshop 01, a draft).
+  const seed = async (both: boolean) => {
+    await pg.exec(`truncate public.workshop_payment_attempts, public.workshop_registrations, public.workshop_sessions cascade`)
+    for (const [slug, modes] of [['only-test', ['test']], ['only-live', ['live']], ['no-payments', []], ...(both ? [['both-modes', ['test', 'live']]] : [])] as [string, string[]][]) {
+      const s = (await q(`insert into public.workshop_sessions (slug, kind, title, starts_at, duration_minutes, format, price_ghs)
+        values ($1, 'workshop', 'Seeded', now() + interval '9 days', 60, 'Online', 10) returning id`, [slug]))[0].id
+      let n = 0
+      for (const mode of modes) {
+        const r = (await q(`insert into public.workshop_registrations (session_id, email_normalized, full_name, terms_ack, terms_version)
+          values ($1, $2, 'Seeded', true, '2026-11-03') returning id`, [s, slug + (++n) + '@example.com']))[0].id
+        await q(`insert into public.workshop_payment_attempts (registration_id, reference, amount_minor, mode) values ($1, $2, 1000, $3)`,
+          [r, (mode === 'live' ? 'BPA-WEB-2026-' : 'BPA-WTEST-2026-') + (slug.replace(/-/g, '').toUpperCase() + 'XXXXXXXXXX').slice(0, 9) + n, mode])
+      }
+    }
+  }
+  // A session with both kinds cannot be classified: the migration stops, and (applied in one
+  // transaction, as Supabase applies migrations) leaves nothing behind.
+  await seed(true)
+  let stopped = ''
+  try { await pg.exec('begin;\n' + UP2 + '\ncommit;') } catch (e) { stopped = String((e as Error).message); await pg.exec('rollback') }
+  assert(stopped.includes('both test and live payments'), stopped)
+  assertEquals(await cols('workshop_sessions'), before.s, 'a stopped migration changes nothing')
+  await seed(false)
+  await pg.exec('begin;\n' + UP2 + '\ncommit;')
+  assertEquals((await q(`select slug, is_test from public.workshop_sessions order by slug`)).map((r) => [r.slug, r.is_test]),
+    [['no-payments', false], ['only-live', false], ['only-test', true]])
   await pg.exec(UP2) // idempotent
-  for (const c of ['admission', 'calendar_event_id', 'foundations_discount_pct', 'graduate_free', 'reserved_graduate_seats', 'referral_discount_ghs', 'referral_commission_ghs']) {
+  for (const c of ['admission', 'calendar_event_id', 'foundations_discount_pct', 'graduate_free', 'reserved_graduate_seats', 'referral_discount_ghs', 'referral_commission_ghs', 'is_test']) {
     assert((await cols('workshop_sessions')).split(',').includes(c), c)
   }
   for (const c of ['attend_email', 'invited_email', 'price_tier', 'benefit_credential_id', 'list_price_ghs', 'discount_kind', 'discount_ghs', 'referral_code', 'referrer_id', 'commission_ghs']) {
@@ -207,7 +233,7 @@ Deno.test('release 2 (admission + benefits): additive, idempotent, reversible to
   assertEquals([await cols('payment_events'), await cols('enrollments'), await cols('credentials')], [before.p, before.e, before.c],
     'the training ledger, enrollments and the certificate register are untouched')
   for (const fn of ['workshop_set_attend_email(uuid,text)', 'workshop_admin_admission(text,uuid,text,text)', 'workshop_credential_tier(text)', 'workshop_email_may_claim(text,text,uuid)', 'workshop_benefit_request(text,text,text,text)',
-    'workshop_benefit_confirm(text,text,text,text,text)', 'workshop_price(uuid,text,text,text)', 'workshop_quote(text,text,text,text)',
+    'workshop_benefit_confirm(text,text,text,text,text)', 'workshop_price(uuid,text,text,text)', 'workshop_quote(text,text,text,text,text)', 'workshop_is_test_registration(uuid)',
     'workshop_obligations_met(uuid)', 'workshop_admin_referral(text,text,text,uuid,text,text,text,uuid)', 'workshop_register(text,text,text,text,boolean,text,text,jsonb,boolean,numeric,timestamptz)']) {
     for (const role of ['anon', 'authenticated']) {
       assertEquals((await q(`select has_function_privilege($1, $2, 'execute') ok`, [role, 'public.' + fn]))[0].ok, false, role + ' ' + fn)
@@ -218,11 +244,59 @@ Deno.test('release 2 (admission + benefits): additive, idempotent, reversible to
   }
   // Defaults leave every existing session exactly as it behaved.
   await session()
-  assertEquals((await q(`select admission, foundations_discount_pct, graduate_free, reserved_graduate_seats from public.workshop_sessions`))[0],
-    { admission: 'link', foundations_discount_pct: 0, graduate_free: false, reserved_graduate_seats: 0 })
+  assertEquals((await q(`select admission, foundations_discount_pct, graduate_free, reserved_graduate_seats, is_test from public.workshop_sessions`))[0],
+    { admission: 'link', foundations_discount_pct: 0, graduate_free: false, reserved_graduate_seats: 0, is_test: false })
+  // A Google Calendar event ID of realistic length is accepted (a repetition count above 255
+  // in the check would make every non-null value an error).
+  await pg.exec(`update public.workshop_sessions set calendar_event_id = '${'a'.repeat(26)}'`)
   await pg.exec(DOWN2)
+  assertEquals((await q(`select count(*)::int n from pg_trigger where tgname in ('workshop_payout_guard', 'workshop_session_test_fixed')`))[0].n, 0)
+  assertEquals((await q(`select count(*)::int n from pg_proc where proname in ('workshop_is_test_registration', 'workshop_payout_guard',
+    'workshop_session_test_fixed', 'workshop_quote', 'workshop_price')`))[0].n, 0, 'rollback removes every release 2 function')
   assertEquals([await cols('workshop_sessions'), await cols('workshop_registrations')], [before.s, before.r])
   assertEquals([await body('workshop_register'), await body('workshop_start_attempt'), await body('workshop_seats_in_use')],
     [before.reg, before.start, before.seats], 'rollback restores the original function bodies exactly')
   await pg.exec(UP2)
+})
+
+Deno.test('release 2 deployment checks: preflight, apply, postflight, rollback, rollback check on a production-shaped database', async () => {
+  const db = new PGlite()
+  const x = async (sql: string, v: unknown[] = []) => (await db.query<Row>(sql, v)).rows
+  for (const f of ['./fixtures/payment-ledger.sql', './fixtures/supabase-stubs.sql', './fixtures/graduate-records.sql']) await db.exec(await read(f))
+  // What production has that the fixtures do not: the migration history and the dispatcher job.
+  await db.exec(`create schema if not exists supabase_migrations;
+    create table if not exists supabase_migrations.schema_migrations (version text primary key, name text);
+    create schema if not exists cron; create table if not exists cron.job (jobname text, command text);
+    insert into cron.job values ('workshop-dispatch', 'select net.http_post(url := ''https://webinar-e2e-test.bulletproofautomations-training.pages.dev/api/workshops/dispatch'')')`)
+  await db.exec(UP)
+  await db.exec(`insert into supabase_migrations.schema_migrations values ('20261103120000', 'workshops')`)
+  // Production as it stands: a test session with paid test registrations, and workshop 01 as a draft.
+  const t = (await x(`insert into public.workshop_sessions (slug, kind, title, starts_at, duration_minutes, format, price_ghs, capacity, status, join_instructions)
+    values ('test-webinar-checkout', 'webinar', 'Test', now() + interval '30 days', 60, 'test', 10, 10, 'draft', 'x') returning id`))[0].id
+  await x(`insert into public.workshop_sessions (slug, kind, title, starts_at, duration_minutes, format, price_ghs, capacity, status, join_instructions)
+    values ('what-to-charge-for-automation', 'workshop', 'W01', now() + interval '33 days', 180, 'live online', 350, 25, 'draft', 'private')`)
+  for (let i = 1; i <= 3; i++) {
+    const r = (await x(`insert into public.workshop_registrations (session_id, email_normalized, full_name, terms_ack, terms_version, status, payment_status, amount_ghs, amount_paid_minor)
+      values ($1, $2, 'Tester', true, '2026-11-03', 'confirmed', 'paid', 10, 1000) returning id`, [t, `t${i}@example.com`]))[0].id
+    await x(`insert into public.workshop_payment_attempts (registration_id, reference, amount_minor, mode, status) values ($1, $2, 1000, 'test', 'succeeded')`,
+      [r, 'BPA-WTEST-2026-PREFLIGHT' + i])
+  }
+  const run = async (f: string) => Object.values((await x(await read(f)))[0])[0] as Row
+  const pre = await run('../supabase/checks/20261109120000_preflight.sql')
+  for (const k of Object.keys(pre).filter((k) => k.startsWith('ok_'))) assertEquals(pre[k], true, 'preflight ' + k)
+  assertEquals([pre.will_become_test_sessions, pre.live_attempts], [['test-webinar-checkout'], 0])
+
+  // Applied as Supabase applies a migration: one transaction, recorded in the history.
+  await db.exec('begin;\n' + await read('../supabase/migrations/20261109120000_workshop_admission_benefits.sql') +
+    `\ninsert into supabase_migrations.schema_migrations values ('20261109120000', 'workshop_admission_benefits');\ncommit;`)
+  const post = await run('../supabase/checks/20261109120000_postflight.sql')
+  for (const k of Object.keys(post).filter((k) => k.startsWith('ok_'))) assertEquals(post[k], true, 'postflight ' + k)
+  assertEquals(post.sessions, [['test-webinar-checkout', true], ['what-to-charge-for-automation', false]])
+  assertEquals(post.snapshot, pre.snapshot, 'nothing outside release 2 changed, including every existing registration and payment')
+
+  await db.exec(await read('../supabase/migrations/rollback/20261109120000_workshop_admission_benefits_down.sql'))
+  const back = await run('../supabase/checks/20261109120000_rollback_check.sql')
+  for (const k of Object.keys(back).filter((k) => k.startsWith('ok_'))) assertEquals(back[k], true, 'rollback ' + k)
+  assertEquals(back.release1_bodies, pre.release1_bodies, 'rollback restores the release 1 functions exactly')
+  assertEquals(back.snapshot, pre.snapshot)
 })

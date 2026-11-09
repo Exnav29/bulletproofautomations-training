@@ -1,7 +1,11 @@
 -- ---------------------------------------------------------------------------
--- Workshop release 2: admission by Google Calendar invitation (part 1) and
--- prices, certificate benefits, reserved graduate places and referrals (part 2).
--- Applied as ONE migration with ONE rollback.
+-- Workshop release 2: admission by Google Calendar invitation (part 1),
+-- prices, certificate benefits, reserved graduate places and referrals (part 2),
+-- and test isolation (part 3). Applied as ONE migration with ONE rollback.
+--
+-- STATUS: NOT APPLIED. Production already has 20261103120000_workshops (do not
+-- reapply it). Apply only with the owner's explicit approval, after the
+-- preflight in docs/workshops-runbook.md, "Release 2 deployment checklist".
 --
 -- Part 1. Admission by Google Calendar invitation.
 --
@@ -26,7 +30,8 @@ alter table public.workshop_sessions
     check (admission in ('link', 'invite')),
   -- Private, like join_instructions: anon and authenticated have no grant on this table.
   add column if not exists calendar_event_id text
-    check (calendar_event_id is null or calendar_event_id ~ '^[A-Za-z0-9_]{5,1024}$');
+    -- (PostgreSQL caps a regex repetition count at 255, so the length is checked separately.)
+    check (calendar_event_id is null or (calendar_event_id ~ '^[A-Za-z0-9_]+$' and length(calendar_event_id) between 5 and 1024));
 
 alter table public.workshop_registrations
   add column if not exists attend_email text
@@ -103,7 +108,9 @@ create table if not exists public.workshop_referrers (
   -- A public code. Never a certificate number or any private identifier.
   code text not null unique check (code ~ '^[A-Z0-9]{4,16}$'),
   credential_id text not null unique,
-  status text not null default 'active' check (status in ('active', 'suspended')),
+  -- prepared: issued, valid on test sessions only (rehearsal); active: valid
+  -- everywhere; suspended: valid nowhere. See Part 3.
+  status text not null default 'prepared' check (status in ('prepared', 'active', 'suspended')),
   expires_at timestamptz,
   created_by text not null,
   created_at timestamptz not null default now(),
@@ -182,6 +189,92 @@ grant all on public.workshop_referrers, public.workshop_referral_payouts, public
   public.workshop_benefit_email_grants to service_role;
 -- The signed-in admin reads referrers, payouts and grants; never code or token hashes.
 grant select on public.workshop_referrers, public.workshop_referral_payouts, public.workshop_benefit_email_grants to authenticated;
+
+-- ===========================================================================
+-- Part 3. Test isolation.
+--
+-- A session is either test or live (is_test), and money and registrations
+-- never cross between them:
+--   * A test session takes only test-mode checkouts, and only registrations
+--     made by a test-mode deployment (Pages holding a sk_test_ key). A live
+--     session refuses both. So a Preview deployment can neither hold nor
+--     confirm a place on a live workshop, and a rehearsal never uses any of
+--     its 25 general or 5 reserved places.
+--   * A commission on a test registration is never payable, and a payout row
+--     for one is refused by a trigger, whoever inserts it.
+--   * A referral code starts 'prepared': valid on test sessions only, until
+--     the admin activates it. Codes can be issued and rehearsed before
+--     registration opens without being usable on a live workshop.
+--   * No two sessions share a Google Calendar event, so a rehearsal session
+--     cannot point at a real workshop's guest list.
+-- A session's is_test cannot change once it has a registration.
+-- ===========================================================================
+alter table public.workshop_sessions
+  add column if not exists is_test boolean not null default false;
+
+-- Existing sessions: one that has only ever taken test-mode checkouts is a test
+-- session (on 9 November 2026, test-webinar-checkout alone). One with both
+-- modes cannot be classified safely, so the migration stops instead.
+do $$
+begin
+  if exists (select 1 from public.workshop_sessions s
+              where exists (select 1 from public.workshop_payment_attempts a join public.workshop_registrations r on r.id = a.registration_id
+                             where r.session_id = s.id and a.mode = 'test')
+                and exists (select 1 from public.workshop_payment_attempts a join public.workshop_registrations r on r.id = a.registration_id
+                             where r.session_id = s.id and a.mode = 'live')) then
+    raise exception 'A workshop session has both test and live payments. Classify it by hand before applying release 2.';
+  end if;
+  update public.workshop_sessions s set is_test = true
+   where not s.is_test
+     and exists (select 1 from public.workshop_payment_attempts a join public.workshop_registrations r on r.id = a.registration_id
+                  where r.session_id = s.id and a.mode = 'test');
+end $$;
+
+create unique index if not exists workshop_sessions_calendar_event_once
+  on public.workshop_sessions (calendar_event_id) where calendar_event_id is not null;
+
+create or replace function public.workshop_session_test_fixed()
+returns trigger language plpgsql set search_path = '' as $$
+begin
+  if new.is_test is distinct from old.is_test
+     and exists (select 1 from public.workshop_registrations r where r.session_id = old.id) then
+    raise exception 'is_test cannot change on a workshop session that has registrations';
+  end if;
+  return new;
+end $$;
+drop trigger if exists workshop_session_test_fixed on public.workshop_sessions;
+create trigger workshop_session_test_fixed before update of is_test on public.workshop_sessions
+  for each row execute function public.workshop_session_test_fixed();
+
+-- A registration is test if its session is, or if any of its checkouts was.
+create or replace function public.workshop_is_test_registration(p_registration_id uuid)
+returns boolean language sql stable set search_path = '' as $$
+  select exists (select 1 from public.workshop_registrations r join public.workshop_sessions s on s.id = r.session_id
+                  where r.id = p_registration_id and s.is_test)
+      or exists (select 1 from public.workshop_payment_attempts a
+                  where a.registration_id = p_registration_id and a.mode = 'test')
+$$;
+
+-- The last line of defence: no payout row for a test registration or for a
+-- commission that is not payable, whether it comes from workshop_admin_referral,
+-- the REST API with the service key, or SQL.
+create or replace function public.workshop_payout_guard()
+returns trigger language plpgsql set search_path = '' as $$
+declare
+  r public.workshop_registrations;
+begin
+  if public.workshop_is_test_registration(new.registration_id) then
+    raise exception 'A commission on a test registration cannot be paid';
+  end if;
+  select * into r from public.workshop_registrations where id = new.registration_id;
+  if not found or not public.workshop_commission_payable(r) or new.referrer_id is distinct from r.referrer_id then
+    raise exception 'This registration has no payable commission';
+  end if;
+  return new;
+end $$;
+drop trigger if exists workshop_payout_guard on public.workshop_referral_payouts;
+create trigger workshop_payout_guard before insert or update on public.workshop_referral_payouts
+  for each row execute function public.workshop_payout_guard();
 drop policy if exists "Admin reads workshop referrers" on public.workshop_referrers;
 create policy "Admin reads workshop referrers" on public.workshop_referrers for select to authenticated
   using ((auth.jwt() ->> 'email') = 'johnathan@bulletproofautomations.com');
@@ -369,7 +462,8 @@ begin
 
   if ref <> '' and tier <> 'graduate' then
     select * into x from public.workshop_referrers where code = ref;
-    if not found or x.status <> 'active' or (x.expires_at is not null and x.expires_at <= now())
+    if not found or not (x.status = 'active' or (x.status = 'prepared' and s.is_test))
+       or (x.expires_at is not null and x.expires_at <= now())
        or public.workshop_credential_tier(x.credential_id) is distinct from 'graduate' then
       return jsonb_build_object('ok', false, 'error', 'referral_invalid');
     end if;
@@ -399,13 +493,16 @@ begin
 end $$;
 
 -- What the page shows before checkout. Writes nothing.
-create or replace function public.workshop_quote(p_slug text, p_email text, p_referral_code text, p_token_hash text)
+create or replace function public.workshop_quote(p_slug text, p_email text, p_referral_code text, p_token_hash text,
+  p_deployment_mode text default 'off')
 returns jsonb language plpgsql stable security definer set search_path = '' as $$
 declare
   s public.workshop_sessions;
 begin
   select * into s from public.workshop_sessions where slug = p_slug and status <> 'draft';
-  if not found then return jsonb_build_object('ok', false, 'error', 'not_found'); end if;
+  if not found or s.is_test is distinct from (coalesce(p_deployment_mode, 'off') = 'test') then
+    return jsonb_build_object('ok', false, 'error', 'not_found');
+  end if;
   return public.workshop_price(s.id, p_email, p_referral_code, p_token_hash);
 end $$;
 
@@ -431,6 +528,11 @@ begin
   select * into s from public.workshop_sessions where slug = p_slug for update;
   if not found or s.status = 'draft' then
     return jsonb_build_object('outcome', 'not_found');
+  end if;
+  -- Test and live never cross (Part 3). deployment_mode is set by the Pages
+  -- Function from its own key, never by the browser; absent reads as 'off'.
+  if s.is_test is distinct from (coalesce(a->>'deployment_mode', 'off') = 'test') then
+    return jsonb_build_object('outcome', 'closed');
   end if;
 
   select * into r from public.workshop_registrations where session_id = s.id and email_normalized = email;
@@ -537,6 +639,10 @@ begin
   if r.status <> 'pending_payment' or r.amount_ghs = 0 or r.payment_status = 'needs_review' then
     return jsonb_build_object('outcome', 'not_payable', 'status', r.status);
   end if;
+  -- Test money only on a test session, live money only on a live one (Part 3).
+  if (p_mode = 'test') is distinct from s.is_test then
+    return jsonb_build_object('outcome', 'mode_not_allowed');
+  end if;
   if not public.workshop_session_open(s) then
     return jsonb_build_object('outcome', 'closed');
   end if;
@@ -556,10 +662,12 @@ end $$;
 
 -- A commission is payable only on a confirmed registration whose single
 -- verified payment is held in full (no refund, duplicate or mismatch), made
--- with a valid referral, not voided, and not a complimentary place.
+-- with a valid referral, not voided, not a complimentary place, and not a
+-- test registration (Part 3).
 create or replace function public.workshop_commission_payable(r public.workshop_registrations)
 returns boolean language sql stable set search_path = '' as $$
   select r.commission_ghs > 0 and r.referrer_id is not null and r.price_tier <> 'graduate'
+     and not public.workshop_is_test_registration(r.id)
      and r.status = 'confirmed' and r.payment_status = 'paid' and r.commission_voided_at is null
      and r.amount_paid_minor = round(r.amount_ghs * 100)::bigint
      and exists (select 1 from public.workshop_payment_attempts a where a.registration_id = r.id and a.status = 'succeeded')
@@ -619,8 +727,10 @@ begin
 end $$;
 
 -- Referrals and certificate recovery, admin only:
---   create_referrer      p_credential_id, optional p_value = the code (A-Z, 0-9, 4-16)
---   suspend_referrer / activate_referrer   p_credential_id
+--   create_referrer      p_credential_id, optional p_value = the code (A-Z, 0-9, 4-16).
+--                        Created 'prepared': usable on test sessions only.
+--   activate_referrer    p_credential_id: valid on live sessions too (when shared)
+--   suspend_referrer     p_credential_id: valid nowhere
 --   record_payout        p_registration_id, p_value = MoMo or bank reference
 --   void_commission      p_registration_id, p_value = reason (fraud, error)
 --   grant_email          p_credential_id, p_email, p_value = reason, p_session_slug
@@ -645,7 +755,7 @@ begin
 
   if p_action = 'create_referrer' then
     select * into x from public.workshop_referrers where credential_id = cred;
-    if found then return jsonb_build_object('ok', true, 'already', true, 'code', x.code); end if;
+    if found then return jsonb_build_object('ok', true, 'already', true, 'code', x.code, 'status', x.status); end if;
     if public.workshop_credential_tier(cred) is distinct from 'graduate' then
       return jsonb_build_object('ok', false, 'error', 'not_eligible_graduate');
     end if;
@@ -671,9 +781,10 @@ begin
         exit when not exists (select 1 from public.workshop_referrers where code = new_code);
       end loop;
     end if;
-    insert into public.workshop_referrers (code, credential_id, created_by) values (new_code, cred, lower(p_actor_email))
+    insert into public.workshop_referrers (code, credential_id, status, created_by)
+    values (new_code, cred, 'prepared', lower(p_actor_email))
     returning * into x;
-    return jsonb_build_object('ok', true, 'code', x.code);
+    return jsonb_build_object('ok', true, 'code', x.code, 'status', x.status);
 
   elsif p_action in ('suspend_referrer', 'activate_referrer') then
     update public.workshop_referrers set status = case when p_action = 'suspend_referrer' then 'suspended' else 'active' end
@@ -684,6 +795,7 @@ begin
   elsif p_action = 'record_payout' then
     select * into r from public.workshop_registrations where id = p_registration_id for update;
     if not found then return jsonb_build_object('ok', false, 'error', 'not_found'); end if;
+    if public.workshop_is_test_registration(r.id) then return jsonb_build_object('ok', false, 'error', 'test_registration'); end if;
     if not public.workshop_commission_payable(r) then return jsonb_build_object('ok', false, 'error', 'not_qualifying'); end if;
     if length(val) < 3 then return jsonb_build_object('ok', false, 'error', 'reference_required'); end if;
     insert into public.workshop_referral_payouts (registration_id, referrer_id, amount_ghs, payout_reference, recorded_by)
@@ -726,7 +838,8 @@ begin
     'workshop_obligations_met(uuid)', 'workshop_credential_tier(text)', 'workshop_email_may_claim(text,text,uuid)',
     'workshop_graduate_seats_in_use(uuid)', 'workshop_benefit_request(text,text,text,text)',
     'workshop_benefit_confirm(text,text,text,text,text)', 'workshop_price(uuid,text,text,text)',
-    'workshop_quote(text,text,text,text)', 'workshop_commission_payable(public.workshop_registrations)',
+    'workshop_quote(text,text,text,text,text)', 'workshop_commission_payable(public.workshop_registrations)',
+    'workshop_is_test_registration(uuid)', 'workshop_session_test_fixed()', 'workshop_payout_guard()',
     'workshop_admin_admission(text,uuid,text,text)',
     'workshop_admin_referral(text,text,text,uuid,text,text,text,uuid)'
   ] loop
