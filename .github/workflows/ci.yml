@@ -74,6 +74,9 @@ jobs:
           npm run build
           node tests/admin-console.test.mjs
           node tests/workshop-tracking.test.mjs
+          # The workshop page script on a generated fixture page (sold-out retry, token resume).
+          WORKSHOP_CONTENT_DIR=tests/fixtures/workshops npm run build
+          node tests/workshops-page.test.mjs
       - name: Render real PDFs and reject invalid inputs
         run: deno test --node-modules-dir=none --allow-net --allow-read --allow-env tests/certificate-renderer.test.ts
 
@@ -106,6 +109,34 @@ jobs:
       - name: Production snapshot checksum
         run: |
           echo "0d1255d065a03ccf44391394132b224ea2320c6f9c435de87acd95c75a2acb10  supabase/deployed/paystack-webhook-v9/index.ts" | sha256sum -c -
+
+  # Concurrency and event ordering on a real PostgreSQL server, not PGlite: two
+  # connections, real row locks and SKIP LOCKED (Codex audit, 9 November 2026).
+  workshop-concurrency:
+    name: Workshop concurrency (real PostgreSQL)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          # A throwaway server for this job only, reachable only from it.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.5.4
+      - name: Refunds, holds, waitlist emails and Calendar sync under concurrency
+        run: deno test --node-modules-dir=none --allow-net --allow-read --allow-env tests/workshops-concurrency.test.ts
+        env:
+          WORKSHOP_PG_URL: postgres://postgres@localhost:5432/postgres
 
   # Existing production behaviour, measured with main's own tests and code, must be
   # unchanged by this branch. See docs/workshops-shared-changes.md.
