@@ -61,45 +61,61 @@ carries **no Meet link and no calendar file**: the link only works for invited a
 Google invitation is the calendar entry, so a second one would duplicate it. Google sends the
 invitation, with the Meet link, when the admin adds the guest.
 
-**Admitting people (manual, in `/admin/workshops/`, panel "Google Calendar invitations").** For each
-invitation-only session it derives:
+**Admitting people: automatic (release 3, `20261110120000_workshop_calendar_sync.sql`).** The existing
+dispatcher (cron `workshop-dispatch`, every minute; also straight after a free registration or an
+admin retry) runs `functions/api/_calendar.js`:
 
-| List | Who | What the admin does |
-|---|---|---|
-| Add to the event | `confirmed` and either paid (Paystack-verified, or admitted from review) or a complimentary graduate place still matching an active entitlement, with an account not on the event | Copy the addresses, add them as guests on that session's event, choose **Send** when Calendar asks, then click "Added in Calendar" |
-| Remove from the event | An account on the event whose registration is no longer `confirmed` (refund requested, refunded, cancelled) or that was replaced | Remove the guest in Calendar, then click "Removed in Calendar" |
-| Paid, no Google account yet | `confirmed` without an account | Email them; set it with "Set Google account" |
+| When | What happens on the session's Google Calendar event |
+|---|---|
+| A registration is confirmed and paid, or is a complimentary graduate place still matching an active entitlement | Its Google account is added, and Google emails the invitation (`sendUpdates=all`) |
+| Refund requested, refunded or cancelled | The account it added is removed, and Google emails the cancellation |
+| An approved change of Google account (admin "Set Google account") | Old account removed and new one added, in one update |
+| Duplicate payment webhook, a second run, an account already on the event | Nothing is sent; the record is brought in step |
 
-The database refuses to record an invitation for a registration that is not `confirmed` and paid or legitimately free, a graduate place whose entitlement has lapsed, a second
-registration with the same account, or a new account while the old one is still on the event.
-"Added" twice is a no-op. Account changes are made only on a request from the registered email.
+**What it never does:**
+- It never touches anyone else on the event (the host, a co-host).
+- It never invites an unpaid, unconfirmed or ineligible registration.
+- It never invites the same account twice in a session.
+- Test and live never mix: a test-mode deployment syncs test sessions only, and any other deployment syncs live sessions only.
 
-**Event settings, once per event:** guests cannot see the guest list and cannot invite others, so
-participants never see each other's addresses. Keep the Meet access setting restricted to invited
-guests. Do not add anyone who has not appeared under "Add to the event".
+**Exception queue.** Temporary Google errors (rate limits, 5xx, an etag race) are retried on each run, up
+to 5 times. A missing event, an address Google refuses, or a lapsed graduate place stops at once. All of
+them appear first in the "Google Calendar invitations" panel under **Needs attention**, with the reason
+and a **Retry now** button. The manual buttons stay as a fallback and still record a change made by hand.
+
+**Event settings, once per event:** guests cannot see the guest list and cannot invite others, and Meet
+access is restricted to invited guests.
 
 **Joining instructions stay private.** `join_instructions` and `calendar_event_id` live only on the
 session row: `anon` and `authenticated` have no grant, and no public endpoint selects them. An
 invitation-only session never prints `join_instructions`. The build fails on a meeting link or a
 join field in any content file, and CI fails if one reaches `dist/`.
 
-### Can invitations be automated?
+### Connecting Google Calendar (owner, once)
 
-**Yes, technically, but not with what exists today, and it needs the owner's authorization.** The
-events live on a personal Google account, so a Google service account cannot reach them:
-domain-wide delegation exists only for Workspace. Automation would need:
+Reuses the Google OAuth client Bulletproof Scheduling already uses, so no new Google Cloud project is
+needed. It is a **separate** authorisation for this site, limited to calendar events. Scheduling's own
+stored connection is never copied.
 
-1. a Google Cloud project with the Calendar API enabled, at no cost;
-2. an OAuth client and consent screen, published "In production". In "Testing" the refresh token
-   expires after 7 days. An unverified app is allowed for the owner's own account, behind
-   Google's warning screen;
-3. the owner signing in once to grant `calendar.events` on that account, with the refresh token
-   stored as a Supabase or Cloudflare secret, never in this repository;
-4. code calling `events.patch` on each event's `calendar_event_id` to add or remove the derived
-   guests, with `sendUpdates=all`.
+1. In Google Cloud console, open the OAuth client Scheduling uses.
+   - Add `https://developers.google.com/oauthplayground` as an authorised redirect URI.
+   - Create a new client secret for this site.
+   - Check the consent screen's publishing status is **In production**. In "Testing", Google expires the token after 7 days and invitations stop.
+2. In Google's OAuth Playground (settings: "Use your own OAuth credentials"):
+   - Authorise scope `https://www.googleapis.com/auth/calendar.events`, signed in to the Google account that **owns the workshop events**.
+   - Exchange the code for tokens.
+3. In Cloudflare Pages, set these as **encrypted** variables, Production and Preview separately, then redeploy:
+   - `GOOGLE_CALENDAR_CLIENT_ID`
+   - `GOOGLE_CALENDAR_CLIENT_SECRET`
+   - `GOOGLE_CALENDAR_REFRESH_TOKEN`
+   - Optional: `GOOGLE_CALENDAR_ID` (default `primary`)
 
-The manual panel is the first version because it needs none of that. If automated later, the same
-derived lists and `workshop_admin_admission` records stay as they are; only the clicking changes.
+   Never paste them anywhere else.
+4. Test on the rehearsal session (`rehearsal-what-to-charge`, test-mode Preview) with its own test event: a test payment should appear as a guest within a minute, and a refund should remove it.
+
+Until the three values are set, nothing calls Google and the manual panel works as before. **Rollback:**
+remove `GOOGLE_CALENDAR_REFRESH_TOKEN` and redeploy, then (optionally) run
+`rollback/20261110120000_workshop_calendar_sync_down.sql`.
 
 ### Access test before taking money (owner, with two Google accounts)
 

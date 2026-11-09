@@ -9,6 +9,7 @@ import { rpc } from "./_shared.js";
 import { db as rest } from "./_installments.js";
 import { sendMail, esc, MAILBOX } from "./_mail.js";
 import { sendConversions, metaConfigured } from "./_meta.js";
+import { syncInvitations } from "./_calendar.js";
 
 export const WORKSHOP_APP = "bulletproof-training-workshops";
 
@@ -382,8 +383,8 @@ export function emailFor(kind, registration, session, env) {
    concurrently: rows are claimed with SKIP LOCKED.
    --------------------------------------------------------------------------- */
 export async function processOutbox(env, origin, limits) {
-  const report = { emails: { sent: 0, failed: 0, skipped: 0 }, meta: { sent: 0, failed: 0 }, reconciled: 0 };
-  const max = Object.assign({ emails: 10, meta: 20, reconcile: 10 }, limits || {});
+  const report = { emails: { sent: 0, failed: 0, skipped: 0 }, meta: { sent: 0, failed: 0 }, reconciled: 0, calendar: null };
+  const max = Object.assign({ emails: 10, meta: 20, reconcile: 10, calendar: 10 }, limits || {});
 
   // 1. Reconcile started checkouts the webhook has not settled (missed or late
   //    webhook). Paystack is asked directly; the RPC applies at most once.
@@ -411,7 +412,11 @@ export async function processOutbox(env, origin, limits) {
     }
   }
 
-  // 3. Meta Conversions API. Left queued (not claimed) until it is configured.
+  // 3. Google Calendar invitations for invitation-only sessions (_calendar.js).
+  //    A test-mode deployment syncs test sessions only; any other, live only.
+  if (max.calendar > 0) report.calendar = await syncInvitations(env, workshopMode(env) === "test", max.calendar);
+
+  // 4. Meta Conversions API. Left queued (not claimed) until it is configured.
   if (max.meta > 0 && metaConfigured(env)) {
     const claimed = await rpc(env, "workshop_claim_meta_events", { p_limit: max.meta });
     const events = claimed.ok && Array.isArray(claimed.data) ? claimed.data : [];

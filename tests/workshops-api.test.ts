@@ -11,7 +11,8 @@ import { loadDatabase, serveDatabase } from './helpers/postgrest.ts'
 type Row = Record<string, any>
 const u = (p: string) => new URL(p, import.meta.url)
 const pg = await loadDatabase([u('./fixtures/payment-ledger.sql'), u('./fixtures/supabase-stubs.sql'), u('./fixtures/graduate-records.sql'),
-  u('../supabase/migrations/20261103120000_workshops.sql'), u('../supabase/migrations/20261109120000_workshop_admission_benefits.sql')])
+  u('../supabase/migrations/20261103120000_workshops.sql'), u('../supabase/migrations/20261109120000_workshop_admission_benefits.sql'),
+  u('../supabase/migrations/20261110120000_workshop_calendar_sync.sql')])
 const DB = serveDatabase(pg, 54341)
 
 const register = (await import('../functions/api/workshops/register.js')).onRequestPost
@@ -22,12 +23,16 @@ const adminAction = (await import('../functions/api/admin/workshops.js')).onRequ
 
 // --- external services ------------------------------------------------------------------
 const paystack = { paid: new Map<string, Row>(), initialized: [] as Row[], failInit: false }
+// Google Calendar stand-in: the event's guest list and etag, and every write made to it.
+const gcal = { events: new Map<string, Row>(), patches: [] as Row[], tokenFails: false, failNext: [] as number[] }
 const mail: Row[] = []
 const meta: Row[] = []
 const realFetch = globalThis.fetch
 globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url)
-  const body = init?.body ? JSON.parse(String(init.body)) : null
+  // JSON for every service here except Google's token endpoint, which is form-encoded.
+  let body: any = null
+  try { body = init?.body ? JSON.parse(String(init.body)) : null } catch (_) { body = null }
   if (url.host === 'paystack.mock' || url.host === 'api.paystack.co') {
     if (url.pathname === '/transaction/initialize') {
       if (paystack.failInit) return Response.json({ status: false, message: 'declined' }, { status: 400 })
@@ -37,6 +42,24 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const ref = decodeURIComponent(url.pathname.replace('/transaction/verify/', ''))
     const t = paystack.paid.get(ref)
     return Response.json({ status: true, data: t ?? { status: 'abandoned', reference: ref } })
+  }
+  if (url.host === 'oauth2.googleapis.com' && url.pathname === '/token') {
+    const form = new URLSearchParams(String(init?.body))
+    const good = !gcal.tokenFails && form.get('grant_type') === 'refresh_token' && form.get('refresh_token') === 'google-refresh-for-tests'
+    return good ? Response.json({ access_token: 'google-access', expires_in: 3599 }) : Response.json({ error: 'invalid_grant' }, { status: 400 })
+  }
+  if (url.host === 'www.googleapis.com') {
+    const m = url.pathname.match(/^\/calendar\/v3\/calendars\/primary\/events\/([^/]+)$/)
+    if (!m || (init?.headers as Row)?.Authorization !== 'Bearer google-access') return new Response('no', { status: 401 })
+    if (gcal.failNext.length) return new Response('{}', { status: gcal.failNext.shift() })
+    const ev = gcal.events.get(decodeURIComponent(m[1]))
+    if (!ev) return new Response('{}', { status: 404 })
+    if ((init?.method ?? 'GET') === 'GET') return Response.json({ etag: ev.etag, attendees: ev.attendees })
+    if ((init?.headers as Row)['If-Match'] !== ev.etag) return new Response('{}', { status: 412 })
+    const body = JSON.parse(String(init!.body))
+    gcal.patches.push({ event: m[1], sendUpdates: url.searchParams.get('sendUpdates'), emails: body.attendees.map((a: Row) => a.email) })
+    ev.attendees = body.attendees; ev.etag = '"' + (Number(ev.etag.replace(/"/g, '')) + 1) + '"'
+    return Response.json({ etag: ev.etag, attendees: ev.attendees })
   }
   if (url.host === 'api.mail.hostinger.com') {
     if (url.pathname.endsWith('/me')) {
@@ -65,6 +88,9 @@ const ENV: Row = {
   WORKSHOP_PAYSTACK_API_BASE: 'http://paystack.mock',
   PAYSTACK_SECRET_KEY: 'sk_test_training_api_suite_only',
   HOSTINGER_MAIL_API_TOKEN: 'mail-token',
+  // Automatic Google Calendar invitations (functions/api/_calendar.js), against the stand-in above.
+  GOOGLE_CALENDAR_CLIENT_ID: 'client-for-tests', GOOGLE_CALENDAR_CLIENT_SECRET: 'secret-for-tests',
+  GOOGLE_CALENDAR_REFRESH_TOKEN: 'google-refresh-for-tests',
 }
 
 async function call(fn: Function, path: string, body: Row | null, env: Row = ENV, headers: Row = {}) {
@@ -366,12 +392,12 @@ async function paidAndConfirmed(email = 'ama@example.com') {
     p_domain => 'test', p_paid_at => now(), p_via => 'webhook')`, [r.json.reference])
   return r
 }
-async function dispatchNow() {
+async function dispatchNow(env: Row = ENV) {
   const secret = 'dispatch-secret-for-tests'
   const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(secret))))
     .map((b) => b.toString(16).padStart(2, '0')).join('')
   await pg.query(`insert into public.workshop_dispatch_config (secret_hash) values ($1) on conflict do nothing`, [hash])
-  return call(dispatch, '/api/workshops/dispatch', {}, ENV, { 'x-workshop-dispatch': secret })
+  return call(dispatch, '/api/workshops/dispatch', {}, env, { 'x-workshop-dispatch': secret })
 }
 
 Deno.test('Meet: the paid confirmation email has both clocks, the Meet button and the support address, and no calendar file', opts, async () => {
@@ -928,3 +954,165 @@ Deno.test('referral codes are issued prepared: rehearsal only until activated, f
   await adminPost({ action: 'suspend_referrer', credential_id: 'BPA-TRN-2026-GRAD01' })
   assertEquals([(await liveQuote()).json.code, (await testQuote()).json.code], ['referral_invalid', 'referral_invalid'])
 })
+
+// --- automatic Google Calendar invitations (release 3) ---------------------------------------
+// The real dispatcher, admin endpoint, payment and refund RPCs and database rules, against the
+// Google Calendar stand-in. Each test's event starts with the host on it, who must never be removed.
+const EVENT = 'w01event0001'
+const HOST = { email: 'host@bulletproofautomations.com', organizer: true, responseStatus: 'accepted' }
+async function inviteSession(over: Row = {}) {
+  await reset({ ...RELEASE, calendar_event_id: EVENT, ...over }); await seedRecords()
+  gcal.events.clear(); gcal.patches.length = 0; gcal.tokenFails = false; gcal.failNext.length = 0
+  gcal.events.set(EVENT, { etag: '"1"', attendees: [HOST] })
+}
+const guests = () => gcal.events.get(EVENT)!.attendees.map((a: Row) => a.email)
+const paidTest = async (email: string, attend: string) => {
+  const r = await reg({ email, attend_email: attend, expected_price: 350 })
+  await pay(r.json.reference, 35000)
+  return r
+}
+
+Deno.test('calendar: a confirmed payment is invited automatically, once, keeping everyone else on the event', opts, async () => {
+  await inviteSession()
+  const r = await paidTest('ama@example.com', 'ama.meet@gmail.com')
+  const out = await dispatchNow()
+  assertEquals(out.json.report.calendar, { added: 1, removed: 0, failed: 0, blocked: 0 })
+  assertEquals(guests(), ['host@bulletproofautomations.com', 'ama.meet@gmail.com'])
+  assertEquals(gcal.patches, [{ event: EVENT, sendUpdates: 'all', emails: ['host@bulletproofautomations.com', 'ama.meet@gmail.com'] }],
+    'one update, and Google sends the invitation (sendUpdates=all)')
+  const row = await regRow('ama@example.com')
+  assertEquals([row.invited_email, row.calendar_sync_failures, row.calendar_sync_error], ['ama.meet@gmail.com', 0, null])
+  assert(/calendar-sync added \(ama\.meet@gmail\.com\)/.test(row.admin_notes))
+  // Duplicates change nothing: the same webhook delivered again, and the dispatcher run again.
+  await pay(r.json.reference, 35000)
+  assertEquals((await dispatchNow()).json.report.calendar, { added: 0, removed: 0, failed: 0, blocked: 0 })
+  assertEquals([gcal.patches.length, guests().length], [1, 2])
+})
+
+Deno.test('calendar: unpaid and not-yet-confirmed registrations are never invited', opts, async () => {
+  await inviteSession()
+  await reg({ email: 'unpaid@example.com', attend_email: 'unpaid.meet@gmail.com', expected_price: 350 })
+  await dispatchNow()
+  assertEquals([gcal.patches.length, guests()], [0, ['host@bulletproofautomations.com']])
+})
+
+Deno.test('calendar: a complimentary Intermediate graduate place is invited automatically', opts, async () => {
+  await inviteSession()
+  const t = await verifyCert('abena@example.com', 'BPA-TRN-2026-GRAD02')
+  const g = await reg({ email: 'abena@example.com', verification: t, expected_price: 0, attend_email: 'abena.meet@gmail.com' })
+  assertEquals([g.json.state, g.json.price_tier], ['confirmed', 'graduate'])
+  await dispatchNow()
+  assert(guests().includes('abena.meet@gmail.com'))
+  assertEquals((await regRow('abena@example.com')).invited_email, 'abena.meet@gmail.com')
+})
+
+Deno.test('calendar: a full refund removes the invitation, and Google tells the guest', opts, async () => {
+  await inviteSession()
+  const r = await paidTest('ama@example.com', 'ama.meet@gmail.com')
+  await dispatchNow()
+  await refund(r.json.reference, 35000)
+  assertEquals((await dispatchNow()).json.report.calendar, { added: 0, removed: 1, failed: 0, blocked: 0 })
+  assertEquals(guests(), ['host@bulletproofautomations.com'])
+  assertEquals(gcal.patches.at(-1)!.sendUpdates, 'all', 'the removed guest receives the cancellation')
+  const row = await regRow('ama@example.com')
+  assert(row.invited_email === null && row.invite_removed_at)
+})
+
+Deno.test('calendar: a cancelled complimentary place is removed', opts, async () => {
+  await inviteSession()
+  const t = await verifyCert('abena@example.com', 'BPA-TRN-2026-GRAD02')
+  await reg({ email: 'abena@example.com', verification: t, expected_price: 0, attend_email: 'abena.meet@gmail.com' })
+  await dispatchNow()
+  assertEquals((await admit((await regRow('abena@example.com')).id, 'cancel')).json.ok, true)
+  await dispatchNow()
+  assertEquals(guests(), ['host@bulletproofautomations.com'])
+})
+
+Deno.test('calendar: an approved change of Google account swaps the guest in one update', opts, async () => {
+  await inviteSession()
+  await paidTest('ama@example.com', 'ama.meet@gmail.com')
+  await dispatchNow()
+  const id = (await regRow('ama@example.com')).id
+  assertEquals((await admit(id, 'set_attend_email', 'ama.work@gmail.com')).json.ok, true)
+  assertEquals((await dispatchNow()).json.report.calendar, { added: 1, removed: 1, failed: 0, blocked: 0 })
+  assertEquals(guests(), ['host@bulletproofautomations.com', 'ama.work@gmail.com'])
+  assertEquals(gcal.patches.length, 2)
+  assertEquals((await regRow('ama@example.com')).invited_email, 'ama.work@gmail.com')
+})
+
+Deno.test('calendar: a graduate place whose entitlement lapses before the invitation goes out is never invited, and goes to the exception queue', opts, async () => {
+  await inviteSession()
+  const t = await verifyCert('abena@example.com', 'BPA-TRN-2026-GRAD02')
+  // A free registration runs the dispatcher straight away; register while Google is not yet
+  // connected, so the lapse below happens before any invitation.
+  await call(register, '/api/workshops/register', form({ testOptIn: true, email: 'abena@example.com', verification: t,
+    expected_price: 0, attend_email: 'abena.meet@gmail.com' }), { ...ENV, GOOGLE_CALENDAR_REFRESH_TOKEN: undefined })
+  assertEquals((await regRow('abena@example.com')).invited_email, null)
+  await pg.exec(`update public.payment_plan_installments set status = 'sent' where installment_number = 2
+    and enrollment_id = (select enrollment_id from public.credentials where credential_id = 'BPA-TRN-2026-GRAD02')`)
+  assertEquals((await dispatchNow()).json.report.calendar.blocked, 1)
+  assertEquals(gcal.patches.length, 0)
+  const row = await regRow('abena@example.com')
+  assertEquals([row.invited_email, row.calendar_sync_failures], [null, 5])
+  assert(/no longer matches an active entitlement/.test(row.calendar_sync_error))
+})
+
+Deno.test('calendar: temporary Google errors retry on the next run; a missing event stops and waits for the admin', opts, async () => {
+  await inviteSession()
+  await paidTest('ama@example.com', 'ama.meet@gmail.com')
+  // 503, then an etag race: counted, retried, then done.
+  gcal.failNext.push(503)
+  assertEquals((await dispatchNow()).json.report.calendar.failed, 1)
+  assertEquals((await regRow('ama@example.com')).calendar_sync_failures, 1)
+  await dispatchNow()
+  assertEquals([(await regRow('ama@example.com')).invited_email, (await regRow('ama@example.com')).calendar_sync_failures], ['ama.meet@gmail.com', 0])
+
+  // The event disappears: permanent, no more retries until the admin acts.
+  await inviteSession()
+  gcal.events.delete(EVENT)
+  await paidTest('ama@example.com', 'ama.meet@gmail.com')
+  await dispatchNow()
+  let row = await regRow('ama@example.com')
+  assertEquals(row.calendar_sync_failures, 5)
+  assert(/event was not found/.test(row.calendar_sync_error))
+  await dispatchNow()
+  assertEquals((await regRow('ama@example.com')).calendar_sync_at, row.calendar_sync_at, 'not retried by itself')
+  // The admin fixes the event and retries from the exception queue.
+  gcal.events.set(EVENT, { etag: '"7"', attendees: [HOST] })
+  assertEquals((await admit(row.id, 'retry_calendar')).json.ok, true)
+  row = await regRow('ama@example.com')
+  assertEquals([row.invited_email, row.calendar_sync_failures, row.calendar_sync_error], ['ama.meet@gmail.com', 0, null], 'retried at once')
+  assert(/calendar-sync retry requested/.test(row.admin_notes))
+})
+
+Deno.test('calendar: a refused Google sign-in is recorded on each waiting registration and changes nothing', opts, async () => {
+  await inviteSession()
+  await paidTest('ama@example.com', 'ama.meet@gmail.com')
+  gcal.tokenFails = true
+  assertEquals((await dispatchNow()).json.report.calendar.failed, 1)
+  const row = await regRow('ama@example.com')
+  assert(row.invited_email === null && /Could not sign in to Google Calendar/.test(row.calendar_sync_error))
+  assertEquals(gcal.patches.length, 0)
+})
+
+Deno.test('calendar: without Google settings nothing is called and the manual panel still works', opts, async () => {
+  await inviteSession()
+  await paidTest('ama@example.com', 'ama.meet@gmail.com')
+  const off = { ...ENV, GOOGLE_CALENDAR_REFRESH_TOKEN: undefined }
+  assertEquals((await dispatchNow(off)).json.report.calendar, { skipped: 'not_configured' })
+  assertEquals(gcal.patches.length, 0)
+  assertEquals((await admit((await regRow('ama@example.com')).id, 'mark_invited')).json.ok, true)
+})
+
+Deno.test('calendar: a test deployment never touches a live session\'s event, and a live one never touches a test session\'s', opts, async () => {
+  await inviteSession({ is_test: false })
+  await activate('BPA-TRN-2026-GRAD01')
+  const r = await liveReg({ email: 'kofi@example.com', attend_email: 'kofi.meet@gmail.com', expected_price: 350 })
+  await pay(r.json.reference, 35000)
+  assertEquals((await regRow('kofi@example.com')).status, 'confirmed')
+  await dispatchNow(ENV) // the Preview (test) deployment
+  assertEquals(gcal.patches.length, 0)
+  await dispatchNow(LIVE)
+  assertEquals(guests(), ['host@bulletproofautomations.com', 'kofi.meet@gmail.com'])
+})
+

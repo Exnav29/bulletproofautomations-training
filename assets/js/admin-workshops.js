@@ -170,9 +170,24 @@
   function toRemove(r) { return isInvite(r) && !!r.invited_email && (r.status !== "confirmed" || r.attend_email !== r.invited_email); }
   function noAccount(r) { return isInvite(r) && r.status === "confirmed" && !r.attend_email; }
 
+  /* Invitations are sent automatically by the dispatcher (functions/api/_calendar.js).
+   * The exception queue lists what it could not do: an error recorded and the
+   * change still outstanding. "Retry" clears the error and tries again at once. */
+  function calendarException(r) {
+    return !!r.calendar_sync_error && (toAdd(r) || toRemove(r) || Number(r.calendar_sync_failures) >= 5);
+  }
   function invites() {
     var ids = Object.keys(ws.sessions).filter(function (id) { return ws.sessions[id].admission === "invite"; });
     var total = 0;
+    var failed = ws.rows.filter(function (r) { return isInvite(r) && calendarException(r); });
+    var queue = failed.length ? '<div class="ws-inv"><h4>Needs attention: automatic invitation failed</h4><ul>' + failed.map(function (r) {
+      var s = ws.sessions[r.session_id] || {};
+      return "<li><strong>" + esc(r.full_name) + "</strong> " + esc(r.attend_email || r.invited_email || r.email_normalized) +
+        (isTest(r) ? ' <span class="tag tag--bad">TEST</span>' : "") + " <small>(" + esc(s.title || "") + ")</small><br>" +
+        '<span class="msg msg--bad">' + esc(r.calendar_sync_error) + (Number(r.calendar_sync_failures) >= 5 ? " Retries stopped." : " Retrying automatically.") + "</span> " +
+        '<button class="mini" type="button" data-ws="retry_calendar" data-id="' + esc(r.id) + '">Retry now</button></li>';
+    }).join("") + "</ul></div>" : "";
+    total += failed.length;
     var html = ids.map(function (id) {
       var s = ws.sessions[id];
       var mine = ws.rows.filter(function (r) { return r.session_id === id; });
@@ -209,7 +224,7 @@
         "</div>";
     }).join("");
     $("ws-inv-count").textContent = total;
-    $("ws-invites").innerHTML = html || '<p class="msg msg--empty">No session is set to join by invitation.</p>';
+    $("ws-invites").innerHTML = queue + (html || '<p class="msg msg--empty">No session is set to join by invitation.</p>');
   }
 
   function render() {

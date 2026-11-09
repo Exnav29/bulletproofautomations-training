@@ -16,6 +16,8 @@ import { processOutbox } from "../_workshops.js";
 
 const ACTIONS = new Set(["admit", "request_refund", "resolve_duplicate", "cancel", "attendance", "note"]);
 const ADMISSION = new Set(["mark_invited", "mark_removed", "set_attend_email"]);
+// The exception queue's retry for automatic Google Calendar invitations.
+const CALENDAR = new Set(["retry_calendar"]);
 const REFERRAL = new Set(["create_referrer", "suspend_referrer", "activate_referrer", "record_payout", "void_commission",
   "grant_email", "revoke_grant"]);
 const REFERRAL_ERRORS = {
@@ -68,6 +70,16 @@ export async function onRequestPost(context) {
       return result({ ok: false, error: REFERRAL_ERRORS[done.data && done.data.error] || "The action was refused." }, 409);
     }
     return result({ ok: true, already: done.data.already === true, code: done.data.code || null, status: done.data.status || null });
+  }
+  if (id && CALENDAR.has(action)) {
+    const done = await rpc(env, "workshop_calendar_retry", { p_actor_email: String(admin.email).toLowerCase(), p_registration_id: id });
+    if (!done.ok) return result({ ok: false, error: "The action could not be recorded." }, 502);
+    if (!done.data || done.data.ok !== true) return result({ ok: false, error: "Registration not found." }, 409);
+    // Try again now rather than at the next scheduled run.
+    if (context.waitUntil) {
+      context.waitUntil(processOutbox(env, new URL(request.url).origin, { emails: 0, meta: 0, reconcile: 0 }).catch(function () {}));
+    }
+    return result({ ok: true });
   }
   if (id && ADMISSION.has(action)) {
     const email = body && typeof body.email === "string" ? body.email.slice(0, 160) : null;

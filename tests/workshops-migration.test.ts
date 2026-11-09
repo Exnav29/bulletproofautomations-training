@@ -300,3 +300,27 @@ Deno.test('release 2 deployment checks: preflight, apply, postflight, rollback, 
   assertEquals(back.release1_bodies, pre.release1_bodies, 'rollback restores the release 1 functions exactly')
   assertEquals(back.snapshot, pre.snapshot)
 })
+
+Deno.test('release 3 (calendar sync): additive, idempotent, closed to anon, and its rollback leaves release 2 exactly', async () => {
+  const UP3 = await read('../supabase/migrations/20261110120000_workshop_calendar_sync.sql')
+  const DOWN3 = await read('../supabase/migrations/rollback/20261110120000_workshop_calendar_sync_down.sql')
+  const cols = async (t: string) => (await q(`select column_name from information_schema.columns where table_name = $1 order by ordinal_position`, [t])).map((r) => r.column_name).join(',')
+  const fns = async () => (await q(`select p.proname || ':' || md5(p.prosrc) f from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname like 'workshop%' order by 1`)).map((r) => r.f).join(',')
+  const before = { s: await cols('workshop_sessions'), r: await cols('workshop_registrations'), p: await cols('payment_events'), f: await fns() }
+  await pg.exec(UP3)
+  await pg.exec(UP3) // idempotent
+  for (const c of ['calendar_sync_failures', 'calendar_sync_error', 'calendar_sync_at']) assert((await cols('workshop_registrations')).split(',').includes(c), c)
+  assertEquals([await cols('workshop_sessions'), await cols('payment_events')], [before.s, before.p], 'sessions and the training ledger untouched')
+  for (const fn of ['workshop_calendar_plan(boolean,integer)', 'workshop_calendar_record(uuid,boolean,text,text,text,boolean)', 'workshop_calendar_retry(text,uuid)']) {
+    for (const role of ['anon', 'authenticated']) {
+      assertEquals((await q(`select has_function_privilege($1, $2, 'execute') ok`, [role, 'public.' + fn]))[0].ok, false, role + ' ' + fn)
+    }
+  }
+  // No existing function was replaced: every release 1 and 2 body is byte-identical.
+  const after = (await fns()).split(',').filter((f) => !/^workshop_calendar_/.test(f)).join(',')
+  assertEquals(after, before.f)
+  await pg.exec(DOWN3)
+  assertEquals([await cols('workshop_registrations'), await fns()], [before.r, before.f], 'rollback restores release 2 exactly')
+  await pg.exec(UP3)
+})
