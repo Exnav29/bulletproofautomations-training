@@ -84,3 +84,46 @@ Work in a dedicated branch. Implement the approved reuse-first design with minim
 **Decision standard:** Can the existing system do it? If yes, reuse it. If not, what is the smallest safe extension? Only then consider a new subsystem, with proof of necessity.
 
 **Outcome:** One training platform supporting multiple training types, not a second platform bolted onto the first.
+
+
+---
+
+## Approved extension: automatic seven-day cutoff and FIFO waitlists
+
+**Status:** Owner-approved functional requirements for the webinar/workshop rollout. This section supplements the original reuse-first mandate. It does **not** authorize immediate production deployment or destructive database changes. The original Stage A audit was completed; implement only after reconciling with the approved Stage B plan.
+
+### Registration closing rule
+
+For every webinar or standalone workshop, new paid and complimentary registrations close **exactly 168 hours before \`starts_at\`** (expressed/displayed in \`Africa/Accra\`); enforce server-side, including checkout initialization, not only in the browser. Show the exact cutoff time on the event page. At the cutoff, disable new regular registrations, waitlist entries and offers; let already confirmed registrations and automatic attendee communications continue. Carefully reconcile checkout sessions and payments initiated before cutoff, so a delayed Paystack webhook cannot create an unaccounted charge or uncontrolled oversell. Apply the cutoff consistently to rescheduled sessions. Workshop 01 starts 12 December 2026 at 11:30 AM Africa/Accra, so its cutoff is **5 December 2026 at 11:30 AM Africa/Accra**. Test immediately before, at, and after cutoff. Do not equate this business rule with statutory consumer cancellation rights.
+
+### Waitlist scope and user experience
+
+Use the **existing** workshop sessions, registration/seat allocation, Supabase, Paystack, shared Hostinger mail sender, notification outbox and dispatcher. Do **not** build a separate app, scheduler, payments subsystem, or second admin portal.
+
+- When the relevant seat allocation is sold out or fully held, display **“Sold Out — Join the Waitlist”** and a free waitlist form instead of a paid checkout. Collect name, email and only essential existing registration/eligibility preferences; never initiate Paystack on waitlist enrollment.
+- Record the timestamped, session-scoped entry and a deterministic tie-breaker. Prevent duplicate entries by normalized identity and session, including retry/race behavior. Send a waitlist acknowledgment via existing Hostinger notification transport. Where safe, show the individual's queue position without exposing anyone else's information.
+- For the initial workshop honor **25 general paid seats + 5 reserved eligible Intermediate graduate seats, 30 total**. Maintain eligibility-aware FIFO within each allocation. **Never** issue a general admission offer against reserved graduate capacity without explicit authorized release; protect Foundations discounts, graduate referrals/commissions, graduate complimentary entitlements, and test/live isolation.
+- When a confirmed place is freed by an eligible cancellation/refund, expiration of an existing hold, or approved capacity change, automatically issue an offer to the **oldest eligible** waiting person, using entry timestamp then stable tie-breaker. Document and audit any reason for bypassing an ineligible entry.
+- Each offer includes a unique, unguessable, scoped, expiring claim token and **exclusively holds its seat**. This is essential: a concurrent new buyer, another offer or a duplicate webhook must not take the same seat. A token opens a prefilled registration page with the correct participant's data and current eligible price/discount, without revealing the participant's information to anyone else. Only the recipient should be able to use the claim securely; verify token, status, eligibility and expiry server-side. The participant must explicitly initiate any paid checkout. No charge for joining the waitlist or receiving an offer.
+- The claim window is **24 hours**, ending earlier if the registration cutoff is reached. The hold expires automatically on decline, lapse, cancellation, or successful conversion. On failure/decline/expiry, release and offer the next eligible person in FIFO order. Payment failures can be retried within the valid window.
+- Recheck hold and capacity **atomically on the server before starting Paystack checkout** and again during payment confirmation. Define a safe bounded **payment-in-flight state** so that a checkout begun before offer expiry is reconciled properly if its webhook arrives late. Never double-sell the seat, automatically charge a different participant, or lose a successful payment. Where a payment cannot result in a valid seat, record it as an exception for prompt reconciliation/refund rather than silently confirming oversold attendance.
+- Use database constraints/transactions or existing locking/RPC mechanisms for idempotent seat assignment, offer transitions and webhook handling. Duplicate sends and concurrent releases must not create extra holds, payments, invitations or registrations.
+- At the **168-hour cutoff**, stop new waitlist entries and offers; expire unaccepted/unpaid holds according to the specified payment-in-flight rule. Preserve the waitlist and offer audit history for reporting. Don't issue an offer that cannot be completed before cutoff.
+- Automatically send waitlist acknowledgment, offer email with secure registration link, optional reminder, and offer expiration/decline notices using the existing Hostinger email/outbox. A waitlisted person **never** receives a Google Meet invitation or meeting access until their registration is actually confirmed.
+- Once registration is paid/complimentary-confirmed, use the approved **automated Google Calendar invitation** workflow, with deduplication and subsequent cancellation/refund removal. Do not require the owner to invite attendees manually.
+- In the existing admin console show general/reserved capacity, confirmed and held seats, FIFO entries, active offers, expirations, declined/converted entries and exceptions. Keep an auditable record of offer decisions and admin overrides.
+
+### Required acceptance tests
+
+1. Sold-out view replaces payment form with no-charge waitlist signup.
+2. Waitlist enrollment is idempotent, timestamps order FIFO, does not contact Paystack and does not reveal other customers.
+3. A freed seat offers the **oldest eligible** person an exclusive hold with a secure prefilled link.
+4. Acceptance and explicit Paystack payment convert the held seat to a confirmed registration; confirmation triggers one automated Calendar invitation.
+5. Decline and expiration release the hold and automatically move to the next person, including at the 168-hour cutoff.
+6. A failed payment can retry safely within the offer window; a late verified payment cannot cause overselling or disappear.
+7. Multiple simultaneous requests, webhooks, releases and retries preserve capacity and FIFO; no duplicate offers or charges.
+8. Graduate reserved capacity, certificate entitlement, Foundations pricing, referral discounts/commissions and test-only payments remain isolated and correct.
+9. Cutoff is enforced server-side immediately before, at and after the exact cutoff time; rescheduling recalculates correctly.
+10. Existing cohort registration/payment/notifications and admin access remain unchanged.
+
+**Implementation gate:** Inspect the actual workshop seat-hold/reservation model, \`workshop_*\` schema, outbox/dispatch, and checkout before proposing new objects. For any missing primitive, explain the exact limitation, the smallest safe schema or code extension, and its rollback. Make development-branch changes only with focused regressions; no production deployment, public registration, live Paystack activation, or destructive cleanup without owner authorization.
