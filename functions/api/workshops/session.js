@@ -4,7 +4,7 @@
  * counter), no join instructions. */
 
 import { json, rpc } from "../_shared.js";
-import { rest, workshopMode } from "../_workshops.js";
+import { rest, workshopMode, registrationClosesAt } from "../_workshops.js";
 
 export async function onRequestGet({ request, env }) {
   const slug = new URL(request.url).searchParams.get("slug") || "";
@@ -27,7 +27,10 @@ export async function onRequestGet({ request, env }) {
     return json({ ok: false, code: "not_found" }, 404);
   }
 
-  const open = row.status === "published" && Date.parse(row.starts_at) > Date.now();
+  // Registration closes seven days before the start (the database refuses after that too).
+  const closesAt = registrationClosesAt(row.starts_at);
+  const started = Date.parse(row.starts_at) <= Date.now();
+  const open = row.status === "published" && Date.now() < closesAt.getTime();
   let full = false;
   if (open && row.capacity) {
     const used = await rpc(env, "workshop_seats_in_use", { p_session_id: row.id, p_except: null });
@@ -54,6 +57,8 @@ export async function onRequestGet({ request, env }) {
     // Yes/no only: there is deliberately no "places left" counter.
     general_full: open && full,
     graduate_places_open: graduateOpen,
-    status: open ? (full ? (graduateOpen ? "graduates_only" : "full") : "open") : row.status === "published" ? "started" : row.status
+    registration_closes_at: closesAt.toISOString(),
+    status: open ? (full ? (graduateOpen ? "graduates_only" : "full") : "open")
+      : row.status === "published" ? (started ? "started" : "registration_closed") : row.status
   });
 }

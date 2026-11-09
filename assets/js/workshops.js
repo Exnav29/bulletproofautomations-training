@@ -250,7 +250,8 @@
           banner.hidden = false;
           return;
         }
-        if (d.status === "full") closeForm("This session is full", "No payment was taken. Other dates are listed on the webinars page.", [{ href: "/workshops", text: "See other sessions", quiet: true }]);
+        if (d.status === "registration_closed") closeForm("Registration closed", "Registration closes seven days before the session starts, so places are confirmed and invitations sent in good time. Other sessions are listed on the webinars page.", [{ href: "/workshops", text: "See other sessions", quiet: true }]);
+        else if (d.status === "full") closeForm("This session is full", "No payment was taken. Other dates are listed on the webinars page.", [{ href: "/workshops", text: "See other sessions", quiet: true }]);
         else if (d.status !== "open") closeForm("Registration has closed", "This session has started or registration is no longer open.", [{ href: "/workshops", text: "See other sessions", quiet: true }]);
       })
       .catch(function () { /* the registration endpoint checks again */ });

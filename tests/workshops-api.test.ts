@@ -116,7 +116,7 @@ async function reset(over: Row = {}) {
   const row = { slug: 'automate-invoices', kind: 'webinar', title: 'Automate your invoices', duration_minutes: 90,
     // This suite runs as a test-mode deployment (sk_test_ key), so its sessions are test sessions.
     format: 'Online, live', price_ghs: 150, status: 'published', is_test: true, join_instructions: 'Zoom link: https://zoom.example/j/1',
-    starts_at: new Date(Date.now() + 5 * 86400000).toISOString(), ...over }
+    starts_at: new Date(Date.now() + 10 * 86400000).toISOString(), ...over }
   const keys = Object.keys(row)
   await pg.query(`insert into public.workshop_sessions (${keys.join(',')}) values (${keys.map((_, i) => '$' + (i + 1)).join(',')})`,
     keys.map((k) => (row as Row)[k]))
@@ -820,7 +820,7 @@ const liveReg = (over: Row) => call(register, '/api/workshops/register', form({ 
 const REHEARSAL = { slug: 'rehearsal-what-to-charge', is_test: true, calendar_event_id: 'rehearsalevent01' }
 async function addSession(over: Row) {
   const row = { ...RELEASE, title: 'Rehearsal', format: 'Online, live', status: 'published', duration_minutes: 180,
-    starts_at: new Date(Date.now() + 5 * 86400000).toISOString(), ...over }
+    starts_at: new Date(Date.now() + 10 * 86400000).toISOString(), ...over }
   const keys = Object.keys(row)
   await pg.query(`insert into public.workshop_sessions (${keys.join(',')}) values (${keys.map((_, i) => '$' + (i + 1)).join(',')})`,
     keys.map((k) => (row as Row)[k]))
@@ -1116,3 +1116,57 @@ Deno.test('calendar: a test deployment never touches a live session\'s event, an
   assertEquals(guests(), ['host@bulletproofautomations.com', 'kofi.meet@gmail.com'])
 })
 
+
+// --- registration closes seven days (168 hours) before the start ------------------------------
+const HOUR = 3600000
+const startsIn = (ms: number) => new Date(Date.now() + ms).toISOString()
+
+Deno.test('cutoff: open one minute before the cutoff; closed after it, at every price, on the server', opts, async () => {
+  await reset({ ...RELEASE, starts_at: startsIn(168 * HOUR + 60000) }); await seedRecords()
+  const before = await call(session, '/api/workshops/session?slug=automate-invoices', null)
+  assertEquals(before.json.status, 'open')
+  assertEquals(Date.parse(before.json.registration_closes_at), Date.parse(before.json.session.starts_at) - 168 * HOUR)
+  assertEquals((await reg({ email: 'early@example.com', expected_price: 350 })).json.state, 'checkout')
+
+  await reset({ ...RELEASE, starts_at: startsIn(168 * HOUR - 1000) }); await seedRecords()
+  const after = await call(session, '/api/workshops/session?slug=automate-invoices', null)
+  assertEquals([after.json.status, after.json.open], ['registration_closed', false])
+  assertEquals((await reg({ email: 'late@example.com', expected_price: 350 })).json.code, 'closed', 'paid')
+  const t = await verifyCert('abena@example.com', 'BPA-TRN-2026-GRAD02')
+  assertEquals(t, null, 'no certificate code is issued once registration has closed')
+  assertEquals((await rows(`select count(*)::int n from public.workshop_registrations`))[0].n, 0, 'nothing recorded, no place held')
+  assertEquals(paystack.initialized.length, 0)
+})
+
+Deno.test('cutoff: a checkout started before it and paid after it is confirmed, not refused', opts, async () => {
+  await inviteSession({ starts_at: startsIn(168 * HOUR + 60000) })
+  const r = await reg({ email: 'ama@example.com', attend_email: 'ama.meet@gmail.com', expected_price: 350 })
+  assertEquals(r.json.state, 'checkout')
+  // Time passes: the cutoff is now behind us while the customer is on Paystack.
+  await pg.exec(`update public.workshop_sessions set starts_at = now() + interval '160 hours'`)
+  assertEquals((await call(session, '/api/workshops/session?slug=automate-invoices', null)).json.status, 'registration_closed')
+  await pay(r.json.reference, 35000) // the webhook's own RPC
+  const row = await regRow('ama@example.com')
+  assertEquals([row.status, row.payment_status, row.review_reason], ['confirmed', 'paid', null])
+  const st = await call(status, '/api/workshops/status', { token: r.json.token, reference: r.json.reference })
+  assertEquals(st.json.state, 'confirmed', 'the return page confirms the place')
+  await dispatchNow()
+  assert(guests().includes('ama.meet@gmail.com'), 'and the invitation goes out as normal')
+})
+
+Deno.test('cutoff: an unpaid registration cannot start a new checkout after it', opts, async () => {
+  await reset({ ...RELEASE, starts_at: startsIn(168 * HOUR + 60000) }); await seedRecords()
+  await reg({ email: 'ama@example.com', expected_price: 350 })
+  await pg.exec(`update public.workshop_sessions set starts_at = now() + interval '160 hours'`)
+  const again = await reg({ email: 'ama@example.com', expected_price: 350 })
+  assertEquals(again.json.code, 'closed')
+  assertEquals((await rows(`select count(*)::int n from public.workshop_payment_attempts`))[0].n, 1, 'no second charge started')
+})
+
+Deno.test('cutoff: rescheduling the session moves its cutoff with it', opts, async () => {
+  await reset({ ...RELEASE, starts_at: startsIn(100 * HOUR) }); await seedRecords()
+  assertEquals((await call(session, '/api/workshops/session?slug=automate-invoices', null)).json.status, 'registration_closed')
+  await pg.exec(`update public.workshop_sessions set starts_at = now() + interval '20 days'`)
+  assertEquals((await call(session, '/api/workshops/session?slug=automate-invoices', null)).json.status, 'open')
+  assertEquals((await reg({ email: 'ama@example.com', expected_price: 350 })).json.state, 'checkout')
+})

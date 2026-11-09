@@ -1,12 +1,14 @@
 -- ---------------------------------------------------------------------------
--- Workshop release 3: automatic Google Calendar invitations.
+-- Workshop release 3: automatic Google Calendar invitations, and registration
+-- closing seven days before the start (end of file).
 --
 -- STATUS: NOT APPLIED. Apply only with the owner's explicit approval, after
 -- release 2 (20261109120000). Rollback:
 -- supabase/migrations/rollback/20261110120000_workshop_calendar_sync_down.sql
 --
--- Additive only. It replaces no existing function and touches no payment,
--- enrollment or cohort object. The admission records release 2 added
+-- It replaces one existing function, workshop_session_open (the cutoff); the
+-- rollback restores release 1's body verbatim. Otherwise additive, and it
+-- touches no payment, enrollment or cohort object. The admission records release 2 added
 -- (attend_email, invited_email, invited_at, invite_removed_at) stay the record
 -- of who is on each session's Google Calendar event; the dispatcher
 -- (functions/api/_calendar.js, run by the existing workshop-dispatch job) now
@@ -135,3 +137,25 @@ begin
     execute format('grant execute on function public.%s to service_role', fn);
   end loop;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- Registration closes 168 hours (seven days) before the start.
+--
+-- The one place "open" is decided, already used by registration, checkout and
+-- certificate codes, so the cutoff applies to every price, including
+-- complimentary graduate places. It is derived from starts_at: a rescheduled
+-- session's cutoff moves with it, and every future session gets it by default.
+-- Africa/Accra is UTC+0 all year, so 168 hours is exactly seven calendar days
+-- at the same Ghana clock time (workshop 01: 12 December 11:30 closes
+-- 5 December 11:30).
+--
+-- NOT used by workshop_apply_charge: a checkout started before the cutoff and
+-- paid after it is still confirmed (it is held for review only if the session
+-- was withdrawn or has started), so nobody pays without a place. Release 1's
+-- body is restored by the rollback. Mirrored for display by
+-- REGISTRATION_CLOSES_HOURS in functions/api/_workshops.js.
+-- ---------------------------------------------------------------------------
+create or replace function public.workshop_session_open(s public.workshop_sessions)
+returns boolean language sql stable set search_path = '' as $$
+  select s.status = 'published' and now() < s.starts_at - interval '168 hours'
+$$;

@@ -198,8 +198,14 @@ function when(s) {
     wd: fmt(s.starts_at, tz, { weekday: "short" }),
     accra: fmt(s.starts_at, "Africa/Accra", clock).toUpperCase(),
     lagos: fmt(s.starts_at, "Africa/Lagos", clock).toUpperCase(),
-    gmt: fmt(s.starts_at, "UTC", clock).toUpperCase()
+    gmt: fmt(s.starts_at, "UTC", clock).toUpperCase(),
+    // Registration closes 168 hours before the start (REGISTRATION_CLOSES_HOURS; the database enforces it).
+    closes: fmt(closesAt(s), "Africa/Accra", { weekday: "long", day: "numeric", month: "long" }) + ", " +
+      fmt(closesAt(s), "Africa/Accra", clock).toUpperCase()
   };
+}
+function closesAt(s) {
+  return new Date(Date.parse(s.starts_at) - 168 * 3600000).toISOString();
 }
 function duration(min) {
   if (min % 60 === 0) return min / 60 === 1 ? "1 hour" : min / 60 + " hours";
@@ -243,6 +249,7 @@ function page(title, description, canonical, body, extraBodyAttrs) {
 function factsList(s, w) {
   return '<dl class="ws-facts">\n' +
     '  <dt>When</dt><dd><span class="ws-date">' + esc(w.long) + '</span><small>' + esc(w.accra) + ' in Accra<br>' + esc(w.lagos) + ' in Lagos</small></dd>\n' +
+    '  <dt>Registration closes</dt><dd><strong>' + esc(w.closes) + ' in Accra</strong><small>Seven days before the start. No registrations after that, at any price.</small></dd>\n' +
     '  <dt>Length</dt><dd>' + esc(duration(s.duration_minutes)) + ', ' + esc(s.format) + '</dd>\n' +
     '  <dt>Fee</dt><dd>' + esc(fee(s)) + (s.price_ghs > 0 ? '<small>MoMo or card, through Paystack</small>' : '') +
       (s.referral_discount_ghs > 0 ? '<small>' + esc(referralFee(s)) + ' with a graduate\'s referral code</small>' : '') +
@@ -373,7 +380,7 @@ function detailPage(s, seriesList, live) {
 '<aside class="ws-aside" id="register" aria-labelledby="ws-reg">\n' +
 '  <div class="ws-sheet" data-ws-sheet>\n' +
 '    <h2 id="ws-reg">Register</h2>\n' +
-'    <p class="ws-sumline">' + esc(w.long) + ', ' + esc(w.gmt) + ' GMT. ' + esc(fee(s)) + '.</p>\n' +
+'    <p class="ws-sumline">' + esc(w.long) + ', ' + esc(w.gmt) + ' GMT. ' + esc(fee(s)) + '. Registration closes ' + esc(w.closes) + ' in Accra.</p>\n' +
 '    <p class="ws-banner" data-ws-banner role="status" hidden></p>\n' +
 '    ' + trace(s, w).replace(/\n/g, "\n    ") + '\n' +
 '    ' + form(s).replace(/\n/g, "\n    ") + '\n' +

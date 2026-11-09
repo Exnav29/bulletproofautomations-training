@@ -95,6 +95,14 @@ export async function verifyWorkshopTransaction(env, reference) {
 // section 23 of refund-policy/index.html. A build test keeps the two in step.
 export const TERMS_VERSION = "2026-11-09";
 
+/* Registration closes this many hours before a session starts. The database
+   enforces it (workshop_session_open, migration 20261110120000); this copy is
+   only for showing it. A test checks the two agree. */
+export const REGISTRATION_CLOSES_HOURS = 168;
+export function registrationClosesAt(startsAt) {
+  return new Date(Date.parse(startsAt) - REGISTRATION_CLOSES_HOURS * 3600000);
+}
+
 const ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
 /* BPA-WEB- (live) / BPA-WTEST- (test). Distinct from the cohort's BPA-CAB- and

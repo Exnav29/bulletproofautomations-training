@@ -28,7 +28,7 @@ async function session(over: Row = {}) {
     public.workshop_payment_attempts, public.workshop_registrations, public.workshop_sessions cascade`)
   const cols = { slug: 'test-session', kind: 'webinar', title: 'Test session', duration_minutes: 60,
     format: 'Online', price_ghs: 150, status: 'published',
-    starts_at: new Date(Date.now() + 86400000).toISOString(), ...over }
+    starts_at: new Date(Date.now() + 10 * 86400000).toISOString(), ...over }
   const keys = Object.keys(cols)
   await pg.query(`insert into public.workshop_sessions (${keys.join(',')}) values (${keys.map((_, i) => '$' + (i + 1)).join(',')})`,
     keys.map((k) => (cols as Row)[k]))
@@ -317,9 +317,11 @@ Deno.test('release 3 (calendar sync): additive, idempotent, closed to anon, and 
       assertEquals((await q(`select has_function_privilege($1, $2, 'execute') ok`, [role, 'public.' + fn]))[0].ok, false, role + ' ' + fn)
     }
   }
-  // No existing function was replaced: every release 1 and 2 body is byte-identical.
-  const after = (await fns()).split(',').filter((f) => !/^workshop_calendar_/.test(f)).join(',')
-  assertEquals(after, before.f)
+  // One existing function is replaced, workshop_session_open (the seven-day cutoff); every
+  // other release 1 and 2 body is byte-identical.
+  const keep = (list: string) => list.split(',').filter((f) => !/^workshop_calendar_|^workshop_session_open:/.test(f)).join(',')
+  assertEquals(keep(await fns()), keep(before.f))
+  assert((await fns()) !== before.f)
   await pg.exec(DOWN3)
   assertEquals([await cols('workshop_registrations'), await fns()], [before.r, before.f], 'rollback restores release 2 exactly')
   await pg.exec(UP3)

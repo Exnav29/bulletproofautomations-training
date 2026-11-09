@@ -135,7 +135,7 @@ async function reset(session: Row = {}) {
   await insert('payment_plan_installments', installmentRow)
   await insert('workshop_sessions', {
     id: SESSION, slug: 'test-webinar', kind: 'webinar', title: 'Test webinar',
-    starts_at: new Date(Date.now() + 7 * 86400000).toISOString(), duration_minutes: 90,
+    starts_at: new Date(Date.now() + 14 * 86400000).toISOString(), duration_minutes: 90,
     format: 'Online (Zoom)', price_ghs: 150, status: 'published', ...session,
   })
 }

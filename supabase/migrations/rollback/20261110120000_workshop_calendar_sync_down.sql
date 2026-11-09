@@ -3,6 +3,12 @@
 -- recorded, so the manual panel in /admin/workshops/ carries on from there.
 -- Unset GOOGLE_CALENDAR_REFRESH_TOKEN on Cloudflare Pages first, so the
 -- dispatcher stops calling Google before these functions disappear.
+
+-- Registration open until the start again, verbatim from 20261103120000_workshops.sql.
+create or replace function public.workshop_session_open(s public.workshop_sessions)
+returns boolean language sql stable set search_path = '' as $$
+  select s.status = 'published' and s.starts_at > now()
+$$;
 drop function if exists public.workshop_calendar_retry(text, uuid);
 drop function if exists public.workshop_calendar_record(uuid, boolean, text, text, text, boolean);
 drop function if exists public.workshop_calendar_plan(boolean, integer);
