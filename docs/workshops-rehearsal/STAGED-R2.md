@@ -14,6 +14,10 @@
 
 **Read-only verification:** `workshop_quote` returns GHS 350 for standard test and `not_found` in live mode; live Workshop 01 remains inaccessible as `draft`. No test or live workshop 01 registrations were created.
 
-**Still to do:** Confirm Cloudflare deployed this preview branch and exposes the test page. The existing `workshop-dispatch` cron STILL points to the older `webinar-e2e-test` preview and should not be retargeted until the new deployment is verified. Carry out five real Paystack *test-mode* browser journeys with controlled inboxes and verify real delivery; check zero live commissions and seats. Finish and remove the test event after the rehearsal, not before.
+**Verified live preview (9 Nov 2026):** Public session GET returned HTTP 200 for `rehearsal-what-to-charge`, with open test registration and GHS 350. The same preview returned HTTP 404 for Workshop 01, proving live/test separation. Real preview quote API POST returned HTTP 200 with GHS 350 standard, and HTTP 200 with GHS 300 using the prepared referral code (GHS 50 discount). The live Workshop 01 quote returned HTTP 404. No test registrations were submitted. 
+
+**Dispatcher:** After verifying preview/API and zero pending notifications, `workshop-dispatch` was changed from `webinar-e2e-test` to `webinar-e2e-test-r2`. A one-time authenticated dispatch probe returned HTTP 200 with `emails: {sent:0, failed:0, skipped:0}`, `meta: {sent:0, failed:0}`, `reconciled:0`. The job remains active. At production launch it must be pointed at the production domain, not left here.
+
+**Still to do:** Carry out five real Paystack *test-mode* browser journeys with five controlled inboxes and verify actual delivery. Verify the Foundations 20% discount and Intermediate free registration using the live email-code path; no verification emails should be sent to graduates. Check zero live commissions and places, and verify the Google Meet guest restrictions. Finish and remove the separate test event after the rehearsal, not before.
 
 **Guardrails:** No production key changes, no public registration, no live payments, no PR #61 merge, no student outreach or invitations.
