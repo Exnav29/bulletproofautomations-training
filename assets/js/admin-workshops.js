@@ -97,8 +97,12 @@
       getJson("/rest/v1/workshop_referral_payouts?select=*").catch(function () { return []; }),
       getJson("/rest/v1/workshop_sessions?select=id,referral_commission_ghs").catch(function () { return []; }),
       // The waitlist arrives with migration 20261111120000; without it the page still loads.
-      getJson("/rest/v1/workshop_waitlist?select=*&order=created_at.asc,id.asc").catch(function () { return []; })
+      getJson("/rest/v1/workshop_waitlist?select=*&order=created_at.asc,id.asc").catch(function () { return []; }),
+      // Emails the dispatcher gave up on after 5 attempts: each can be retried from its row.
+      getJson("/rest/v1/workshop_notifications?select=registration_id,kind,error&status=eq.failed").catch(function () { return []; })
     ]).then(function (out) {
+      ws.failedMail = {};
+      (out[7] || []).forEach(function (n) { (ws.failedMail[n.registration_id] = ws.failedMail[n.registration_id] || []).push(n); });
       ws.referrers = out[3];
       ws.waitlist = out[6] || [];
       ws.payouts = {};
@@ -152,6 +156,11 @@
     if (r.review_reason === "duplicate_payment") b.push('<button class="mini" type="button" data-ws="resolve_duplicate" data-id="' + esc(r.id) + '">Note duplicate refund</button>');
     if (r.status === "pending_payment" && r.payment_status === "pending") b.push('<button class="mini" type="button" data-ws="cancel" data-id="' + esc(r.id) + '">Cancel</button>');
     if (isInvite(r) && r.status === "confirmed") b.push('<button class="mini" type="button" data-ws-account="' + esc(r.id) + '">Google account</button>');
+    var undelivered = (ws.failedMail || {})[r.id];
+    if (undelivered) {
+      b.push('<span class="msg msg--bad">Email not delivered: ' + esc(undelivered.map(function (n) { return n.kind.replace(/_/g, " ") + " (" + (n.error || "failed") + ")"; }).join(", ")) + '</span>' +
+        ' <button class="mini" type="button" data-ws="retry_email" data-id="' + esc(r.id) + '">Retry email</button>');
+    }
     return b.join(" ");
   }
 
@@ -493,7 +502,9 @@
   function csv() {
     var cols = ["registered_at", "session", "full_name", "email", "whatsapp", "whatsapp_consent", "status", "payment_status",
       "review_reason", "confirmed_paid", "verified_paid_ghs", "attendance", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "references"];
-    var cell = function (v) { var s = String(v == null ? "" : v); return /[",\n]/.test(s) || /^[=+\-@]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    // A value starting with = + - @ or a tab/CR is a formula to Excel and Sheets even
+    // when quoted; prefixing ' makes it text (Codex audit: CSV formula injection).
+    var cell = function (v) { var s = String(v == null ? "" : v); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
     var lines = [cols.join(",")].concat(filtered().map(function (r) {
       var s = ws.sessions[r.session_id] || {};
       return [r.created_at, s.slug, r.full_name, r.email_normalized, r.whatsapp, r.whatsapp_consent, r.status, r.payment_status,

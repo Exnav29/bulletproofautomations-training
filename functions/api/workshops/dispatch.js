@@ -2,9 +2,10 @@
  * Paystack, send queued emails, keep Google Calendar invitations in step, send
  * queued Conversions API events.
  *
- * Called every five minutes by pg_cron + pg_net with the x-workshop-dispatch
- * header; only the SHA-256 of that secret is stored
- * (workshop_dispatch_config), the same pattern as the installment scheduler. */
+ * Called every minute by pg_cron + pg_net (cron job `workshop-dispatch`) with the
+ * x-workshop-dispatch header, the secret read from Supabase Vault; only its
+ * SHA-256 is stored (workshop_dispatch_config). Setup: docs/workshops-runbook.md,
+ * "Dispatcher". The commented schedule at the end of release 1 is superseded. */
 
 import { json } from "../_shared.js";
 import { rest, sha256Hex, processOutbox } from "../_workshops.js";

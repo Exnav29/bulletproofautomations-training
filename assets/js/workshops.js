@@ -252,6 +252,12 @@
         // A valid offer link holds a place for this person, whatever the page would
         // otherwise say about places (until registration closes).
         if (offerToken && d.status !== "registration_closed" && d.status !== "started") return;
+        // This browser already registered for this session (it holds the status
+        // token): "full" may be counting its own held place. Keep the form, so a
+        // payment that failed or was abandoned can be retried. The server decides
+        // whether that place is still theirs (Codex audit: sold-out pages blocked
+        // legitimate payment retries by switching the form to the waitlist).
+        if (loadAccess(slug) && d.status !== "registration_closed" && d.status !== "started") return;
         // General places are taken but a reserved graduate place is free: the
         // form stays open for a confirmed Intermediate graduate certificate, and
         // anyone else joins the waitlist for an open place.
@@ -402,7 +408,10 @@
         ad_consent: consent.ad_consent,
         company_website: form.elements.company_website.value,
         testOptIn: testOptIn,
-        offer: offerToken || undefined
+        offer: offerToken || undefined,
+        // Proves this is the browser that registered: without it an existing
+        // registration is never resumed or disclosed.
+        token: (loadAccess(slug) || {}).token || undefined
       }).then(function (r) {
         if (r.token) saveAccess(slug, { token: r.token, reference: r.reference || null });
         if (!r.ok) {
@@ -413,6 +422,7 @@
             stale_page: ["The details have changed", "Refresh this page to see the current date and fee, then register."],
             not_found: ["Registration isn't open", "This session isn't taking registrations. Nothing has been charged."]
           };
+          if (r.code === "registered") return showError("This email already has a registration for this session. Check your email for its details, or " + contact() + " and we'll help. Nothing has been charged.");
           if (r.code === "offer_not_valid") return showError("This waitlist offer has expired, was already used, or is for a different email address. Nothing has been charged.");
           if (r.code === "attend_email_required") return showError("Add the Google account you will join with. Only that account can get into the meeting.");
           if (r.code === "price_changed") { requote(); return showError("Your price has changed to " + ghsText(r.price_ghs) + ". Check it, then register again. Nothing has been charged."); }

@@ -1,5 +1,5 @@
 /* POST /api/admin/workshops — administrative actions on one registration:
- * admit | request_refund | resolve_duplicate | cancel | attendance | note, and
+ * admit | request_refund | resolve_duplicate | cancel | attendance | note | retry_email, and
  * for invitation-only sessions mark_invited | mark_removed | set_attend_email,
  * which record what the admin did on the Google Calendar event (nothing here
  * talks to Google), and the referral actions create_referrer |
@@ -18,6 +18,8 @@ const ACTIONS = new Set(["admit", "request_refund", "resolve_duplicate", "cancel
 const ADMISSION = new Set(["mark_invited", "mark_removed", "set_attend_email"]);
 // The exception queue's retry for automatic Google Calendar invitations.
 const CALENDAR = new Set(["retry_calendar"]);
+// Retry for confirmation, review and duplicate-payment emails the dispatcher gave
+// up on after 5 attempts (Codex audit): before, nothing could bring them back.
 // Waitlist exceptions only; normal progression is automatic.
 const WAITLIST = { waitlist_remove: "remove", waitlist_retry_email: "retry_email" };
 const REFERRAL = new Set(["create_referrer", "suspend_referrer", "activate_referrer", "record_payout", "void_commission",
@@ -94,6 +96,16 @@ export async function onRequestPost(context) {
     // Try again now rather than at the next scheduled run.
     if (context.waitUntil) {
       context.waitUntil(processOutbox(env, new URL(request.url).origin, { emails: 0, meta: 0, reconcile: 0 }).catch(function () {}));
+    }
+    return result({ ok: true });
+  }
+  if (id && action === "retry_email") {
+    const done = await rpc(env, "workshop_admin_notification_retry", { p_actor_email: String(admin.email).toLowerCase(), p_registration_id: id });
+    if (!done.ok) return result({ ok: false, error: "The action could not be recorded." }, 502);
+    if (!done.data || done.data.ok !== true) return result({ ok: false, error: "No undelivered email on this registration." }, 409);
+    // Send now rather than at the next scheduled run.
+    if (context.waitUntil) {
+      context.waitUntil(processOutbox(env, new URL(request.url).origin, { emails: 3, meta: 0, reconcile: 0, calendar: 0, waitlist: 0 }).catch(function () {}));
     }
     return result({ ok: true });
   }

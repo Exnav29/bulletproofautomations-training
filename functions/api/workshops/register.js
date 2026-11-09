@@ -67,6 +67,10 @@ export async function onRequestPost(context) {
   // nobody is registered and the page re-quotes.
   const expectedPrice = typeof body.expected_price === "number" && isFinite(body.expected_price) ? body.expected_price : null;
   const offerToken = typeof body.offer === "string" && looksLikeToken(body.offer) ? body.offer : "";
+  // The status token this browser already holds for this session, if any. An
+  // existing registration is resumed only for a browser that holds one (or the
+  // emailed waitlist offer link): an email address alone is not proof of owning it.
+  const existingToken = typeof body.token === "string" && looksLikeToken(body.token) ? body.token : "";
 
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return refuse("supabase-not-configured", 503);
   if (!attendEmail && await sessionAdmission(env, slug) === "invite") {
@@ -94,7 +98,8 @@ export async function onRequestPost(context) {
         // deployment registers only on test sessions, and nothing else does.
         deployment_mode: workshopMode(env),
         // A waitlist offer link's token: the database checks it holds a place for this email.
-        offer_token_hash: offerToken ? await sha256Hex(offerToken) : null }),
+        offer_token_hash: offerToken ? await sha256Hex(offerToken) : null,
+        existing_token_hash: existingToken ? await sha256Hex(existingToken) : null }),
     p_ad_consent: adConsent,
     p_displayed_price: displayedPrice,
     p_displayed_starts_at: displayedStart
@@ -106,6 +111,9 @@ export async function onRequestPost(context) {
 
   const r = registered.data || {};
   if (r.outcome === "not_found") return json({ ok: false, code: "not_found" }, 404);
+  // Already registered, from another browser: no token, no state, no checkout. The
+  // same answer the waitlist gives, so it reveals nothing the waitlist does not.
+  if (r.outcome === "existing_unverified") return json({ ok: false, code: "registered" }, 409);
   if (r.outcome === "closed") return json({ ok: false, code: "closed" }, 409);
   if (r.outcome === "full") return json({ ok: false, code: "full" }, 409);
   if (r.outcome === "offer_not_valid") return json({ ok: false, code: "offer_not_valid" }, 409);

@@ -351,3 +351,37 @@ Deno.test('release 4 (waitlist): idempotent, closed to anon, and its rollback re
   assertEquals((await q(`select to_regclass('public.workshop_waitlist') t`))[0].t, null)
   await pg.exec(UP4)
 })
+
+Deno.test('release 5 (audit corrections): idempotent, closed to anon, ledger untouched, and its rollback restores release 4 exactly', async () => {
+  const UP4 = await read('../supabase/migrations/20261111120000_workshop_waitlist.sql')
+  const UP5 = await read('../supabase/migrations/20261112120000_workshop_audit_corrections.sql')
+  const DOWN5 = await read('../supabase/migrations/rollback/20261112120000_workshop_audit_corrections_down.sql')
+  await pg.exec(UP4) // release 5 applies on top of release 4
+  // Body, volatility and security of every workshop function, without line endings.
+  const fns = async () => (await q(`select p.proname || ':' || p.provolatile::text || p.prosecdef::text || ':' || md5(replace(p.prosrc, chr(13), '')) f
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname like 'workshop%' order by 1`)).map((r) => r.f).join(',')
+  const cols = async (t: string) => (await q(`select column_name from information_schema.columns where table_name = $1 order by ordinal_position`, [t])).map((r) => r.column_name).join(',')
+  const tables = ['workshop_payment_attempts', 'workshop_waitlist', 'workshop_registrations', 'workshop_sessions', 'payment_events', 'enrollments']
+  const snap = async () => Object.fromEntries(await Promise.all(tables.map(async (t) => [t, await cols(t)])))
+  const before = { f: await fns(), c: await snap() }
+  await pg.exec(UP5)
+  await pg.exec(UP5) // idempotent
+  const during = await snap()
+  assertEquals([during.payment_events, during.enrollments, during.workshop_sessions], [before.c.payment_events, before.c.enrollments, before.c.workshop_sessions],
+    'the training ledger, enrollments and sessions are untouched')
+  assert(during.workshop_payment_attempts.endsWith(',hold_until'))
+  assert(during.workshop_waitlist.endsWith(',mail_claimed_at'))
+  assert(during.workshop_registrations.endsWith(',calendar_claimed_at'))
+  for (const fn of ['workshop_apply_refund(text,bigint,text,uuid)', 'workshop_apply_pending_refunds(text)', 'workshop_refund_awaiting_note()',
+    'workshop_admin_notification_retry(text,uuid)', 'workshop_waitlist_mail_due(boolean,integer)', 'workshop_calendar_plan(boolean,integer)',
+    'workshop_register(text,text,text,text,boolean,text,text,jsonb,boolean,numeric,timestamptz)', 'workshop_start_attempt(uuid,text,text)']) {
+    for (const role of ['anon', 'authenticated']) {
+      assertEquals((await q(`select has_function_privilege($1, $2, 'execute') ok`, [role, 'public.' + fn]))[0].ok, false, role + ' ' + fn)
+    }
+    assertEquals((await q(`select has_function_privilege('service_role', $1, 'execute') ok`, ['public.' + fn]))[0].ok, true, 'service_role ' + fn)
+  }
+  await pg.exec(DOWN5)
+  assertEquals(await fns(), before.f, 'rollback restores every function exactly, including volatility')
+  assertEquals(await snap(), before.c, 'rollback removes exactly the three added columns')
+  await pg.exec(UP5)
+})
