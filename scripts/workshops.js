@@ -166,10 +166,9 @@ function loadSeries(dir, sessions) {
   });
 }
 
-/* Paid forms link to the site's existing refund policy page. The webinar and
-   workshop terms (draft: docs/workshops-refund-policy-draft.json, pending legal
-   review) become a section of that page once approved; no separate page is built. */
-const POLICY_HREF = "/refund-policy";
+/* Paid forms link to the webinar and workshop terms: section 23 of the site's
+   existing refund policy page. No separate policy page is built. */
+const POLICY_HREF = "/refund-policy#workshops";
 
 /* The series and entry a session belongs to, if any. */
 function membership(seriesList, slug) {

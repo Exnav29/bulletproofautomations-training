@@ -50,6 +50,7 @@ folder, draft or not.
 
 ## Refund policy
 
-Paid forms link to the site's existing `/refund-policy` page. The webinar and workshop terms are an
-unpublished draft in `docs/workshops-refund-policy-draft.json`; once approved they become a section
-of that page (`docs/workshops-runbook.md`, step 8). No separate policy page is built.
+Paid forms link to the webinar and workshop terms: section 23, "Webinars and workshops", of the
+existing `/refund-policy` page (`refund-policy/index.html#workshops`). No separate policy page is
+built. When the terms change, update that section's version line and `TERMS_VERSION` in
+`functions/api/_workshops.js` together; a build test fails if they differ.

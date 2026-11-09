@@ -90,7 +90,9 @@ export async function verifyWorkshopTransaction(env, reference) {
     amountMinor: typeof t.amount === "number" ? Math.round(t.amount) : null,
     currency: t.currency || null, domain: t.domain || null, paidAt: t.paid_at || t.paidAt || null };
 }
-export const TERMS_VERSION = "2026-11-03";
+// The webinar and workshop terms each registration accepts: the version line of
+// section 23 of refund-policy/index.html. A build test keeps the two in step.
+export const TERMS_VERSION = "2026-11-09";
 
 const ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 

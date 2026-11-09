@@ -147,19 +147,22 @@ test("a joining link or joining field in any content file fails the build, draft
   assert.doesNotMatch(raw, /meet\.google\.com|join_instructions/);
 });
 
-test("refund policy: paid forms link to the site's existing /refund-policy page; no separate policy page is built", () => {
+test("refund policy: paid forms link to section 23 of the existing /refund-policy page, whose version is the one registrations record", () => {
   const s = ws.validate(sample(), file("sample-webinar"));
   const out = fs.mkdtempSync(path.join(os.tmpdir(), "ws-pol-"));
   const paths = ws.render([s], out, []);
-  assert.equal(ws.POLICY_HREF, "/refund-policy");
-  assert.equal(paths.some((p) => /refund-policy/.test(p)), false);
+  assert.equal(ws.POLICY_HREF, "/refund-policy#workshops");
+  assert.equal(paths.some((p) => /refund-policy/.test(p)), false, "no separate policy page");
   assert.equal(fs.existsSync(path.join(out, "workshops/refund-policy")), false);
-  assert.match(fs.readFileSync(path.join(out, "workshops/sample-webinar/index.html"), "utf8"), /href="\/refund-policy">refund policy/);
-  // The workshop terms stay an unpublished draft until legal review and approval.
-  const draft = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "docs/workshops-refund-policy-draft.json"), "utf8"));
-  assert.equal(draft.approved, false);
-  assert.equal(draft.legal_review, "pending");
-  assert.equal(fs.existsSync(path.join(__dirname, "..", "content/workshops/refund-policy.json")), false);
+  assert.match(fs.readFileSync(path.join(out, "workshops/sample-webinar/index.html"), "utf8"), /href="\/refund-policy#workshops">refund policy/);
+  const page = fs.readFileSync(path.join(__dirname, "..", "refund-policy/index.html"), "utf8");
+  const terms = /TERMS_VERSION = "([^"]+)"/.exec(fs.readFileSync(path.join(__dirname, "..", "functions/api/_workshops.js"), "utf8"))[1];
+  const section = page.slice(page.indexOf('id="workshops"'));
+  assert.ok(page.includes('id="workshops"') && page.includes('href="#workshops"'), "section 23 and its contents entry");
+  assert.match(section, new RegExp("Version " + terms + "\\."), "the section's version is the terms version registrations record");
+  // The cohort terms are untouched: all 22 sections, in order, before the workshop section.
+  for (let n = 1; n <= 22; n++) assert.ok(page.indexOf('<span class="policy__n">' + n + '.</span>') < page.indexOf('id="workshops"'), "section " + n);
+  assert.equal(fs.existsSync(path.join(__dirname, "..", "docs/workshops-refund-policy-draft.json")), false, "one copy of the text");
 });
 
 test("invitation-only sessions ask for the Google account to join with; others do not", () => {
