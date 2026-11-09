@@ -28,6 +28,9 @@ fail=0
 while IFS= read -r f; do
   if ! cmp -s "$MAIN/dist/$f" "dist/$f"; then
     if [[ "$f" =~ $ALLOWED ]]; then echo "changed (reviewed): $f"
+    # Only the CSV formula escaping (shared change 9); the rest must match main exactly.
+    elif [[ "$f" == "./assets/js/admin.js" ]] && cmp -s <(tr -d '\r' < "$MAIN/dist/$f") <(node tests/baseline/strip-csv-escape.js "dist/$f" | tr -d '\r'); then
+      echo "changed only by CSV formula escaping (reviewed): $f"
     elif [[ "$f" =~ \.(html|xml)$ ]] && cmp -s "$MAIN/dist/$f" <(strip_workshops "dist/$f"); then workshops_only=$((${workshops_only:-0}+1))
     else echo "UNEXPECTED CHANGE: $f"; fail=1; fi
   fi
