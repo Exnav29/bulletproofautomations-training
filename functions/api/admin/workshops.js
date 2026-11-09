@@ -18,6 +18,8 @@ const ACTIONS = new Set(["admit", "request_refund", "resolve_duplicate", "cancel
 const ADMISSION = new Set(["mark_invited", "mark_removed", "set_attend_email"]);
 // The exception queue's retry for automatic Google Calendar invitations.
 const CALENDAR = new Set(["retry_calendar"]);
+// Waitlist exceptions only; normal progression is automatic.
+const WAITLIST = { waitlist_remove: "remove", waitlist_retry_email: "retry_email" };
 const REFERRAL = new Set(["create_referrer", "suspend_referrer", "activate_referrer", "record_payout", "void_commission",
   "grant_email", "revoke_grant"]);
 const REFERRAL_ERRORS = {
@@ -70,6 +72,20 @@ export async function onRequestPost(context) {
       return result({ ok: false, error: REFERRAL_ERRORS[done.data && done.data.error] || "The action was refused." }, 409);
     }
     return result({ ok: true, already: done.data.already === true, code: done.data.code || null, status: done.data.status || null });
+  }
+  if (WAITLIST[action]) {
+    const wid = body && typeof body.waitlist_id === "string" && /^[0-9a-f-]{36}$/.test(body.waitlist_id) ? body.waitlist_id : "";
+    if (!wid) return result({ ok: false, error: "A waitlist entry is required." }, 400);
+    const done = await rpc(env, "workshop_admin_waitlist", {
+      p_actor_email: String(admin.email).toLowerCase(), p_id: wid, p_action: WAITLIST[action],
+      p_reason: typeof body.value === "string" ? body.value.slice(0, 300) : null
+    });
+    if (!done.ok) return result({ ok: false, error: "The action could not be recorded." }, 502);
+    if (!done.data || done.data.ok !== true) {
+      const why = { reason_required: "Give a reason (at least five characters).", not_found: "That entry can no longer be changed." };
+      return result({ ok: false, error: why[done.data && done.data.error] || "The action was refused." }, 409);
+    }
+    return result({ ok: true });
   }
   if (id && CALENDAR.has(action)) {
     const done = await rpc(env, "workshop_calendar_retry", { p_actor_email: String(admin.email).toLowerCase(), p_registration_id: id });

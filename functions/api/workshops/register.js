@@ -66,6 +66,7 @@ export async function onRequestPost(context) {
   // The final price the page showed. If the database computes anything else,
   // nobody is registered and the page re-quotes.
   const expectedPrice = typeof body.expected_price === "number" && isFinite(body.expected_price) ? body.expected_price : null;
+  const offerToken = typeof body.offer === "string" && looksLikeToken(body.offer) ? body.offer : "";
 
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return refuse("supabase-not-configured", 503);
   if (!attendEmail && await sessionAdmission(env, slug) === "invite") {
@@ -91,7 +92,9 @@ export async function onRequestPost(context) {
         expected_price: expectedPrice,
         // From this deployment's own key, never from the browser: a test-mode
         // deployment registers only on test sessions, and nothing else does.
-        deployment_mode: workshopMode(env) }),
+        deployment_mode: workshopMode(env),
+        // A waitlist offer link's token: the database checks it holds a place for this email.
+        offer_token_hash: offerToken ? await sha256Hex(offerToken) : null }),
     p_ad_consent: adConsent,
     p_displayed_price: displayedPrice,
     p_displayed_starts_at: displayedStart
@@ -105,6 +108,7 @@ export async function onRequestPost(context) {
   if (r.outcome === "not_found") return json({ ok: false, code: "not_found" }, 404);
   if (r.outcome === "closed") return json({ ok: false, code: "closed" }, 409);
   if (r.outcome === "full") return json({ ok: false, code: "full" }, 409);
+  if (r.outcome === "offer_not_valid") return json({ ok: false, code: "offer_not_valid" }, 409);
   if (r.outcome === "stale_page") return json({ ok: false, code: "stale_page" }, 409);
   if (r.outcome === "price_changed") return json({ ok: false, code: "price_changed", price_ghs: Number(r.price_ghs) }, 409);
   // A self-referral reads as an invalid code: telling them apart would reveal whose code it is.

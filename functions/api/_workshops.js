@@ -10,6 +10,7 @@ import { db as rest } from "./_installments.js";
 import { sendMail, esc, MAILBOX } from "./_mail.js";
 import { sendConversions, metaConfigured } from "./_meta.js";
 import { syncInvitations } from "./_calendar.js";
+import { processWaitlist } from "./_waitlist.js";
 
 export const WORKSHOP_APP = "bulletproof-training-workshops";
 
@@ -391,8 +392,8 @@ export function emailFor(kind, registration, session, env) {
    concurrently: rows are claimed with SKIP LOCKED.
    --------------------------------------------------------------------------- */
 export async function processOutbox(env, origin, limits) {
-  const report = { emails: { sent: 0, failed: 0, skipped: 0 }, meta: { sent: 0, failed: 0 }, reconciled: 0, calendar: null };
-  const max = Object.assign({ emails: 10, meta: 20, reconcile: 10, calendar: 10 }, limits || {});
+  const report = { emails: { sent: 0, failed: 0, skipped: 0 }, meta: { sent: 0, failed: 0 }, reconciled: 0, calendar: null, waitlist: null };
+  const max = Object.assign({ emails: 10, meta: 20, reconcile: 10, calendar: 10, waitlist: 1 }, limits || {});
 
   // 1. Reconcile started checkouts the webhook has not settled (missed or late
   //    webhook). Paystack is asked directly; the RPC applies at most once.
@@ -419,6 +420,10 @@ export async function processOutbox(env, origin, limits) {
       else report.emails.failed += 1;
     }
   }
+
+  // 3a. Waitlist (_waitlist.js): offers, expiries and their emails, decided by the
+  //     database under each session's lock. Same test/live split as everything else.
+  if (max.waitlist > 0) report.waitlist = await processWaitlist(env, origin, workshopMode(env) === "test");
 
   // 3. Google Calendar invitations for invitation-only sessions (_calendar.js).
   //    A test-mode deployment syncs test sessions only; any other, live only.

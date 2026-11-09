@@ -12,7 +12,7 @@ type Row = Record<string, any>
 const u = (p: string) => new URL(p, import.meta.url)
 const pg = await loadDatabase([u('./fixtures/payment-ledger.sql'), u('./fixtures/supabase-stubs.sql'), u('./fixtures/graduate-records.sql'),
   u('../supabase/migrations/20261103120000_workshops.sql'), u('../supabase/migrations/20261109120000_workshop_admission_benefits.sql'),
-  u('../supabase/migrations/20261110120000_workshop_calendar_sync.sql')])
+  u('../supabase/migrations/20261110120000_workshop_calendar_sync.sql'), u('../supabase/migrations/20261111120000_workshop_waitlist.sql')])
 const DB = serveDatabase(pg, 54341)
 
 const register = (await import('../functions/api/workshops/register.js')).onRequestPost
@@ -1170,3 +1170,184 @@ Deno.test('cutoff: rescheduling the session moves its cutoff with it', opts, asy
   assertEquals((await call(session, '/api/workshops/session?slug=automate-invoices', null)).json.status, 'open')
   assertEquals((await reg({ email: 'ama@example.com', expected_price: 350 })).json.state, 'checkout')
 })
+
+// --- waitlist (release 4): first in, first out, through the existing registration and checkout ----
+const waitlistApi = await import('../functions/api/workshops/waitlist.js')
+const join = (email: string, over: Row = {}) => call(waitlistApi.onRequestPost, '/api/workshops/waitlist',
+  { action: 'join', slug: 'automate-invoices', full_name: 'Wait ' + email.split('@')[0], email,
+    attend_email: email.replace('@', '.meet@'), ack_terms: true, ...over })
+const entry = async (email: string) => (await rows(`select * from public.workshop_waitlist where email_normalized = $1`, [email]))[0]
+const offerLink = (email: string) => {
+  const m = [...mail].reverse().find((x) => x.to[0] === email && /A place is held for you/.test(x.subject))
+  return m ? new URL(m.text.match(/Register: (\S+)/)![1]).searchParams.get('offer')! : null
+}
+const offerReg = (email: string, offer: string, over: Row = {}) =>
+  reg({ email, attend_email: email.replace('@', '.meet@'), expected_price: 350, offer, ...over })
+const used = async () => (await rows(`select public.workshop_seats_in_use(id) g, public.workshop_graduate_seats_in_use(id) r from public.workshop_sessions`))[0]
+// Two open places and one reserved graduate place, both open places sold.
+async function soldOut() {
+  await inviteSession({ capacity: 2, reserved_graduate_seats: 1 })
+  const a = await paidTest('paid1@example.com', 'paid1.meet@gmail.com')
+  const b = await paidTest('paid2@example.com', 'paid2.meet@gmail.com')
+  return [a, b]
+}
+
+Deno.test('waitlist: a sold-out session offers the waitlist; joining is free, FIFO, once per person, and confirmed by email', opts, async () => {
+  await soldOut()
+  const s = await call(session, '/api/workshops/session?slug=automate-invoices', null)
+  assertEquals([s.json.status, s.json.waitlist_open], ['graduates_only', true], 'open places sold; reserved graduate place still free')
+  assertEquals((await reg({ email: 'late@example.com', expected_price: 350 })).json.code, 'full')
+  const before = paystack.initialized.length
+  const one = await join('w1@example.com'), two = await join('w2@example.com'), three = await join('w3@example.com')
+  assertEquals([one.json.position, two.json.position, three.json.position], [1, 2, 3])
+  assertEquals(paystack.initialized.length, before, 'no Paystack call to join')
+  assertEquals((await join('W1@example.com ')).json, { ok: true, outcome: 'already', position: 1 }, 'no duplicate entry')
+  assertEquals((await rows(`select count(*)::int n from public.workshop_waitlist`))[0].n, 3)
+  const confirmations = mail.filter((m) => /You're on the waitlist/.test(m.subject))
+  assertEquals(confirmations.map((m) => m.to[0]), ['w1@example.com', 'w2@example.com', 'w3@example.com'])
+  assert(confirmations[1].text.includes('You are number 2 in the queue') && !confirmations[1].text.includes('w1@example.com'), 'own position only')
+  assertEquals((await join('paid1@example.com')).json.code, 'registered', 'already holding a place')
+})
+
+Deno.test('waitlist: a refund opens a place for the first in line only; the link fills in their details, holds the place, and their payment confirms it', opts, async () => {
+  const [a] = await soldOut()
+  await join('w1@example.com'); await join('w2@example.com')
+  await refund(a.json.reference, 35000)
+  const run = await dispatchNow()
+  assertEquals(run.json.report.waitlist.advanced.offered, 1)
+  assertEquals([(await entry('w1@example.com')).status, (await entry('w2@example.com')).status], ['offered', 'waiting'])
+  const e = await entry('w1@example.com')
+  assertEquals(Date.parse(e.offer_expires_at) - Date.parse(e.offered_at), 24 * HOUR, '24 hours')
+  // The held place is not available to anyone else, including the next in line.
+  assertEquals((await reg({ email: 'late@example.com', expected_price: 350 })).json.code, 'full')
+  const token = offerLink('w1@example.com')!
+  assert(token && !e.offer_token_hash.includes(token), 'only the hash is stored')
+  const pre = await call(waitlistApi.onRequestGet, '/api/workshops/waitlist?offer=' + token, null)
+  assertEquals([pre.json.offer.email, pre.json.offer.full_name, pre.json.offer.attend_email], ['w1@example.com', 'Wait w1', 'w1.meet@example.com'])
+  assertEquals((await call(waitlistApi.onRequestGet, '/api/workshops/waitlist?offer=' + 'X'.repeat(43), null)).status, 404)
+  // The link is personal: someone else's email cannot use it.
+  assertEquals((await offerReg('w2@example.com', token)).json.code, 'offer_not_valid')
+  // Their own registration: the existing price, checkout and webhook.
+  const r = await offerReg('w1@example.com', token)
+  assertEquals([r.json.state, paystack.initialized.at(-1)!.amount], ['checkout', 35000])
+  await pay(r.json.reference, 35000)
+  assertEquals((await regRow('w1@example.com')).status, 'confirmed')
+  await dispatchNow()
+  assertEquals((await entry('w1@example.com')).status, 'converted')
+  assert(guests().includes('w1.meet@example.com'), 'then the existing automatic invitation')
+  assert(!guests().includes('w2.meet@example.com'), 'never anyone still waiting')
+  assertEquals(await used(), { g: 2, r: 0 })
+})
+
+Deno.test('waitlist: an expired offer moves on to the next person; declining releases at once; payment retries stay within the window', opts, async () => {
+  const [a, b] = await soldOut()
+  await join('w1@example.com'); await join('w2@example.com'); await join('w3@example.com')
+  await refund(a.json.reference, 35000)
+  await dispatchNow()
+  // w1 starts a checkout that fails, then retries inside the window: one place, no double charge.
+  const t1 = offerLink('w1@example.com')!
+  const first = await offerReg('w1@example.com', t1)
+  const retry = await offerReg('w1@example.com', t1)
+  assertEquals([first.json.state, retry.json.registration], ['checkout', 'existing'])
+  assertEquals((await rows(`select count(*)::int n from public.workshop_registrations where email_normalized = 'w1@example.com'`))[0].n, 1)
+  // The window passes without payment.
+  await pg.exec(`update public.workshop_waitlist set offer_expires_at = now() - interval '1 minute' where email_normalized = 'w1@example.com'`)
+  await pg.exec(`update public.workshop_payment_attempts set created_at = now() - interval '2 hours' where registration_id = (select id from public.workshop_registrations where email_normalized = 'w1@example.com')`)
+  await dispatchNow()
+  assertEquals([(await entry('w1@example.com')).status, (await entry('w2@example.com')).status], ['expired', 'offered'])
+  assert(mail.some((m) => m.to[0] === 'w1@example.com' && /released/.test(m.subject)), 'told it was released')
+  // w2 declines from the email link: the place goes to w3 straight away.
+  const t2 = offerLink('w2@example.com')!
+  assertEquals((await call(waitlistApi.onRequestPost, '/api/workshops/waitlist', { action: 'decline', offer: t2 })).json.declined, true)
+  assertEquals([(await entry('w2@example.com')).status, (await entry('w3@example.com')).status], ['declined', 'offered'])
+  assert(/declined/.test((await entry('w2@example.com')).audit))
+  // A second place opens while w3's offer is live: nobody else is waiting, so it simply reopens.
+  await refund(b.json.reference, 35000)
+  await dispatchNow()
+  assertEquals((await call(session, '/api/workshops/session?slug=automate-invoices', null)).json.status, 'open')
+})
+
+Deno.test('waitlist: places never oversell, even with offers, holds, refunds and registrations racing', opts, async () => {
+  const [a] = await soldOut()
+  for (const n of [1, 2, 3, 4]) await join('w' + n + '@example.com')
+  await refund(a.json.reference, 35000)
+  // The refund and four attempts to grab the place at once, then the dispatcher.
+  const racing = await Promise.all([
+    reg({ email: 'x1@example.com', expected_price: 350 }), reg({ email: 'x2@example.com', expected_price: 350 }),
+    dispatchNow(), dispatchNow(), reg({ email: 'x3@example.com', expected_price: 350 })])
+  assert(racing.slice(0, 2).concat([racing[4]]).every((r) => r.json.code === 'full'), 'nobody jumps the queue')
+  assertEquals((await rows(`select count(*)::int n from public.workshop_waitlist where status = 'offered'`))[0].n, 1, 'one place, one offer')
+  assertEquals((await used()).g, 2, 'capacity 2, never more')
+  // Running the dispatcher again, and a duplicate webhook, change nothing.
+  const sentBefore = mail.length
+  await dispatchNow(); await dispatchNow()
+  assertEquals(mail.length, sentBefore, 'no duplicate offer email')
+  const t = offerLink('w1@example.com')!
+  const r = await offerReg('w1@example.com', t)
+  await pay(r.json.reference, 35000); await pay(r.json.reference, 35000)
+  assertEquals((await regRow('w1@example.com')).payment_status, 'paid')
+  assertEquals((await rows(`select count(*)::int n from public.workshop_payment_attempts where status = 'succeeded'
+    and registration_id = (select id from public.workshop_registrations where email_normalized = 'w1@example.com')`))[0].n, 1)
+  assertEquals((await used()).g, 2)
+})
+
+Deno.test('waitlist: reserved graduate places go only to verified graduates in their own queue', opts, async () => {
+  await soldOut()
+  // A graduate takes the only reserved place.
+  const t0 = await verifyCert('abena@example.com', 'BPA-TRN-2026-GRAD02')
+  await reg({ email: 'abena@example.com', verification: t0, expected_price: 0, attend_email: 'abena.meet@gmail.com' })
+  // An open-place waiter, then a verified graduate waiter.
+  await join('w1@example.com')
+  const t1 = await verifyCert('kwame@example.com', 'BPA-TRN-2026-GRAD01')
+  const g = await join('kwame@example.com', { verification: t1 })
+  assertEquals([(await entry('kwame@example.com')).seat_kind, g.json.position], ['graduate', 1])
+  // The reserved place opens: it is offered to the graduate, never to the open-place waiter.
+  await admit((await regRow('abena@example.com')).id, 'cancel')
+  await dispatchNow()
+  assertEquals([(await entry('kwame@example.com')).status, (await entry('w1@example.com')).status], ['offered', 'waiting'])
+  // Using it still needs the graduate certificate, through the existing check.
+  const token = offerLink('kwame@example.com')!
+  assertEquals((await offerReg('kwame@example.com', token)).json.code, 'offer_not_valid', 'a standard registration cannot take a graduate place')
+  const t2 = await verifyCert('kwame@example.com', 'BPA-TRN-2026-GRAD01')
+  const r = await offerReg('kwame@example.com', token, { verification: t2, expected_price: 0 })
+  assertEquals([r.json.state, r.json.price_tier], ['confirmed', 'graduate'])
+  assertEquals(await used(), { g: 2, r: 1 })
+})
+
+Deno.test('waitlist: the seven-day cutoff closes it, ends open offers, and nothing is offered too close to it', opts, async () => {
+  const [a] = await soldOut()
+  await join('w1@example.com'); await join('w2@example.com')
+  // 169 hours to go: inside the last 2 hours before the cutoff, so no new offer.
+  await pg.exec(`update public.workshop_sessions set starts_at = now() + interval '169 hours'`)
+  await refund(a.json.reference, 35000)
+  await dispatchNow()
+  assertEquals((await entry('w1@example.com')).status, 'waiting', 'no offer that could not be used')
+  // An offer made earlier never outlives the cutoff.
+  await pg.exec(`update public.workshop_sessions set starts_at = now() + interval '180 hours'`)
+  await dispatchNow()
+  const e = await entry('w1@example.com')
+  assertEquals(e.status, 'offered')
+  assert(Date.parse(e.offer_expires_at) <= Date.now() + 12 * HOUR + 60000, 'expires at the cutoff, not after 24 hours')
+  // The cutoff passes: the offer ends, the queue closes, and joining is refused.
+  await pg.exec(`update public.workshop_sessions set starts_at = now() + interval '160 hours'`)
+  await pg.exec(`update public.workshop_waitlist set offer_expires_at = now() - interval '1 minute' where status = 'offered'`)
+  await dispatchNow()
+  assertEquals([(await entry('w1@example.com')).status, (await entry('w2@example.com')).status], ['expired', 'closed'])
+  assertEquals((await join('w9@example.com')).json.code, 'closed')
+  assertEquals((await call(session, '/api/workshops/session?slug=automate-invoices', null)).json.status, 'registration_closed')
+  assertEquals((await rows(`select count(*)::int n from public.workshop_registrations where status = 'confirmed'`))[0].n, 1, 'confirmed registrations kept')
+})
+
+Deno.test('waitlist: admin exceptions only: removal needs a reason and is recorded; nothing else moves the queue', opts, async () => {
+  await soldOut()
+  await join('w1@example.com'); await join('w2@example.com')
+  const id = (await entry('w1@example.com')).id
+  const noReason = await call(adminAction, '/api/admin/workshops', { action: 'waitlist_remove', waitlist_id: id, value: '' }, ENV, adminEnv)
+  assertEquals(noReason.status, 409)
+  const ok = await call(adminAction, '/api/admin/workshops', { action: 'waitlist_remove', waitlist_id: id, value: 'Asked to be taken off by phone' }, ENV, adminEnv)
+  assertEquals(ok.json.ok, true)
+  const e = await entry('w1@example.com')
+  assert(e.status === 'removed' && /Asked to be taken off/.test(e.audit))
+  assertEquals((await call(waitlistApi.onRequestPost, '/api/workshops/waitlist', { action: 'join', slug: 'automate-invoices', full_name: 'X', email: 'w3@example.com', ack_terms: true })).status, 400, 'a name is required')
+})
+
