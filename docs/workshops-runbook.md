@@ -22,7 +22,7 @@ Checked read-only against the existing Supabase project, not taken from earlier 
 | Test session `test-webinar-checkout` | `draft`. 3 confirmed test registrations and 4 test-mode attempts (`BPA-WTEST-`). No live attempt exists anywhere |
 | Workshop 01, `what-to-charge-for-automation` | `draft`, GHS 350, 25 places, joining details stored on the row (never in this repository, which is public), no registrations |
 | Certificate records release 2 reads | PR #54's entitlement view exists: **2** active graduate entitlements and **10** valid Foundations certificates |
-| Webinar and workshop refund terms | **Owner-approved 9 November 2026. Legal review NOT done.** Section 23 of the existing `refund-policy/index.html` (`#workshops`), version `2026-11-09` = `TERMS_VERSION`. On the development branch only: it publishes when this branch reaches `main`, which must wait for legal sign-off |
+| Webinar and workshop refund terms | **Final policy owner-approved 9 November 2026 (non-refundable; transfers 72 hours or more ahead). Legal review NOT done.** Section 23 of the existing `refund-policy/index.html` (`#workshops`), version `2026-11-09` = `TERMS_VERSION`. On the development branch only: it publishes when this branch reaches `main`, which must wait for legal sign-off |
 
 ## Test and live never mix (release 2, part 3)
 
@@ -273,16 +273,36 @@ Run the access test above. The rehearsal (step 5) can already have run it on the
 
 ### 8. Refund policy
 
-**Owner approval: done (9 November 2026).** The terms are section 23 of the existing
-`refund-policy/index.html`; paid forms link to `/refund-policy#workshops`, and every registration records
-`TERMS_VERSION` `2026-11-09`, the section's version line.
+**Owner approval: done (9 November 2026), for the final policy.**
 
-**Legal review: not done.** It must be completed before this branch is merged to `main`, because merging
-publishes the section. Points for the reviewer: the Ghana electronic-transactions cancellation
-provisions (Act 772, section 49, and its exceptions for services already begun), Paystack's refund
-rules from October 2026, and the late-registration full-refund clause (see PR #61 notes on its
-financial exposure). If the reviewer changes the wording, update section 23's version line and
-`TERMS_VERSION` in the same commit.
+- **Where:** section 23 of the existing `refund-policy/index.html`.
+  - Paid registrations are non-refundable except as stated or as the law requires.
+  - A one-time transfer within 12 months is available when cancelling 72 hours or more ahead.
+  - Within 72 hours, and for no-shows, there is no voluntary refund or transfer.
+  - If we cancel or materially reschedule: a refund or another session.
+  - Duplicate payments and registrations we cannot fulfil are refunded.
+  - Discounts and complimentary places have no cash value.
+- **Acceptance:** paid forms link to `/refund-policy#workshops` and require an explicit, ticked acceptance that names the non-refundable term. The server refuses a registration without it. Every registration records the accepted `terms_version` (`2026-11-09`, the section's version line) and, in `created_at`, the time of acceptance.
+- **Sections 1 to 22 (cohort and certification terms) are byte-identical to `main`:** `tests/baseline/compare-site.sh` removes section 23 and compares the rest.
+
+**Legal review: not done, and required before this branch is merged to `main`,** because merging
+publishes the section. Questions for the reviewer, none of which were answered by assumption:
+
+1. **Does Act 772's consumer cancellation right apply to these sales?** The seller is a US company and
+   the buyers are consumers in Ghana paying online. The section says that where it applies, the
+   period runs from the purchase, not from the event. The section is cited only by Act name, because
+   the section number and text were not verified from an authoritative source.
+2. **Does the exception for services that began with the consumer's consent apply?** Registration
+   closes 168 hours before the start. Any seven-day period running from the purchase therefore ends
+   at or before the start, so the live event itself never begins inside it. Whether anything earlier
+   counts as "beginning" the service (the calendar invitation, any pre-session material) is a legal
+   question. The policy does **not** rely on that exception, and checkout acceptance is not treated
+   as waiving the right.
+3. If the right applies, can a statutory refund deduct Paystack's fee? The policy claims no deduction.
+4. Whether the existing Florida governing-law clause (section 21) works for Ghanaian consumers.
+
+If the reviewer changes the wording, update section 23's version line and `TERMS_VERSION` in the
+same commit; a build test fails if they differ.
 
 ### 9. Merge PR #61
 

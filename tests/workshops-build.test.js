@@ -154,7 +154,10 @@ test("refund policy: paid forms link to section 23 of the existing /refund-polic
   assert.equal(ws.POLICY_HREF, "/refund-policy#workshops");
   assert.equal(paths.some((p) => /refund-policy/.test(p)), false, "no separate policy page");
   assert.equal(fs.existsSync(path.join(out, "workshops/refund-policy")), false);
-  assert.match(fs.readFileSync(path.join(out, "workshops/sample-webinar/index.html"), "utf8"), /href="\/refund-policy#workshops">refund policy/);
+  const detail = fs.readFileSync(path.join(out, "workshops/sample-webinar/index.html"), "utf8");
+  assert.match(detail, /href="\/refund-policy#workshops">webinar and workshop refund terms<\/a>\. I understand a paid registration is non-refundable/,
+    "explicit acceptance of the non-refundable terms, on a required box");
+  assert.match(detail, /<input type="checkbox" name="ack_terms" required>/);
   const page = fs.readFileSync(path.join(__dirname, "..", "refund-policy/index.html"), "utf8");
   const terms = /TERMS_VERSION = "([^"]+)"/.exec(fs.readFileSync(path.join(__dirname, "..", "functions/api/_workshops.js"), "utf8"))[1];
   const section = page.slice(page.indexOf('id="workshops"'));

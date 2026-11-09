@@ -307,7 +307,7 @@ function form(s) {
     '  <div class="ws-field"><label for="ws-wa">WhatsApp <span class="ws-hint">Optional</span></label><input id="ws-wa" name="whatsapp" type="tel" autocomplete="tel" inputmode="tel" maxlength="40" placeholder="+233"></div>\n' +
     '  <label class="ws-check" data-wa-consent hidden><input type="checkbox" name="whatsapp_consent"> <span>Send me session reminders on WhatsApp.</span></label>\n' +
     '  <label class="ws-check"><input type="checkbox" name="ack_terms" required> <span>I agree to the <a href="/privacy">privacy notice</a>' +
-    (s.price_ghs > 0 ? ' and the <a href="' + POLICY_HREF + '">refund policy</a>' : '') + '.</span></label>\n' +
+    (s.price_ghs > 0 ? ' and the <a href="' + POLICY_HREF + '">webinar and workshop refund terms</a>. I understand a paid registration is non-refundable except as those terms or the law provide' : '') + '.</span></label>\n' +
     '  <div class="ws-hp" aria-hidden="true"><label for="ws-company">Company website</label><input id="ws-company" name="company_website" type="text" tabindex="-1" autocomplete="off"></div>\n' +
     '  <p class="ws-error" data-ws-error role="alert" hidden></p>\n' +
     (s.referral_discount_ghs > 0 || hasBenefits(s) ? '  <p class="ws-note" data-ws-quote aria-live="polite">You pay ' + esc(fee(s)) + '.</p>\n' : '') +

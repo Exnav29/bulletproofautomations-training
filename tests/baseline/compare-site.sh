@@ -11,13 +11,17 @@ env "${ENVV[@]}" node scripts/build.js >/dev/null
 ALLOWED='^\./(_headers|admin/(index|credentials/index|enrollments/index|payments/index|studio/index|verification/index)\.html|assets/css/admin-console\.css|assets/js/admin-console\.js)$'
 # Publishing a webinar session (content/workshops) adds exactly two things to existing files:
 # one "Webinars and workshops" nav/footer line per page, and /workshops entries in the sitemap.
-# Those additions are removed before comparing; any other difference still fails.
+# The refund policy page gains section 23, "Webinars and workshops", and its contents entry.
+# Those additions are removed before comparing, so sections 1 to 22 (the cohort and
+# certification terms) must be byte-identical to main; any other difference still fails.
 strip_workshops() {
   node -e '
     const fs = require("fs");
     let t = fs.readFileSync(process.argv[1], "utf8");
     t = t.replace(/\r?\n[ \t]*<li><a href="\/workshops"( aria-current="[^"]*")?>Webinars and workshops<\/a><\/li>/g, "");
     t = t.replace(/\n[ \t]*<url>\s*<loc>https:\/\/training\.bulletproofautomations\.com\/workshops[^<]*<\/loc>\s*<\/url>/g, "");
+    t = t.replace(/\r?\n[ \t]*<li><a href="#workshops">Webinars and workshops<\/a><\/li>/g, "");
+    t = t.replace(/\r?\n[ \t]*<h2 class="section__title policy__h" id="workshops">[\s\S]*?(?=\r?\n[ \t]*<\/div>)/, "");
     process.stdout.write(t);' "$1"
 }
 fail=0
