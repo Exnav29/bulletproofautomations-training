@@ -1,5 +1,5 @@
 -- Rollback of 20261111120000_workshop_waitlist.sql. Restores release 2's
--- capacity and registration functions verbatim, then drops the waitlist.
+-- capacity, registration and checkout functions verbatim, then drops the waitlist.
 -- Export workshop_waitlist first: it is the record of every offer made.
 create or replace function public.workshop_seats_in_use(p_session_id uuid, p_except uuid default null)
 returns integer language sql stable set search_path = '' as $$
@@ -135,6 +135,45 @@ begin
     'list_price_ghs', r.list_price_ghs, 'discount_kind', r.discount_kind, 'discount_ghs', r.discount_ghs);
 end $$;
 
+create or replace function public.workshop_start_attempt(p_registration_id uuid, p_reference text, p_mode text)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  r public.workshop_registrations;
+  s public.workshop_sessions;
+  att public.workshop_payment_attempts;
+begin
+  select * into r from public.workshop_registrations where id = p_registration_id;
+  if not found then return jsonb_build_object('outcome', 'not_found'); end if;
+  select * into s from public.workshop_sessions where id = r.session_id for update;
+  select * into r from public.workshop_registrations where id = p_registration_id for update;
+
+  if r.status in ('confirmed', 'payment_received_review', 'refund_pending') or r.payment_status = 'paid' then
+    return jsonb_build_object('outcome', 'already_paid', 'status', r.status);
+  end if;
+  if r.status <> 'pending_payment' or r.amount_ghs = 0 or r.payment_status = 'needs_review' then
+    return jsonb_build_object('outcome', 'not_payable', 'status', r.status);
+  end if;
+  -- Test money only on a test session, live money only on a live one (Part 3).
+  if (p_mode = 'test') is distinct from s.is_test then
+    return jsonb_build_object('outcome', 'mode_not_allowed');
+  end if;
+  if not public.workshop_session_open(s) then
+    return jsonb_build_object('outcome', 'closed');
+  end if;
+  if s.capacity is not null and public.workshop_seats_in_use(s.id, r.id) >= s.capacity then
+    return jsonb_build_object('outcome', 'full');
+  end if;
+
+  insert into public.workshop_payment_attempts (registration_id, reference, amount_minor, currency, mode)
+  values (r.id, p_reference, round(r.amount_ghs * 100)::bigint, 'GHS', p_mode)
+  returning * into att;
+
+  perform public.workshop_enqueue_meta(r, 'InitiateCheckout', 'ic_' || r.id, r.amount_ghs);
+
+  return jsonb_build_object('outcome', 'started', 'attempt_id', att.id, 'reference', att.reference,
+    'amount_minor', att.amount_minor, 'currency', att.currency, 'session_id', s.id);
+end $$;
+
 drop function if exists public.workshop_admin_waitlist(text, uuid, text, text);
 drop function if exists public.workshop_waitlist_decline(text);
 drop function if exists public.workshop_waitlist_offer(text);
@@ -145,6 +184,7 @@ drop function if exists public.workshop_waitlist_advance(boolean);
 drop function if exists public.workshop_waitlist_position(uuid);
 drop function if exists public.workshop_waitlist_join(text, text, text, text, boolean, text, text, text, text);
 drop function if exists public.workshop_waiting(uuid, text);
+drop function if exists public.workshop_payment_in_flight(uuid);
 drop function if exists public.workshop_offers_holding(uuid, text, uuid);
 drop function if exists public.workshop_offer_holds(uuid);
 drop table if exists public.workshop_waitlist;

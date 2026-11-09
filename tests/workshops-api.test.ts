@@ -1355,3 +1355,95 @@ Deno.test('waitlist: admin exceptions only: removal needs a reason and is record
   assertEquals((await call(waitlistApi.onRequestPost, '/api/workshops/waitlist', { action: 'join', slug: 'automate-invoices', full_name: 'X', email: 'w3@example.com', ack_terms: true })).status, 400, 'a name is required')
 })
 
+
+// --- waitlist: payment in flight, late payments, queue-jumping, and the exact cutoff instant --------
+const failAttempts = async (email: string) => {
+  for (const a of await rows(`select reference from public.workshop_payment_attempts where registration_id =
+      (select id from public.workshop_registrations where email_normalized = $1)`, [email])) {
+    await pg.query(`select public.workshop_attempt_init_failed($1, 'checkout abandoned in test')`, [a.reference])
+  }
+}
+const lapseOffer = (email: string) => pg.query(`update public.workshop_waitlist set offer_expires_at = now() - interval '1 minute'
+  where email_normalized = $1`, [email])
+
+Deno.test('waitlist: a payment in flight when the offer lapses still converts, and the place is offered to nobody else meanwhile', opts, async () => {
+  const [a] = await soldOut()
+  await join('w1@example.com'); await join('w2@example.com')
+  await refund(a.json.reference, 35000)
+  await dispatchNow()
+  const r = await offerReg('w1@example.com', offerLink('w1@example.com')!)
+  assertEquals(r.json.state, 'checkout')
+  await lapseOffer('w1@example.com') // the window ends while w1 is on Paystack
+  await dispatchNow()
+  assertEquals([(await entry('w1@example.com')).status, (await entry('w2@example.com')).status], ['offered', 'waiting'], 'held while the payment is in flight')
+  assertEquals((await used()).g, 2)
+  await pay(r.json.reference, 35000) // the webhook arrives late, inside the 30-minute hold
+  await dispatchNow()
+  assertEquals([(await regRow('w1@example.com')).status, (await entry('w1@example.com')).status, (await entry('w2@example.com')).status],
+    ['confirmed', 'converted', 'waiting'])
+  assertEquals((await used()).g, 2, 'never oversold')
+})
+
+Deno.test('waitlist: a payment arriving after the hold lapsed and the place was re-offered is held for review, never oversold or lost', opts, async () => {
+  const [a] = await soldOut()
+  await join('w1@example.com'); await join('w2@example.com')
+  await refund(a.json.reference, 35000)
+  await dispatchNow()
+  const r = await offerReg('w1@example.com', offerLink('w1@example.com')!)
+  await lapseOffer('w1@example.com'); await failAttempts('w1@example.com') // window and hold both over
+  await dispatchNow()
+  assertEquals([(await entry('w1@example.com')).status, (await entry('w2@example.com')).status], ['expired', 'offered'])
+  // w1's payment on a checkout started well before (its 30-minute hold long over) is verified
+  // only now, for a place that is now w2's. Attempts are immutable, so the aged one is inserted
+  // as it would exist, the same way the webhook suite builds a stale attempt.
+  assert(r.json.reference)
+  await pg.query(`insert into public.workshop_payment_attempts (registration_id, reference, amount_minor, mode, created_at)
+    values ((select id from public.workshop_registrations where email_normalized = 'w1@example.com'),
+            'BPA-WTEST-2026-LATEPAYMNT', 35000, 'test', now() - interval '2 hours')`)
+  await pay('BPA-WTEST-2026-LATEPAYMNT', 35000)
+  const late = await regRow('w1@example.com')
+  assertEquals([late.status, late.review_reason], ['payment_received_review', 'capacity'], 'an exception for refund, not a seat')
+  assertEquals(Number(late.amount_paid_minor), 35000, 'the money is recorded, not lost')
+  // Places actually given: confirmed registrations plus live offers stay within capacity (2).
+  const given = (await rows(`select (select count(*)::int from public.workshop_registrations where status = 'confirmed' and price_tier <> 'graduate')
+    + (select count(*)::int from public.workshop_waitlist where status = 'offered' and offer_expires_at > now()) n`))[0].n
+  assertEquals(given, 2, 'not oversold')
+  // Release 1 counts money held for review as occupying a place until the admin admits or refunds
+  // it, so nothing further is offered meanwhile (conservative, by design).
+  assertEquals((await used()).g, 3)
+  await dispatchNow()
+  assertEquals((await rows(`select count(*)::int n from public.workshop_waitlist where status = 'offered'`))[0].n, 1, 'no extra offer')
+  assert(!guests().includes('w1.meet@example.com'), 'no meeting access')
+})
+
+Deno.test('waitlist: an expired offer, or an old unpaid registration, cannot start a new checkout while others wait', opts, async () => {
+  const [a] = await soldOut()
+  await join('w1@example.com'); await join('w2@example.com')
+  await refund(a.json.reference, 35000)
+  await dispatchNow()
+  await offerReg('w1@example.com', offerLink('w1@example.com')!)
+  await lapseOffer('w1@example.com'); await failAttempts('w1@example.com')
+  await dispatchNow() // w2 now holds the place
+  const before = paystack.initialized.length
+  const again = await reg({ email: 'w1@example.com', attend_email: 'w1.meet@example.com', expected_price: 350 })
+  assertEquals(again.json.code, 'full')
+  assertEquals(paystack.initialized.length, before, 'Paystack is never called')
+  // Even with the place momentarily free (w2 declines), w1 cannot take it while anyone waits.
+  await join('w3@example.com')
+  await call(waitlistApi.onRequestPost, '/api/workshops/waitlist', { action: 'decline', offer: offerLink('w2@example.com') })
+  assertEquals((await reg({ email: 'w1@example.com', attend_email: 'w1.meet@example.com', expected_price: 350 })).json.code, 'full')
+  assertEquals((await entry('w3@example.com')).status, 'offered', 'FIFO: the next in line gets it')
+})
+
+Deno.test('cutoff: closed at exactly 168 hours before the start, open a second before; recalculated on reschedule', opts, async () => {
+  await reset({ ...RELEASE }); await seedRecords()
+  const open = async (interval: string) => (await rows(`update public.workshop_sessions set starts_at = now() + interval '${interval}'
+    returning public.workshop_session_open(workshop_sessions.*) o`))[0].o
+  assertEquals(await open('168 hours 1 second'), true, 'one second before the cutoff')
+  assertEquals(await open('168 hours'), false, 'at the cutoff')
+  assertEquals(await open('167 hours 59 minutes 59 seconds'), false, 'one second after')
+  assertEquals(await open('30 days'), true, 'rescheduled later: open again')
+  // Workshop 01: Saturday 12 December 2026, 11:30 Accra (UTC+0), closes Saturday 5 December 2026, 11:30.
+  const w = (await rows(`select ('2026-12-12 11:30:00+00'::timestamptz - interval '168 hours') at time zone 'Africa/Accra' c`))[0].c
+  assertEquals(new Date(w).toISOString().slice(0, 16), '2026-12-05T11:30')
+})

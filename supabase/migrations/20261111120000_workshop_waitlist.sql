@@ -23,8 +23,9 @@
 --     An offer lasts until the earlier of 24 hours and the cutoff, and none is
 --     made in the last 2 hours before the cutoff. Waiting entries close at it.
 --
--- Replaces workshop_seats_in_use, workshop_graduate_seats_in_use and
--- workshop_register; the rollback restores release 2's bodies verbatim.
+-- Replaces workshop_seats_in_use, workshop_graduate_seats_in_use,
+-- workshop_register and workshop_start_attempt; the rollback restores release
+-- 2's bodies verbatim.
 -- ---------------------------------------------------------------------------
 
 create table if not exists public.workshop_waitlist (
@@ -99,6 +100,18 @@ returns integer language sql stable set search_path = '' as $$
      and (p_except is null or w.registration_id is distinct from p_except)
      and (w.registration_id is null or exists (select 1 from public.workshop_registrations r
                                                 where r.id = w.registration_id and r.status = 'pending_payment'))
+$$;
+
+-- Payment in flight: a checkout for this registration that is still within the
+-- session's hold (hold_minutes, 30 by default). This bounds how long a lapsed
+-- offer can wait for a payment that is already under way.
+create or replace function public.workshop_payment_in_flight(p_registration_id uuid)
+returns boolean language sql stable set search_path = '' as $$
+  select exists (select 1 from public.workshop_payment_attempts a
+                  join public.workshop_registrations r on r.id = a.registration_id
+                  join public.workshop_sessions s on s.id = r.session_id
+                  where a.registration_id = p_registration_id and a.status = 'initialized'
+                    and a.created_at > now() - make_interval(mins => s.hold_minutes))
 $$;
 
 create or replace function public.workshop_waiting(p_session_id uuid, p_kind text)
@@ -267,6 +280,52 @@ begin
     'list_price_ghs', r.list_price_ghs, 'discount_kind', r.discount_kind, 'discount_ghs', r.discount_ghs);
 end $$;
 
+create or replace function public.workshop_start_attempt(p_registration_id uuid, p_reference text, p_mode text)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  r public.workshop_registrations;
+  s public.workshop_sessions;
+  att public.workshop_payment_attempts;
+begin
+  select * into r from public.workshop_registrations where id = p_registration_id;
+  if not found then return jsonb_build_object('outcome', 'not_found'); end if;
+  select * into s from public.workshop_sessions where id = r.session_id for update;
+  select * into r from public.workshop_registrations where id = p_registration_id for update;
+
+  if r.status in ('confirmed', 'payment_received_review', 'refund_pending') or r.payment_status = 'paid' then
+    return jsonb_build_object('outcome', 'already_paid', 'status', r.status);
+  end if;
+  if r.status <> 'pending_payment' or r.amount_ghs = 0 or r.payment_status = 'needs_review' then
+    return jsonb_build_object('outcome', 'not_payable', 'status', r.status);
+  end if;
+  -- Test money only on a test session, live money only on a live one (Part 3).
+  if (p_mode = 'test') is distinct from s.is_test then
+    return jsonb_build_object('outcome', 'mode_not_allowed');
+  end if;
+  if not public.workshop_session_open(s) then
+    return jsonb_build_object('outcome', 'closed');
+  end if;
+  -- Release 4: checked atomically, under the session lock, before Paystack is
+  -- called. A registration made from a live offer, or one whose own checkout
+  -- hold is still running (payment in flight), already has its place. Any other
+  -- may start a checkout only if a place is free AND nobody is waiting for one,
+  -- so an expired offer or an old unpaid registration can never jump the queue.
+  if not public.workshop_offer_holds(r.id) and not public.workshop_payment_in_flight(r.id)
+     and s.capacity is not null
+     and (public.workshop_seats_in_use(s.id, r.id) >= s.capacity or public.workshop_waiting(s.id, 'general') > 0) then
+    return jsonb_build_object('outcome', 'full');
+  end if;
+
+  insert into public.workshop_payment_attempts (registration_id, reference, amount_minor, currency, mode)
+  values (r.id, p_reference, round(r.amount_ghs * 100)::bigint, 'GHS', p_mode)
+  returning * into att;
+
+  perform public.workshop_enqueue_meta(r, 'InitiateCheckout', 'ic_' || r.id, r.amount_ghs);
+
+  return jsonb_build_object('outcome', 'started', 'attempt_id', att.id, 'reference', att.reference,
+    'amount_minor', att.amount_minor, 'currency', att.currency, 'session_id', s.id);
+end $$;
+
 -- Join the waitlist. Outcomes: joined | already (position), not_full (register
 -- instead), registered (already has a place), closed, not_found.
 create or replace function public.workshop_waitlist_join(
@@ -373,6 +432,9 @@ begin
         audit = concat_ws(E'\n', w.audit, stamp || 'offer expired')
        where w.session_id = s.id and w.status = 'offered' and w.offer_expires_at <= now()
          and not exists (select 1 from public.workshop_registrations r where r.id = w.registration_id and r.status = 'confirmed')
+         -- Payment in flight: a checkout started before expiry keeps the offer open
+         -- until it resolves or its 30-minute hold lapses, so it can still convert.
+         and (w.registration_id is null or not public.workshop_payment_in_flight(w.registration_id))
       returning 1)
     select jsonb_set(out, '{expired}', to_jsonb((out->>'expired')::int + count(*)::int)) into out from e;
 
@@ -525,6 +587,7 @@ declare fn text;
 begin
   foreach fn in array array[
     'workshop_offer_holds(uuid)', 'workshop_offers_holding(uuid,text,uuid)', 'workshop_waiting(uuid,text)',
+    'workshop_payment_in_flight(uuid)',
     'workshop_waitlist_join(text,text,text,text,boolean,text,text,text,text)', 'workshop_waitlist_position(uuid)',
     'workshop_waitlist_advance(boolean)', 'workshop_waitlist_mail_due(boolean,integer)',
     'workshop_waitlist_set_token(uuid,text)', 'workshop_waitlist_mail_done(uuid,text,boolean,text)',

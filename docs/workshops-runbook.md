@@ -211,6 +211,13 @@ The existing per-minute dispatcher (`workshop_waitlist_advance`, under each sess
 **Guarantees:**
 - An offer holds its place in the same count that registrations and checkout holds use, under the same lock, so nothing can oversell (tested with racing registrations and dispatcher runs).
 - Nobody is charged by an offer: payment always starts from the person's own registration.
+- **Checkout is rechecked atomically before Paystack is called** (`workshop_start_attempt`, under the session lock). A checkout can start only in three cases:
+  - for a live offer;
+  - for a registration whose own checkout hold is still running;
+  - when a place is free and nobody is waiting.
+
+  An expired offer or an old unpaid registration can never jump the queue.
+- **Payment in flight, bounded.** A checkout started before an offer lapses keeps the offer open until it resolves or its 30-minute hold (`hold_minutes`) ends, so a slightly late webhook still converts the place. A payment verified after that, for a place already re-offered, is held for review (`payment_received_review`, reason `capacity`). It appears under "Needs resolution" for admit or refund: it never oversells, and the money is never lost. Money held for review counts as occupying a place until you resolve it, so nothing more is offered meanwhile.
 - Reserved graduate places are offered only to verified graduates, and only used with the graduate certificate check. A reserved place is released to open-place waiters only if the admin changes the session's `capacity` / `reserved_graduate_seats`.
 - Waitlisted people get no meeting access: the automatic invitation runs only after the registration is confirmed.
 
