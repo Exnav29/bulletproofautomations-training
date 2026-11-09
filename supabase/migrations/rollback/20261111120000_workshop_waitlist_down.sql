@@ -174,6 +174,135 @@ begin
     'amount_minor', att.amount_minor, 'currency', att.currency, 'session_id', s.id);
 end $$;
 
+-- Release 1's payment confirmation, verbatim.
+create or replace function public.workshop_apply_charge(
+  p_reference text, p_amount_minor bigint, p_currency text, p_domain text,
+  p_paid_at timestamptz, p_via text, p_payment_event_id uuid default null
+) returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  att public.workshop_payment_attempts;
+  r public.workshop_registrations;
+  s public.workshop_sessions;
+  reason text;
+  hold_valid boolean;
+  outcome text;
+  note text;
+  detail text;
+begin
+  select * into att from public.workshop_payment_attempts where reference = p_reference;
+  if not found then
+    if p_payment_event_id is not null then
+      perform public.workshop_note_event(p_payment_event_id, null, false,
+        'Workshop transaction with no matching payment attempt; not applied to any enrollment');
+    end if;
+    return jsonb_build_object('outcome', 'unknown_reference');
+  end if;
+
+  -- Lock order everywhere: session, registration, attempt.
+  select * into s from public.workshop_sessions where id = (
+    select session_id from public.workshop_registrations where id = att.registration_id) for update;
+  select * into r from public.workshop_registrations where id = att.registration_id for update;
+  select * into att from public.workshop_payment_attempts where id = att.id for update;
+
+  if att.status in ('succeeded', 'duplicate_payment', 'mismatch') then
+    if p_payment_event_id is not null then
+      perform public.workshop_note_event(p_payment_event_id, r.id, true,
+        'Workshop attempt already ' || att.status || '; nothing applied again');
+    end if;
+    return jsonb_build_object('outcome', 'already_applied', 'registration_id', r.id, 'attempt_status', att.status);
+  end if;
+
+  -- Money arrived, but not the money this attempt expected. Never confirm on
+  -- it, never ignore it: hold for a person.
+  if p_amount_minor is distinct from att.amount_minor
+     or upper(coalesce(p_currency, '')) <> att.currency
+     or p_domain is distinct from att.mode then
+    detail := format('expected %s %s %s; received %s %s %s',
+      att.amount_minor, att.currency, att.mode, p_amount_minor, p_currency, p_domain);
+    update public.workshop_payment_attempts
+       set status = 'mismatch', received_minor = greatest(coalesce(p_amount_minor, 0), 0), paid_at = p_paid_at,
+           verified_at = now(), verified_via = p_via,
+           payment_event_id = coalesce(p_payment_event_id, payment_event_id), status_note = detail
+     where id = att.id;
+    r := public.workshop_recompute_payment(r.id);
+    if p_payment_event_id is not null then
+      perform public.workshop_note_event(p_payment_event_id, r.id, true,
+        'WORKSHOP PAYMENT MISMATCH, held for review: ' || detail);
+    end if;
+    return jsonb_build_object('outcome', 'mismatch', 'registration_id', r.id);
+  end if;
+
+  -- A second successful payment for a registration that already has one.
+  -- The registration and its access are kept exactly as they are; the extra
+  -- money is flagged for refund review.
+  if exists (select 1 from public.workshop_payment_attempts x
+              where x.registration_id = r.id and x.id <> att.id and x.status = 'succeeded') then
+    update public.workshop_payment_attempts
+       set status = 'duplicate_payment', received_minor = p_amount_minor, paid_at = p_paid_at,
+           verified_at = now(), verified_via = p_via, payment_event_id = coalesce(p_payment_event_id, payment_event_id)
+     where id = att.id;
+    r := public.workshop_recompute_payment(r.id);
+    insert into public.workshop_notifications (registration_id, kind) values (r.id, 'duplicate_payment')
+    on conflict do nothing;
+    if p_payment_event_id is not null then
+      perform public.workshop_note_event(p_payment_event_id, r.id, true,
+        'DUPLICATE workshop payment; registration kept, flagged for refund review');
+    end if;
+    return jsonb_build_object('outcome', 'duplicate_payment', 'registration_id', r.id, 'status', r.status);
+  end if;
+
+  -- First successful payment. Decide whether it can be honoured automatically.
+  hold_valid := att.created_at > now() - make_interval(mins => s.hold_minutes);
+  reason := null;
+  if r.status in ('cancelled', 'refunded') then
+    reason := 'registration_cancelled';
+  elsif s.status not in ('published', 'closed') or s.starts_at <= now() then
+    reason := 'session_unavailable';
+  elsif not hold_valid and s.capacity is not null
+        and public.workshop_seats_in_use(s.id, r.id) >= s.capacity then
+    reason := 'capacity';
+  end if;
+
+  update public.workshop_payment_attempts
+     set status = 'succeeded', received_minor = p_amount_minor, paid_at = p_paid_at,
+         verified_at = now(), verified_via = p_via, payment_event_id = coalesce(p_payment_event_id, payment_event_id)
+   where id = att.id;
+
+  if reason is null then
+    update public.workshop_registrations
+       set status = 'confirmed', review_reason = null, paid_at = coalesce(p_paid_at, now())
+     where id = r.id;
+    insert into public.workshop_notifications (registration_id, kind) values (r.id, 'confirmation')
+    on conflict do nothing;
+    outcome := 'confirmed';
+    note := 'Workshop payment applied; registration confirmed';
+  else
+    update public.workshop_registrations
+       set status = 'payment_received_review', review_reason = reason, paid_at = coalesce(p_paid_at, now())
+     where id = r.id;
+    insert into public.workshop_notifications (registration_id, kind) values (r.id, 'payment_review')
+    on conflict do nothing;
+    outcome := 'review';
+    note := 'Workshop payment received; held for review (' || reason || ')';
+  end if;
+  r := public.workshop_recompute_payment(r.id);
+
+  /* PURCHASE = A CONFIRMED PAID ENROLLMENT, and nothing else. Money held for
+     review is not yet an enrollment: it may be refunded. It becomes a Purchase
+     only if an admin admits it (workshop_admin_action 'admit'), with the same
+     event id. The browser Pixel (status endpoint) and the admin campaign report
+     use this same definition. */
+  if outcome = 'confirmed' then
+    perform public.workshop_enqueue_meta(r, 'Purchase', 'pu_' || r.id, p_amount_minor / 100.0);
+  end if;
+  if p_payment_event_id is not null then
+    perform public.workshop_note_event(p_payment_event_id, r.id, true, note);
+  end if;
+
+  return jsonb_build_object('outcome', outcome, 'registration_id', r.id, 'status', r.status,
+    'payment_status', r.payment_status, 'review_reason', reason);
+end $$;
+
 drop function if exists public.workshop_admin_waitlist(text, uuid, text, text);
 drop function if exists public.workshop_waitlist_decline(text);
 drop function if exists public.workshop_waitlist_offer(text);

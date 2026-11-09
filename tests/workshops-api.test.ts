@@ -1447,3 +1447,67 @@ Deno.test('cutoff: closed at exactly 168 hours before the start, open a second b
   const w = (await rows(`select ('2026-12-12 11:30:00+00'::timestamptz - interval '168 hours') at time zone 'Africa/Accra' c`))[0].c
   assertEquals(new Date(w).toISOString().slice(0, 16), '2026-12-05T11:30')
 })
+
+// --- late payment versus the waitlist: the payment-confirmation guard (release 4) ------------------
+// x registers while a place is free and starts a checkout, then abandons it; the session sells out,
+// someone joins the waitlist, and a place frees. x's payment for a checkout whose 30-minute hold
+// lapsed long ago is verified now, before the dispatcher has offered that place.
+async function lateCheckoutSetup() {
+  await inviteSession({ capacity: 2, reserved_graduate_seats: 1 })
+  await paidTest('paid1@example.com', 'paid1.meet@gmail.com')
+  await reg({ email: 'x@example.com', attend_email: 'x.meet@gmail.com', expected_price: 350 })
+  await failAttempts('x@example.com') // its live checkout ended
+  // Its earlier checkout, started two hours ago (attempts are immutable, so inserted aged).
+  await pg.query(`insert into public.workshop_payment_attempts (registration_id, reference, amount_minor, mode, created_at)
+    values ((select id from public.workshop_registrations where email_normalized = 'x@example.com'),
+            'BPA-WTEST-2026-XLATEPAYMT', 35000, 'test', now() - interval '2 hours')`)
+  const b = await paidTest('paid2@example.com', 'paid2.meet@gmail.com')
+  await join('w1@example.com')
+  await refund(b.json.reference, 35000) // a place frees; the dispatcher has NOT run yet
+}
+
+Deno.test('late payment: with someone waiting, a lapsed-hold payment is held for refund, not confirmed, even before the dispatcher runs', opts, async () => {
+  await lateCheckoutSetup()
+  assertEquals((await entry('w1@example.com')).status, 'waiting', 'dispatcher delayed: no offer yet')
+  // The same webhook delivered twice at once, and the reconciliation path racing it.
+  await Promise.all([pay('BPA-WTEST-2026-XLATEPAYMT', 35000), pay('BPA-WTEST-2026-XLATEPAYMT', 35000)])
+  const x = await regRow('x@example.com')
+  assertEquals([x.status, x.review_reason, Number(x.amount_paid_minor)], ['payment_received_review', 'capacity', 35000],
+    'recorded for resolution; the money is not lost')
+  assertEquals((await rows(`select count(*)::int n from public.workshop_payment_attempts where reference = 'BPA-WTEST-2026-XLATEPAYMT' and status = 'succeeded'`))[0].n, 1, 'applied once')
+  assertEquals((await rows(`select count(*)::int n from public.workshop_registrations where status = 'confirmed'`))[0].n, 1, 'only paid1 holds a place')
+  // The dispatcher finally runs. The held payment counts against capacity until resolved (owner
+  // decision), so the place is not offered yet; nothing oversells and x gets no meeting access.
+  await dispatchNow()
+  assert(!guests().includes('x.meet@gmail.com'))
+  // The admin refunds x: the place goes to w1, first in line.
+  assertEquals((await admit(x.id, 'request_refund')).json.ok, true)
+  await refund('BPA-WTEST-2026-XLATEPAYMT', 35000)
+  await dispatchNow()
+  assertEquals([(await regRow('x@example.com')).status, (await entry('w1@example.com')).status], ['refunded', 'offered'])
+})
+
+Deno.test('late payment: a payment inside its hold is a legitimate payment in flight and is confirmed even with people waiting', opts, async () => {
+  await inviteSession({ capacity: 2, reserved_graduate_seats: 1 })
+  await paidTest('paid1@example.com', 'paid1.meet@gmail.com')
+  const x = await reg({ email: 'x@example.com', attend_email: 'x.meet@gmail.com', expected_price: 350 })
+  assertEquals(x.json.state, 'checkout') // x's hold makes the session full
+  await join('w1@example.com')
+  assertEquals((await join('w1@example.com')).json.outcome, 'already')
+  await pay(x.json.reference, 35000)
+  assertEquals((await regRow('x@example.com')).status, 'confirmed', 'its place was rightfully held')
+  await dispatchNow()
+  assertEquals((await entry('w1@example.com')).status, 'waiting', 'no place to offer: still FIFO')
+})
+
+Deno.test('late payment: with nobody waiting and a place free, a lapsed-hold payment is still confirmed (unchanged behaviour)', opts, async () => {
+  await inviteSession({ capacity: 2, reserved_graduate_seats: 1 })
+  await paidTest('paid1@example.com', 'paid1.meet@gmail.com')
+  await reg({ email: 'x@example.com', attend_email: 'x.meet@gmail.com', expected_price: 350 })
+  await failAttempts('x@example.com')
+  await pg.query(`insert into public.workshop_payment_attempts (registration_id, reference, amount_minor, mode, created_at)
+    values ((select id from public.workshop_registrations where email_normalized = 'x@example.com'),
+            'BPA-WTEST-2026-XLATEPAYMT', 35000, 'test', now() - interval '2 hours')`)
+  await pay('BPA-WTEST-2026-XLATEPAYMT', 35000)
+  assertEquals((await regRow('x@example.com')).status, 'confirmed')
+})

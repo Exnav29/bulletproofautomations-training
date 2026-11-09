@@ -22,7 +22,7 @@ Checked read-only against the existing Supabase project, not taken from earlier 
 | Test session `test-webinar-checkout` | `draft`. 3 confirmed test registrations and 4 test-mode attempts (`BPA-WTEST-`). No live attempt exists anywhere |
 | Workshop 01, `what-to-charge-for-automation` | `draft`, GHS 350, 25 places, joining details stored on the row (never in this repository, which is public), no registrations |
 | Certificate records release 2 reads | PR #54's entitlement view exists: **2** active graduate entitlements and **10** valid Foundations certificates |
-| Webinar and workshop refund terms | **Final policy owner-approved 9 November 2026 (non-refundable; transfers 72 hours or more ahead). Legal review NOT done.** Section 23 of the existing `refund-policy/index.html` (`#workshops`), version `2026-11-09` = `TERMS_VERSION`. On the development branch only: it publishes when this branch reaches `main`, which must wait for legal sign-off |
+| Webinar and workshop refund terms | **Owner Approved, 9 November 2026** (non-refundable; transfers 72 hours or more ahead). No external legal review: not a launch gate, by owner decision. Section 23 of the existing `refund-policy/index.html` (`#workshops`), version `2026-11-09` = `TERMS_VERSION`. Publishes when the webinar release is merged |
 
 ## Test and live never mix (release 2, part 3)
 
@@ -217,7 +217,7 @@ The existing per-minute dispatcher (`workshop_waitlist_advance`, under each sess
   - when a place is free and nobody is waiting.
 
   An expired offer or an old unpaid registration can never jump the queue.
-- **Payment in flight, bounded.** A checkout started before an offer lapses keeps the offer open until it resolves or its 30-minute hold (`hold_minutes`) ends, so a slightly late webhook still converts the place. A payment verified after that, for a place already re-offered, is held for review (`payment_received_review`, reason `capacity`). It appears under "Needs resolution" for admit or refund: it never oversells, and the money is never lost. Money held for review counts as occupying a place until you resolve it, so nothing more is offered meanwhile.
+- **Payment in flight, bounded.** A checkout started before an offer lapses keeps the offer open until it resolves or its 30-minute hold (`hold_minutes`) ends, so a slightly late webhook still converts the place. A payment verified after that is confirmed only if a place is free **and nobody is waiting**, a rule in the payment confirmation itself (`workshop_apply_charge`), so it holds even before the dispatcher has offered a freed place. Otherwise it is held for review (`payment_received_review`, reason `capacity`). It appears under "Needs resolution" for admit or refund: it never oversells, and the money is never lost. Money held for review counts as occupying a place until you resolve it, so nothing more is offered meanwhile.
 - Reserved graduate places are offered only to verified graduates, and only used with the graduate certificate check. A reserved place is released to open-place waiters only if the admin changes the session's `capacity` / `reserved_graduate_seats`.
 - Waitlisted people get no meeting access: the automatic invitation runs only after the registration is confirmed.
 
@@ -343,9 +343,12 @@ update public.workshop_sessions
 
 Run the access test above. The rehearsal (step 5) can already have run it on the rehearsal event.
 
-### 8. Refund policy
+### 8. Refund policy: done, no launch step
 
-**Owner approval: done (9 November 2026), for the final policy.**
+**Status: Owner Approved, 9 November 2026, by the business owner as final approval authority.** No
+external legal review was carried out, and none is a launch gate (owner decision, 9 November 2026). Do
+not describe the policy as independently reviewed. It publishes as section 23 of `/refund-policy` when the
+webinar release is merged.
 
 - **Where:** section 23 of the existing `refund-policy/index.html`.
   - Paid registrations are non-refundable except as stated or as the law requires.
@@ -357,24 +360,14 @@ Run the access test above. The rehearsal (step 5) can already have run it on the
 - **Acceptance:** paid forms link to `/refund-policy#workshops` and require an explicit, ticked acceptance that names the non-refundable term. The server refuses a registration without it. Every registration records the accepted `terms_version` (`2026-11-09`, the section's version line) and, in `created_at`, the time of acceptance.
 - **Sections 1 to 22 (cohort and certification terms) are byte-identical to `main`:** `tests/baseline/compare-site.sh` removes section 23 and compares the rest.
 
-**Legal review: not done, and required before this branch is merged to `main`,** because merging
-publishes the section. Questions for the reviewer, none of which were answered by assumption:
+**Statutory rights are preserved by the wording, not by assumption:**
+- The section does not limit rights that cannot be waived, and names Ghana's Electronic Transactions Act, 2008 (Act 772).
+- Where the law gives a period to cancel, it states that the period runs from the purchase, not from the event.
+- It does not rely on any exception for services already begun, and does not treat ticking the box at checkout as waiving a statutory right.
+- It claims no deduction from a statutory refund.
 
-1. **Does Act 772's consumer cancellation right apply to these sales?** The seller is a US company and
-   the buyers are consumers in Ghana paying online. The section says that where it applies, the
-   period runs from the purchase, not from the event. The section is cited only by Act name, because
-   the section number and text were not verified from an authoritative source.
-2. **Does the exception for services that began with the consumer's consent apply?** Registration
-   closes 168 hours before the start. Any seven-day period running from the purchase therefore ends
-   at or before the start, so the live event itself never begins inside it. Whether anything earlier
-   counts as "beginning" the service (the calendar invitation, any pre-session material) is a legal
-   question. The policy does **not** rely on that exception, and checkout acceptance is not treated
-   as waiving the right.
-3. If the right applies, can a statutory refund deduct Paystack's fee? The policy claims no deduction.
-4. Whether the existing Florida governing-law clause (section 21) works for Ghanaian consumers.
-
-If the reviewer changes the wording, update section 23's version line and `TERMS_VERSION` in the
-same commit; a build test fails if they differ.
+**If the wording ever changes,** update section 23's version line and `TERMS_VERSION` in the same
+commit; a build test fails if they differ.
 
 ### 9. Merge PR #61
 
