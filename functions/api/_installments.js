@@ -1,4 +1,5 @@
 import { json } from "./_shared.js";
+import { sendMail } from "./_mail.js";
 
 export const ADMIN_EMAIL = "johnathan@bulletproofautomations.com";
 export const FROM_NAME = "Johnathan Lightfoot · Bulletproof Automations";
@@ -111,19 +112,6 @@ export function emailContent(enrollment, installment, plan, url) {
   return { subject: subject, text: text, html: html };
 }
 
-async function mailboxId(token) {
-  const res = await fetch("https://api.mail.hostinger.com/api/v1/me", {
-    headers: { Authorization: "Bearer " + token }
-  });
-  if (!res.ok) return null;
-  const body = await res.json().catch(function () { return null; });
-  const boxes = body && body.data && Array.isArray(body.data.mailboxes) ? body.data.mailboxes : [];
-  const box = boxes.filter(function (m) {
-    return String(m.address || "").toLowerCase() === ADMIN_EMAIL;
-  })[0];
-  return box && (box.resourceId || box.resource_id) || null;
-}
-
 export async function sendInstallment(env, request, installmentId) {
   if (!env.HOSTINGER_MAIL_API_TOKEN) {
     return { ok: false, code: "mail_not_configured", status: 503 };
@@ -138,28 +126,18 @@ export async function sendInstallment(env, request, installmentId) {
   const plan = await planFor(env, enrollment.id);
   const url = payUrl(request, installment.payment_token);
   const content = emailContent(enrollment, installment, plan, url);
-  const box = await mailboxId(env.HOSTINGER_MAIL_API_TOKEN);
-  if (!box) return { ok: false, code: "mailbox_not_found", status: 503 };
-
-  const res = await fetch("https://api.mail.hostinger.com/api/v1/mailboxes/" +
-    encodeURIComponent(box) + "/send", {
-    method: "POST",
-    headers: {
-      Authorization: "Bearer " + env.HOSTINGER_MAIL_API_TOKEN,
-      "Content-Type": "application/json"
-    },    body: JSON.stringify({
-      to: [enrollment.email],
-      displayName: FROM_NAME,
-      subject: content.subject,
-      text: content.text,
-      html: content.html
-    })
+  // The site's one Hostinger sender (_mail.js): same mailbox, same requests.
+  const sent = await sendMail(env, {
+    to: enrollment.email,
+    displayName: FROM_NAME,
+    subject: content.subject,
+    text: content.text,
+    html: content.html
   });
-  if (!res.ok) {
-    return {
-      ok: false, code: "mail_send_failed", status: 502,
-      detail: (await res.text()).slice(0, 200)
-    };
+  if (!sent.ok) {
+    return sent.code === "mailbox_not_found" || sent.code === "mail_not_configured"
+      ? { ok: false, code: sent.code, status: 503 }
+      : { ok: false, code: sent.code, status: 502, detail: sent.detail };
   }
 
   const now = new Date().toISOString();

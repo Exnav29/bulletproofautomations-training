@@ -6,6 +6,7 @@
  */
 
 import { rpc } from "./_shared.js";
+import { db as rest } from "./_installments.js";
 import { sendMail, esc, MAILBOX } from "./_mail.js";
 import { sendConversions, metaConfigured } from "./_meta.js";
 
@@ -174,15 +175,8 @@ export function eventIds(registrationId) {
   };
 }
 
-export function rest(env, path, init) {
-  return fetch(env.SUPABASE_URL + "/rest/v1/" + path, Object.assign({}, init || {}, {
-    headers: Object.assign({
-      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-      Authorization: "Bearer " + env.SUPABASE_SERVICE_ROLE_KEY,
-      "Content-Type": "application/json"
-    }, (init && init.headers) || {})
-  }));
-}
+// The cohort's service-role REST helper, under the name this module's callers use.
+export { rest };
 
 /* Call a Postgres function that returns void. PostgREST answers those with an
    empty body, which the shared rpc() parses as JSON and throws on, so these
@@ -263,69 +257,15 @@ export async function sessionAdmission(env, slug) {
 }
 
 /* The first https link in a session's private joining instructions: the
-   button in the email and the LOCATION of the calendar file. */
+   button in the email. */
 export function joinUrl(session) {
   const m = /https:\/\/[^\s<>"']+/.exec(String((session && session.join_instructions) || ""));
   return m ? m[0].replace(/[.,;:)]+$/, "") : null;
 }
 
-/* A Google Calendar "add" link. It opens a prefilled event in the attendee's
-   own calendar; nothing is sent to the host and no invitation is created. */
-export function googleCalendarLink(session) {
-  const start = new Date(session.starts_at);
-  const end = new Date(start.getTime() + Number(session.duration_minutes || 60) * 60000);
-  const url = joinUrl(session);
-  const q = new URLSearchParams({
-    action: "TEMPLATE",
-    text: session.title,
-    dates: icsStamp(start) + "/" + icsStamp(end),
-    details: "Bulletproof Automations Training." + (url ? " Join: " + url : ""),
-    location: url || "Online"
-  });
-  return "https://calendar.google.com/calendar/render?" + q.toString();
-}
-
 function money(minorOrGhs, isMinor) {
   const ghs = isMinor ? Number(minorOrGhs || 0) / 100 : Number(minorOrGhs || 0);
   return "GHS " + ghs.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-}
-
-function icsStamp(date) {
-  return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-}
-
-export function calendarFile(session, origin) {
-  const start = new Date(session.starts_at);
-  const end = new Date(start.getTime() + Number(session.duration_minutes || 60) * 60000);
-  const fold = function (s) { return String(s).replace(/[\\,;]/g, function (c) { return "\\" + c; }).replace(/\r?\n/g, "\\n"); };
-  // RFC 5545 3.1: content lines longer than 75 octets are folded.
-  const line = function (s) {
-    const out = [];
-    let rest = s;
-    while (rest.length > 74) { out.push(rest.slice(0, 74)); rest = " " + rest.slice(74); }
-    out.push(rest);
-    return out.join("\r\n");
-  };
-  // Joining details appear only when the caller passed them, which it does
-  // only for a confirmed registration. METHOD:PUBLISH with no ORGANIZER or
-  // ATTENDEE: opening the file adds an event and sends no invitation.
-  const url = joinUrl(session);
-  const description = session.join_instructions
-    ? "Bulletproof Automations Training.\n\n" + session.join_instructions
-    : "Bulletproof Automations Training. Joining details are in your confirmation email.";
-  return [
-    "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Bulletproof Automations//Training//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
-    "BEGIN:VEVENT",
-    "UID:" + session.id + "@training.bulletproofautomations.com",
-    "DTSTAMP:" + icsStamp(new Date()),
-    "DTSTART:" + icsStamp(start),
-    "DTEND:" + icsStamp(end),
-    "SUMMARY:" + fold(session.title),
-    "DESCRIPTION:" + fold(description),
-    url ? "LOCATION:" + fold(url) : null,
-    "URL:" + origin + "/workshops/" + session.slug,
-    "END:VEVENT", "END:VCALENDAR", ""
-  ].filter(function (l) { return l !== null; }).map(line).join("\r\n");
 }
 
 /* ---------------------------------------------------------------------------
@@ -342,7 +282,7 @@ export function supportWhatsApp(env) {
   return /^\+[1-9][0-9]{7,14}$/.test(raw) ? raw : null;
 }
 
-export function emailFor(kind, registration, session, links, env) {
+export function emailFor(kind, registration, session, env) {
   const first = String(registration.full_name || "there").trim().split(/\s+/)[0] || "there";
   const when = formatWhen(session);
   const facts = [
@@ -423,9 +363,6 @@ export function emailFor(kind, registration, session, links, env) {
     (showJoin ? '<div style="padding:16px;background:#f3efe5;border-radius:10px;font-size:15px;line-height:1.55;margin-bottom:18px">' +
       '<strong>How to join</strong><br>' + joinHtml + "</div>" : "") +
     (showJoin && url ? '<p style="margin:0 0 14px"><a href="' + esc(url) + '" style="display:inline-block;background:#116149;color:#fff;text-decoration:none;padding:12px 16px;border-radius:10px;font-weight:700">' + esc(joinLabel) + "</a></p>" : "") +
-    (showJoin && !invite ? '<p style="margin:0;font-size:14px;line-height:1.6">Add it to your calendar: ' +
-      '<a href="' + esc(googleCalendarLink(session)) + '" style="color:#116149;font-weight:700">Google Calendar</a>' +
-      (links.calendar ? ' or <a href="' + esc(links.calendar) + '" style="color:#116149;font-weight:700">other calendars (.ics)</a>' : "") + "</p>" : "") +
     '<p style="font-size:13px;line-height:1.5;color:#52615b;margin:22px 0 0">' + esc(help) + '</p>' +
     "</div>" +
     '<p style="font-size:12px;line-height:1.5;color:#65736d;margin:16px 4px 0">Bulletproof Automations is an independent training provider based in Jacksonville, Florida. ' +
@@ -433,8 +370,6 @@ export function emailFor(kind, registration, session, links, env) {
     "</div></body></html>";
   const text = lead + "\n\n" + session.title + "\n" + facts.map(function (f) { return f[0] + ": " + f[1]; }).join("\n") +
     "\n\n" + body + (showJoin ? "\n\nHow to join:\n" + join : "") +
-    (showJoin && !invite ? "\n\nAdd to Google Calendar: " + googleCalendarLink(session) : "") +
-    (showJoin && !invite && links.calendar ? "\nAdd to other calendars (.ics): " + links.calendar : "") +
     "\n\n" + help + "\n\nBulletproof Automations Training";
   return { subject: subject, html: html, text: text };
 }
@@ -531,18 +466,7 @@ async function deliverNotification(env, origin, n) {
     return "skipped";
   }
 
-  // The email carries its own token so its calendar link works on any device.
-  const links = {};
-  if (n.kind !== "payment_review") {
-    const token = newToken();
-    const saved = await rest(env, "workshop_status_tokens", {
-      method: "POST", headers: { Prefer: "return=minimal" },
-      body: JSON.stringify({ token_hash: await sha256Hex(token), registration_id: reg.id })
-    });
-    if (saved.ok) links.calendar = origin + "/api/workshops/calendar?t=" + encodeURIComponent(token);
-  }
-
-  const message = emailFor(n.kind, reg, session, links, env);
+  const message = emailFor(n.kind, reg, session, env);
   if (!message) { await finish(false, "unknown-kind"); return "failed"; }
   const sent = await sendMail(env, { to: reg.email_normalized, subject: message.subject, text: message.text, html: message.html });
   if (!sent.ok) { await finish(false, sent.code); return "failed"; }

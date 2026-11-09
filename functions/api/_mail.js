@@ -1,7 +1,7 @@
 /* Branded business email through the Hostinger Mail API, from the Bulletproof
- * Automations mailbox. The same transport and mailbox the installment emails
- * use (functions/api/_installments.js), which is left untouched so its live
- * payment path does not change.
+ * Automations mailbox. The ONE sender for the site: cohort installment emails
+ * (functions/api/_installments.js) and webinar and workshop emails both use it,
+ * each with its own display name.
  *
  * Not routed (leading underscore). Needs HOSTINGER_MAIL_API_TOKEN on the
  * Pages project; without it every send reports mail_not_configured and the
@@ -29,7 +29,7 @@ async function mailboxId(env, token) {
   return (box && (box.resourceId || box.resource_id)) || null;
 }
 
-/** { ok } or { ok:false, code }. Never throws. */
+/** message: { to, subject, text, html, displayName? }. { ok } or { ok:false, code }. Never throws. */
 export async function sendMail(env, message) {
   const token = env.HOSTINGER_MAIL_API_TOKEN;
   if (!token) return { ok: false, code: "mail_not_configured" };
@@ -41,7 +41,7 @@ export async function sendMail(env, message) {
       headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
       body: JSON.stringify({
         to: [message.to],
-        displayName: FROM_NAME,
+        displayName: message.displayName || FROM_NAME,
         subject: message.subject,
         text: message.text,
         html: message.html

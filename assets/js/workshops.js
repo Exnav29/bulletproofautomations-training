@@ -436,8 +436,6 @@
           setStep(list, "join", "active", joinText + ". Join five minutes early.");
         }
         var actions = el("div", { class: "ws-actions" });
-        // The invitation already puts an invitation-only session in the calendar.
-        if (!invite) actions.appendChild(el("a", { class: "ws-btn", href: "/api/workshops/calendar?t=" + encodeURIComponent(access.token) }, "Add to calendar"));
         actions.appendChild(el("a", { class: "ws-btn ws-btn--quiet", href: "/workshops" }, "Other sessions"));
         bodyEl.appendChild(actions);
         if (s.events && s.events.purchase) track("Purchase", s.events.purchase.id, { content_ids: [session], currency: "GHS", value: s.events.purchase.value });

@@ -50,6 +50,6 @@ folder, draft or not.
 
 ## Refund policy
 
-`refund-policy.json` holds the webinar and workshop refund policy. While `"approved"` is `false`,
-nothing is published and paid forms link to `/refund-policy`. The go-live steps are in
-`docs/workshops-runbook.md`.
+Paid forms link to the site's existing `/refund-policy` page. The webinar and workshop terms are an
+unpublished draft in `docs/workshops-refund-policy-draft.json`; once approved they become a section
+of that page (`docs/workshops-runbook.md`, step 8). No separate policy page is built.

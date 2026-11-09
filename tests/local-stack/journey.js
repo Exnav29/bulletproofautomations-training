@@ -111,7 +111,7 @@ async function register(page, slug, email, query) {
   check("email: one confirmation per confirmed registration, to the registrant", confirmations.length === 3 &&
     confirmations.map((m) => m.to[0]).sort().join(",") === ["free.tester@example.com", "preview.tester@example.com", "second.tester@example.com"].join(","),
     { report: d2j.report, to: s.mail.map((m) => m.to[0] + " | " + m.subject) });
-  check("email: join instructions and calendar link present", confirmations.every((m) => /LOCAL TEST: Zoom link/.test(m.text) && /api\/workshops\/calendar\?t=/.test(m.text)), confirmations[0] && confirmations[0].text);
+  check("email: join instructions present, and no calendar file", confirmations.every((m) => /LOCAL TEST: Zoom link/.test(m.text) && !/api\/workshops\/calendar/.test(m.text)), confirmations[0] && confirmations[0].text);
   check("email: no unverified WhatsApp number when none is configured", s.mail.every((m) => !/652 7779|WhatsApp \+/.test(m.text + m.html)), s.mail.map((m) => m.text.slice(-120)));
   check("email: branded sender and independence statement", s.mail.every((m) => m.displayName === "Bulletproof Automations Training" && /not affiliated with or endorsed by n8n GmbH/.test(m.html)), s.mail[0] && s.mail[0].displayName);
   check("email: outbox rows marked sent only after the mail service accepted them", s.notifications.every((n) => n.status === "sent"), s.notifications);
