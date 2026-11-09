@@ -170,6 +170,71 @@ the figure it showed, so a changed price is refused rather than charged.
 - **Admin reporting** shows the advertised price, discount and its kind, customer payment, commission and net retained separately, with totals, plus general and reserved places used.
 - Verified read-only on 9 November 2026: the eligibility rules match exactly the **2** active graduate entitlements and **10** valid Foundations certificates.
 
+## Registration cutoff: seven days (release 3)
+
+Registration closes **168 hours before each session starts**, at every price, including complimentary
+graduate places. For workshop 01 (Saturday 12 December 2026, 11:30 AM Accra) that is **Saturday 5 December
+2026, 11:30 AM Accra**.
+
+- **Enforcement.** The database refuses after the cutoff, through the one function that already decides
+  "open" (`workshop_session_open`). That covers registration, new checkouts, certificate codes and
+  waitlist joins. The page shows the closing date and time and switches to "Registration closed".
+- **Defaults and changes.** It is derived from `starts_at`, so every future session has it by default
+  and a rescheduled session's cutoff moves with it. Existing registrations are unaffected by a
+  reschedule; the refund terms (section 23) give those people the choice.
+- **Late payments.** A checkout started before the cutoff and paid after it is confirmed, through
+  the webhook or the dispatcher's reconciliation. Confirmed registrations, invitations and emails
+  carry on as normal after the cutoff.
+- **Not the same as statutory rights.** It does not shorten any statutory cancellation right. See
+  step 8.
+
+## Waitlist (release 4)
+
+When a session sells out while registration is open, the page shows **"Sold out — join the
+waitlist"**. The same form adds the person to a free waitlist: no payment and no Paystack. A verified
+Intermediate graduate (confirmed by the emailed code) joins the queue for the reserved places; everyone
+else joins the queue for open places. They get an email with their position in the queue, and nothing
+about anyone else.
+
+The existing per-minute dispatcher (`workshop_waitlist_advance`, under each session's lock) does the rest:
+
+| When | What happens |
+|---|---|
+| A place opens (refund, cancellation, expired checkout hold, a capacity increase) | It is offered to the earliest person waiting for that kind of place: by time of joining, then id. The place is held for them. They get an email with a single-use link that fills in their details; they register and pay with the normal form, prices, discounts and Paystack checkout |
+| A place opens but people are waiting | Newcomers cannot take it: the session shows as sold out until the queue is served |
+| An offer is open | It expires at the earlier of 24 hours and the registration cutoff. A reminder goes 6 hours before expiry, for offers longer than 12 hours. A failed payment can be retried within the window |
+| An offer expires or is declined (link in the email) | The place goes to the next person at once (declining) or at the next minute (expiry). The person is told it was released |
+| The offered person has registered in the meantime, or their graduate entitlement has lapsed | They are skipped, with the reason recorded, and the queue order is otherwise unchanged |
+| Less than 2 hours before the cutoff | No new offer is made; one could not be used in time |
+| The cutoff | Open offers end, people still waiting are closed out and told, and joining is refused. Confirmed registrations and the full history remain |
+
+**Guarantees:**
+- An offer holds its place in the same count that registrations and checkout holds use, under the same lock, so nothing can oversell (tested with racing registrations and dispatcher runs).
+- Nobody is charged by an offer: payment always starts from the person's own registration.
+- Reserved graduate places are offered only to verified graduates, and only used with the graduate certificate check. A reserved place is released to open-place waiters only if the admin changes the session's `capacity` / `reserved_graduate_seats`.
+- Waitlisted people get no meeting access: the automatic invitation runs only after the registration is confirmed.
+
+**Admin** (`/admin/workshops/`, "Places and waitlists"):
+- The panel shows capacity and places left, reserved graduate places, the queue in order, open offers with their expiry, and counts of every outcome.
+- The only actions are exceptions: **Remove** (a reason is required and recorded) and **Retry email**.
+- Every row keeps an audit trail of joins, offers, emails, expiries, conversions and admin actions.
+
+## Releases 3 and 4: deployment
+
+Apply after release 2, in order, each as one transaction recorded in the history, with the same backup
+and snapshot discipline as steps 1 to 4 below:
+
+1. `20261110120000_workshop_calendar_sync.sql`: automatic invitations and the seven-day cutoff.
+   Rollback: `rollback/20261110120000_workshop_calendar_sync_down.sql`, which restores
+   `workshop_session_open` verbatim.
+2. `20261111120000_workshop_waitlist.sql`: the waitlist. Rollback:
+   `rollback/20261111120000_workshop_waitlist_down.sql`. It restores release 2's
+   `workshop_seats_in_use`, `workshop_graduate_seats_in_use` and `workshop_register` verbatim. Export
+   `workshop_waitlist` first.
+
+Both are tested up, re-applied and rolled back in `tests/workshops-migration.test.ts`. Neither touches a
+payment, enrollment, cohort or credential object.
+
 ## Release 2 deployment checklist
 
 One pass, in this order. **Each numbered step needs the owner's approval.** Steps 1 to 4 change

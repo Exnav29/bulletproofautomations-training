@@ -95,7 +95,8 @@ returns integer language sql stable set search_path = '' as $$
   select count(*)::int from public.workshop_waitlist w
    where w.session_id = p_session_id and w.seat_kind = p_kind
      and w.status = 'offered' and w.offer_expires_at > now()
-     and w.registration_id is distinct from p_except
+     -- p_except is the registration whose own place is being checked (start_attempt); null means none.
+     and (p_except is null or w.registration_id is distinct from p_except)
      and (w.registration_id is null or exists (select 1 from public.workshop_registrations r
                                                 where r.id = w.registration_id and r.status = 'pending_payment'))
 $$;
@@ -342,7 +343,7 @@ returns jsonb language plpgsql security definer set search_path = '' as $$
 declare
   s public.workshop_sessions;
   sid uuid;
-  w public.workshop_waitlist;
+  nxt public.workshop_waitlist;
   free_places integer;
   k text;
   stamp text := to_char(now() at time zone 'UTC', 'YYYY-MM-DD HH24:MI') || ' UTC ';
@@ -392,20 +393,20 @@ begin
       free_places := case when k = 'general' then coalesce(s.capacity, 0) - public.workshop_seats_in_use(s.id)
                           else case when s.graduate_free then s.reserved_graduate_seats - public.workshop_graduate_seats_in_use(s.id) else 0 end end;
       while free_places > 0 loop
-        select * into w from public.workshop_waitlist
+        select * into nxt from public.workshop_waitlist
          where session_id = s.id and seat_kind = k and status = 'waiting'
          order by created_at, id limit 1 for update skip locked;
         exit when not found;
         -- Not eligible any more: skipped, with the reason kept. Order is never changed.
-        if exists (select 1 from public.workshop_registrations r where r.session_id = s.id and r.email_normalized = w.email_normalized) then
+        if exists (select 1 from public.workshop_registrations r where r.session_id = s.id and r.email_normalized = nxt.email_normalized) then
           update public.workshop_waitlist set status = 'skipped', status_reason = 'already has a registration for this session', updated_at = now(),
-            audit = concat_ws(E'\n', audit, stamp || 'skipped: already registered') where id = w.id;
+            audit = concat_ws(E'\n', audit, stamp || 'skipped: already registered') where id = nxt.id;
           out := jsonb_set(out, '{skipped}', to_jsonb((out->>'skipped')::int + 1));
           continue;
         end if;
-        if k = 'graduate' and public.workshop_credential_tier(w.benefit_credential_id) is distinct from 'graduate' then
+        if k = 'graduate' and public.workshop_credential_tier(nxt.benefit_credential_id) is distinct from 'graduate' then
           update public.workshop_waitlist set status = 'skipped', status_reason = 'graduate entitlement no longer active', updated_at = now(),
-            audit = concat_ws(E'\n', audit, stamp || 'skipped: graduate entitlement no longer active') where id = w.id;
+            audit = concat_ws(E'\n', audit, stamp || 'skipped: graduate entitlement no longer active') where id = nxt.id;
           out := jsonb_set(out, '{skipped}', to_jsonb((out->>'skipped')::int + 1));
           continue;
         end if;
@@ -413,7 +414,7 @@ begin
           offer_expires_at = least(now() + interval '24 hours', s.starts_at - interval '168 hours'),
           offer_token_hash = null, offer_email_at = null,
           audit = concat_ws(E'\n', audit, stamp || 'offered a ' || k || ' place')
-         where id = w.id;
+         where id = nxt.id;
         out := jsonb_set(out, '{offered}', to_jsonb((out->>'offered')::int + 1));
         free_places := free_places - 1;
       end loop;
@@ -426,7 +427,7 @@ end $$;
 -- left, for an offer of more than 12 hours), released (expired or closed).
 create or replace function public.workshop_waitlist_mail_due(p_test boolean, p_limit integer default 10)
 returns table (id uuid, kind text, email text, full_name text, slug text, title text, starts_at timestamptz,
-  time_zone text, offer_expires_at timestamptz, seat_kind text, status_reason text, position integer)
+  time_zone text, offer_expires_at timestamptz, seat_kind text, status_reason text, queue_position integer)
 language sql stable security definer set search_path = '' as $$
   select w.id,
     case when w.joined_email_at is null and w.status in ('waiting', 'offered') then 'joined'

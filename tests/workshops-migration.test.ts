@@ -305,7 +305,7 @@ Deno.test('release 3 (calendar sync): additive, idempotent, closed to anon, and 
   const UP3 = await read('../supabase/migrations/20261110120000_workshop_calendar_sync.sql')
   const DOWN3 = await read('../supabase/migrations/rollback/20261110120000_workshop_calendar_sync_down.sql')
   const cols = async (t: string) => (await q(`select column_name from information_schema.columns where table_name = $1 order by ordinal_position`, [t])).map((r) => r.column_name).join(',')
-  const fns = async () => (await q(`select p.proname || ':' || md5(p.prosrc) f from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  const fns = async () => (await q(`select p.proname || ':' || md5(replace(p.prosrc, chr(13), '')) f from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.proname like 'workshop%' order by 1`)).map((r) => r.f).join(',')
   const before = { s: await cols('workshop_sessions'), r: await cols('workshop_registrations'), p: await cols('payment_events'), f: await fns() }
   await pg.exec(UP3)
@@ -325,4 +325,29 @@ Deno.test('release 3 (calendar sync): additive, idempotent, closed to anon, and 
   await pg.exec(DOWN3)
   assertEquals([await cols('workshop_registrations'), await fns()], [before.r, before.f], 'rollback restores release 2 exactly')
   await pg.exec(UP3)
+})
+
+Deno.test('release 4 (waitlist): idempotent, closed to anon, and its rollback restores the capacity and registration functions exactly', async () => {
+  const UP4 = await read('../supabase/migrations/20261111120000_workshop_waitlist.sql')
+  const DOWN4 = await read('../supabase/migrations/rollback/20261111120000_workshop_waitlist_down.sql')
+  // Compared without line endings: a Windows checkout loads CRLF files, CI loads LF.
+  const fns = async () => (await q(`select p.proname || ':' || md5(replace(p.prosrc, chr(13), '')) f from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname like 'workshop%' order by 1`)).map((r) => r.f).join(',')
+  const cols = async (t: string) => (await q(`select column_name from information_schema.columns where table_name = $1 order by ordinal_position`, [t])).map((r) => r.column_name).join(',')
+  const before = { f: await fns(), r: await cols('workshop_registrations'), p: await cols('payment_events') }
+  await pg.exec(UP4)
+  await pg.exec(UP4) // idempotent
+  assert((await q(`select to_regclass('public.workshop_waitlist') t`))[0].t)
+  assertEquals([await cols('workshop_registrations'), await cols('payment_events')], [before.r, before.p], 'registrations and the training ledger untouched')
+  for (const fn of ['workshop_waitlist_join(text,text,text,text,boolean,text,text,text,text)', 'workshop_waitlist_advance(boolean)',
+    'workshop_waitlist_offer(text)', 'workshop_waitlist_decline(text)', 'workshop_admin_waitlist(text,uuid,text,text)']) {
+    for (const role of ['anon', 'authenticated']) {
+      assertEquals((await q(`select has_function_privilege($1, $2, 'execute') ok`, [role, 'public.' + fn]))[0].ok, false, role + ' ' + fn)
+    }
+  }
+  assertEquals((await q(`select has_table_privilege('anon', 'public.workshop_waitlist', 'select') ok`))[0].ok, false)
+  await pg.exec(DOWN4)
+  assertEquals(await fns(), before.f, 'rollback restores every function exactly')
+  assertEquals((await q(`select to_regclass('public.workshop_waitlist') t`))[0].t, null)
+  await pg.exec(UP4)
 })

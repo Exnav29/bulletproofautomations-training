@@ -37,7 +37,7 @@ function message(kind, row, links) {
   const when = accra(row.starts_at, true);
   const parts = {
     joined: ["You're on the waitlist: " + row.title,
-      "You're on the waitlist for " + row.title + " (" + when + "). You are number " + row.position + " in the queue" +
+      "You're on the waitlist for " + row.title + " (" + when + "). You are number " + row.queue_position + " in the queue" +
       (row.seat_kind === "graduate" ? " for the reserved graduate places" : "") + ". You have not paid anything.",
       "If a place opens, we email you a link that holds it for you for up to 24 hours. Places are offered strictly in the order people joined. Registration closes seven days before the session; after that no places are offered."],
     offer: ["A place is held for you: " + row.title,

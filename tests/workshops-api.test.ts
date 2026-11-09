@@ -1252,7 +1252,10 @@ Deno.test('waitlist: an expired offer moves on to the next person; declining rel
   assertEquals((await rows(`select count(*)::int n from public.workshop_registrations where email_normalized = 'w1@example.com'`))[0].n, 1)
   // The window passes without payment.
   await pg.exec(`update public.workshop_waitlist set offer_expires_at = now() - interval '1 minute' where email_normalized = 'w1@example.com'`)
-  await pg.exec(`update public.workshop_payment_attempts set created_at = now() - interval '2 hours' where registration_id = (select id from public.workshop_registrations where email_normalized = 'w1@example.com')`)
+  // Its checkouts lapse too (attempts are immutable: they are marked failed, as an abandoned checkout is).
+  for (const a of await rows(`select reference from public.workshop_payment_attempts where registration_id = (select id from public.workshop_registrations where email_normalized = 'w1@example.com')`)) {
+    await pg.query(`select public.workshop_attempt_init_failed($1, 'abandoned in test')`, [a.reference])
+  }
   await dispatchNow()
   assertEquals([(await entry('w1@example.com')).status, (await entry('w2@example.com')).status], ['expired', 'offered'])
   assert(mail.some((m) => m.to[0] === 'w1@example.com' && /released/.test(m.subject)), 'told it was released')
@@ -1276,7 +1279,8 @@ Deno.test('waitlist: places never oversell, even with offers, holds, refunds and
     reg({ email: 'x1@example.com', expected_price: 350 }), reg({ email: 'x2@example.com', expected_price: 350 }),
     dispatchNow(), dispatchNow(), reg({ email: 'x3@example.com', expected_price: 350 })])
   assert(racing.slice(0, 2).concat([racing[4]]).every((r) => r.json.code === 'full'), 'nobody jumps the queue')
-  assertEquals((await rows(`select count(*)::int n from public.workshop_waitlist where status = 'offered'`))[0].n, 1, 'one place, one offer')
+  const offers = await rows(`select email_normalized, status from public.workshop_waitlist order by created_at`)
+  assertEquals(offers.filter((o) => o.status === 'offered').length, 1, 'one place, one offer: ' + JSON.stringify(offers))
   assertEquals((await used()).g, 2, 'capacity 2, never more')
   // Running the dispatcher again, and a duplicate webhook, change nothing.
   const sentBefore = mail.length
