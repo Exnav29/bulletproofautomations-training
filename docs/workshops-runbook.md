@@ -3,7 +3,7 @@
 _Updated 9 November 2026, from a read-only inspection of the production database on that date.
 Live checkout is off, and no workshop registration is open._
 
-- Product contract: `docs/PRD-WEBINARS-WORKSHOPS.md` (PR #59).
+- Direction: `docs/WEBINAR-REUSE-FIRST-RESET.md` (on main). It supersedes the 2 November PRD (PR #59, closed).
 - Design: `docs/workshops-design.md`.
 - Non-regression record: `docs/workshops-shared-changes.md`. **Read it before any production step.**
 
