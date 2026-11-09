@@ -18,7 +18,6 @@ const register = (await import('../functions/api/workshops/register.js')).onRequ
 const status = (await import('../functions/api/workshops/status.js')).onRequestPost
 const session = (await import('../functions/api/workshops/session.js')).onRequestGet
 const dispatch = (await import('../functions/api/workshops/dispatch.js')).onRequestPost
-const calendar = (await import('../functions/api/workshops/calendar.js')).onRequestGet
 const adminAction = (await import('../functions/api/admin/workshops.js')).onRequestPost
 
 // --- external services ------------------------------------------------------------------
@@ -253,7 +252,7 @@ Deno.test('status: an underpaid verify result is held for review, never confirme
   assertEquals([s.json.state, s.json.events.purchase], ['needs_attention', undefined])
 })
 
-// --- dispatcher, Meta, calendar, admin ------------------------------------------------
+// --- dispatcher, Meta, admin ----------------------------------------------------------
 
 Deno.test('dispatch: refuses without the secret; reconciles a missed webhook; sends Meta events when configured', opts, async () => {
   await reset()
@@ -340,15 +339,6 @@ Deno.test('session endpoint exposes public fields only — no capacity figure, n
   assert(!s.text.includes('zoom.example') && !s.text.includes('"capacity"'))
 })
 
-Deno.test('calendar: only for a confirmed registration, by token', opts, async () => {
-  await reset({ price_ghs: 0 })
-  const r = await call(register, '/api/workshops/register', form())
-  const ics = await call(calendar, '/api/workshops/calendar?t=' + r.json.token, null)
-  assertEquals(ics.status, 200)
-  assert(ics.text.includes('BEGIN:VEVENT') && ics.text.includes('SUMMARY:Automate your invoices'))
-  assertEquals((await call(calendar, '/api/workshops/calendar?t=' + 'B'.repeat(43), null)).status, 404)
-})
-
 Deno.test('admin: refused without a session; admits a payment held for review and emails the attendee', opts, async () => {
   await reset({ capacity: 1 })
   const r = await call(register, '/api/workshops/register', form({ testOptIn: true }))
@@ -384,7 +374,7 @@ async function dispatchNow() {
   return call(dispatch, '/api/workshops/dispatch', {}, ENV, { 'x-workshop-dispatch': secret })
 }
 
-Deno.test('Meet: the paid confirmation email has both clocks, the Meet button, both calendar options and the support address', opts, async () => {
+Deno.test('Meet: the paid confirmation email has both clocks, the Meet button and the support address, and no calendar file', opts, async () => {
   // 12 December 2026, 11:30 GMT: the real workshop 01 instant.
   await reset({ ...W01, starts_at: '2026-12-12T11:30:00Z' })
   await paidAndConfirmed()
@@ -394,24 +384,13 @@ Deno.test('Meet: the paid confirmation email has both clocks, the Meet button, b
   assertEquals(m.subject, "You're registered: You know automation. Do you know what to charge?")
   assert(/Date: Saturday,? 12 December 2026/.test(m.text), 'date')
   for (const want of ['Ghana time: 11:30 AM\u20132:30 PM (GMT)', 'Lagos time: 12:30 PM\u20133:30 PM (WAT)',
-    'We have received your payment of GHS 350', 'https://meet.google.com/tst-abcd-xyz', 'johnathan@bulletproofautomations.com',
-    'calendar.google.com/calendar/render', '/api/workshops/calendar?t=']) {
+    'We have received your payment of GHS 350', 'https://meet.google.com/tst-abcd-xyz', 'johnathan@bulletproofautomations.com']) {
     assert(m.text.includes(want), 'text has ' + want)
   }
   assert(m.html.includes('>Join on Google Meet</a>') && m.html.includes('href="https://meet.google.com/tst-abcd-xyz"'))
-  // The Google Calendar link carries the real slot, in UTC.
-  const g = new URL(m.text.match(/https:\/\/calendar\.google\.com\S+/)![0])
-  assertEquals(g.searchParams.get('dates'), '20261212T113000Z/20261212T143000Z')
-  assertEquals(g.searchParams.get('location'), 'https://meet.google.com/tst-abcd-xyz')
-  // The .ics matches: same slot, the Meet link, and nothing that sends an invitation.
-  const token = m.text.match(/calendar\?t=([A-Za-z0-9_-]{43})/)![1]
-  const ics = await call(calendar, '/api/workshops/calendar?t=' + token, null)
-  assertEquals(ics.status, 200)
-  const unfolded = ics.text.replace(/\r\n /g, '')
-  assert(unfolded.includes('DTSTART:20261212T113000Z') && unfolded.includes('DTEND:20261212T143000Z'))
-  assert(unfolded.includes('LOCATION:https://meet.google.com/tst-abcd-xyz'))
-  assert(unfolded.includes('METHOD:PUBLISH') && !/ATTENDEE|ORGANIZER|METHOD:REQUEST/.test(unfolded), 'no invitation is generated')
-  assert(ics.text.split('\r\n').every((l) => l.length <= 75), 'lines are folded')
+  // Calendar links were retired: the email adds no calendar entry, and mints no extra token.
+  assert(!(m.text + m.html).includes('calendar.google.com') && !(m.text + m.html).includes('/api/workshops/calendar'))
+  assertEquals((await rows(`select count(*)::int n from public.workshop_status_tokens`))[0].n, 1, 'only the browser token')
   // A second dispatcher run sends nothing more.
   assertEquals((await dispatchNow()).json.report.emails.sent, 0)
   assertEquals(mail.length, 1)
@@ -425,17 +404,14 @@ Deno.test('Meet: no public or unconfirmed path returns the joining link', opts, 
   assert(!s.text.includes('meet.google.com'), 'public session reply')
   const st = await call(status, '/api/workshops/status', { token: r.json.token, reference: r.json.reference })
   assert(!st.text.includes('meet.google.com'), 'status reply')
-  // Registered but not paid: no calendar file, no email.
-  assertEquals((await call(calendar, '/api/workshops/calendar?t=' + r.json.token, null)).status, 404)
+  // Registered but not paid: no email.
   await dispatchNow()
   assert(!mail.some((m) => JSON.stringify(m).includes('meet.google.com')), 'nothing sent to an unpaid registration')
 })
 
-Deno.test('Meet: a refund before the email goes out stops it, and a refunded registration loses the calendar file', opts, async () => {
+Deno.test('Meet: a refund before the email goes out stops it', opts, async () => {
   await reset({ ...W01 })
   const r = await paidAndConfirmed()
-  const ok = await call(calendar, '/api/workshops/calendar?t=' + r.json.token, null)
-  assertEquals(ok.status, 200)
   // Refunded in full before the dispatcher ran.
   await pg.query(`select public.workshop_apply_refund(p_reference => $1, p_amount_minor => 35000, p_domain => 'test')`, [r.json.reference])
   const reg = (await rows(`select status from public.workshop_registrations`))[0]
@@ -443,7 +419,6 @@ Deno.test('Meet: a refund before the email goes out stops it, and a refunded reg
   const out = await dispatchNow()
   assertEquals([out.json.report.emails.sent, out.json.report.emails.skipped], [0, 1])
   assertEquals(mail.length, 0)
-  assertEquals((await call(calendar, '/api/workshops/calendar?t=' + r.json.token, null)).status, 404)
 })
 
 // --- admission by Google Calendar invitation ------------------------------------------------
@@ -486,8 +461,6 @@ Deno.test('invite: the confirmation explains the invitation, carries no Meet lin
   assert(m.text.includes('Ghana time: 11:30 AM–2:30 PM (GMT)') && m.text.includes('Lagos time: 12:30 PM–3:30 PM (WAT)'))
   const tokenRow = (await rows(`select count(*)::int n from public.workshop_status_tokens`))[0].n
   assert(tokenRow >= 1)
-  // The browser's own token: no .ics for an invitation-only session.
-  assertEquals((await call(calendar, '/api/workshops/calendar?t=' + r.json.token, null)).status, 404)
   const st = await call(status, '/api/workshops/status', { token: r.json.token, reference: r.json.reference })
   assertEquals([st.json.state, st.json.session.admission], ['confirmed', 'invite'])
   assert(!st.text.includes('ama.meet@gmail.com') && !st.text.includes('meet.google.com'), 'status reveals no account or link')

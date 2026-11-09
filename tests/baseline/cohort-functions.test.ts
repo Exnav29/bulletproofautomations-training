@@ -30,9 +30,19 @@ const enroll = (await import(`file://${root}/api/enroll.js`)).onRequest
 const installmentMod = await import(`file://${root}/api/installment.js`)
 
 const sent: Row[] = []
+const mailCalls: Row[] = []
+let mailboxes: Row[] = [{ address: 'johnathan@bulletproofautomations.com', resourceId: 'box-1' }]
+let mailFails = false
 const realFetch = globalThis.fetch
 globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url)
+  if (url.host === 'api.mail.hostinger.com') {
+    // The Hostinger Mail API, as the installment email uses it. Never contacted.
+    mailCalls.push({ method: init?.method ?? 'GET', path: url.pathname, auth: (init?.headers as Row)?.Authorization,
+      body: init?.body ? JSON.parse(String(init.body)) : null })
+    if (url.pathname === '/api/v1/me') return Response.json({ data: { mailboxes: mailboxes } })
+    return mailFails ? new Response('rejected by provider', { status: 500 }) : Response.json({ ok: true })
+  }
   if (url.host === 'api.paystack.co' || url.host === 'paystack.mock') {
     const body = init?.body ? JSON.parse(String(init.body)) : null
     sent.push({ host: url.host, path: url.pathname, auth: (init?.headers as Row)?.Authorization, body })
@@ -202,4 +212,43 @@ Deno.test('baseline installment: a paid installment is not charged again', opts,
     { ...base, PAYSTACK_SECRET_KEY: 'sk_live_x' })
   assertEquals(r.json, { ok: true, paid: true })
   assertEquals(sent.length, 0)
+})
+
+// --- installment payment-link email (the cohort's only transactional email) -------------------
+const installments = await import(`file://${root}/api/_installments.js`)
+const sendInstallment = async (env: Row) => {
+  const id = (await rows('select id from public.payment_plan_installments limit 1'))[0].id
+  return installments.sendInstallment(env, new Request('https://training.example/api/admin/installment-notify'), id)
+}
+const MAIL = { ...base, HOSTINGER_MAIL_API_TOKEN: 'mail-token-for-tests' }
+
+Deno.test('baseline installment email: the exact Hostinger requests, and the row marked sent', opts, async () => {
+  await seedInstallment(); mailCalls.length = 0; mailFails = false
+  const r = await sendInstallment(MAIL)
+  assertEquals([r.ok, r.sent_to, r.payment_url], [true, 'inst@example.com', 'https://training.example/pay/?invoice=11111111-2222-4333-8444-555555555555'])
+  assertEquals(mailCalls.map((c) => [c.method, c.path, c.auth]), [
+    ['GET', '/api/v1/me', 'Bearer mail-token-for-tests'],
+    ['POST', '/api/v1/mailboxes/box-1/send', 'Bearer mail-token-for-tests'],
+  ])
+  const b = mailCalls[1].body
+  assertEquals(Object.keys(b).sort(), ['displayName', 'html', 'subject', 'text', 'to'])
+  assertEquals([b.to, b.displayName], [['inst@example.com'], 'Johnathan Lightfoot · Bulletproof Automations'])
+  assert(b.text.includes('https://training.example/pay/?invoice=11111111-2222-4333-8444-555555555555'))
+  assert(b.subject.length > 0 && b.html.includes('</html>'))
+  const row = (await rows('select status, sent_at, last_notified_at from public.payment_plan_installments'))[0]
+  assert(row.status === 'sent' && row.sent_at && row.last_notified_at)
+})
+
+Deno.test('baseline installment email: no token, no mailbox and a provider rejection report the same codes', opts, async () => {
+  await seedInstallment(); mailCalls.length = 0; mailFails = false
+  assertEquals(await sendInstallment(base), { ok: false, code: 'mail_not_configured', status: 503 })
+  assertEquals(mailCalls.length, 0)
+  mailboxes = []
+  assertEquals(await sendInstallment(MAIL), { ok: false, code: 'mailbox_not_found', status: 503 })
+  mailboxes = [{ address: 'johnathan@bulletproofautomations.com', resourceId: 'box-1' }]
+  mailFails = true
+  assertEquals(await sendInstallment(MAIL), { ok: false, code: 'mail_send_failed', status: 502, detail: 'rejected by provider' })
+  mailFails = false
+  const row = (await rows('select last_notified_at from public.payment_plan_installments'))[0]
+  assertEquals(row.last_notified_at, null, 'a failed send never marks the installment notified')
 })

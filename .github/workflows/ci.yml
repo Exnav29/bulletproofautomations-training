@@ -133,10 +133,13 @@ jobs:
         run: |
           FUNCTIONS_ROOT="$RUNNER_TEMP/main/functions" deno test --node-modules-dir=none --allow-net --allow-env --allow-read tests/baseline/cohort-functions.test.ts
           deno test --node-modules-dir=none --allow-net --allow-env --allow-read tests/baseline/cohort-functions.test.ts
+      # _installments.js is not in this list: its installment email uses the shared Hostinger
+      # sender (functions/api/_mail.js). The baseline step above runs main's code and this
+      # branch's through the same assertions on the exact Hostinger requests, codes and row updates.
       - name: Shared payment code, the training webhook and its tests are byte-identical to main
         run: >-
           git diff --exit-code origin/main --
-          functions/api/_paystack.js functions/api/enroll.js functions/api/_installments.js
+          functions/api/_paystack.js functions/api/enroll.js
           functions/api/installment.js functions/api/installment-scheduler.js functions/api/_regions.js
           functions/_middleware.js supabase/functions/paystack-webhook supabase/deployed tests/paystack-webhook.test.ts
           tests/fixtures/payment-ledger.sql

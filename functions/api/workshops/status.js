@@ -75,8 +75,8 @@ export async function onRequestPost(context) {
     review_reason: s.review_reason || null,
     email_sent: s.email_sent === true,
     amount_ghs: Number(s.amount_ghs),
-    // How this session is joined, so the page never offers a calendar file
-    // that would duplicate a Google Calendar invitation.
+    // How this session is joined: an invitation-only session explains the
+    // Google Calendar invitation instead of a joining link.
     session: s.session ? Object.assign({}, s.session, { admission: await sessionAdmission(env, s.session.slug) }) : s.session,
     events: events
   });

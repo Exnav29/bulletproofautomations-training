@@ -22,7 +22,7 @@ Checked read-only against the existing Supabase project, not taken from earlier 
 | Test session `test-webinar-checkout` | `draft`. 3 confirmed test registrations and 4 test-mode attempts (`BPA-WTEST-`). No live attempt exists anywhere |
 | Workshop 01, `what-to-charge-for-automation` | `draft`, GHS 350, 25 places, joining details stored on the row (never in this repository, which is public), no registrations |
 | Certificate records release 2 reads | PR #54's entitlement view exists: **2** active graduate entitlements and **10** valid Foundations certificates |
-| Refund policy | **Drafted, not approved**: `content/workshops/refund-policy.json`, `"approved": false`, `"legal_review": "pending"`. Nothing published |
+| Refund policy | **Drafted, not approved**: `docs/workshops-refund-policy-draft.json` (`"approved": false`, `"legal_review": "pending"`), unpublished. Paid workshop forms link to the site's existing `/refund-policy` page |
 
 ## Test and live never mix (release 2, part 3)
 
@@ -257,11 +257,15 @@ Run the access test above. The rehearsal (step 5) can already have run it on the
 
 ### 8. Refund policy
 
-Legal review first, then the owner's approval of the wording. In
-`content/workshops/refund-policy.json` set `"legal_review": "complete"`, `"approved": true` and
-`"version"` to the effective date. Set `TERMS_VERSION` in `functions/api/_workshops.js` to the same
-date in the same commit. The build refuses approval without the legal review, and a test fails if the
-versions differ.
+Legal review first, then the owner's approval of the wording. The workshop terms are a draft in
+`docs/workshops-refund-policy-draft.json`; there is no separate policy page. Once approved, in one commit:
+
+1. Add the approved text as a "Webinars and workshops" section, `id="workshops"`, on the existing
+   `refund-policy/index.html`, with its effective date.
+2. Point the paid form at it: `POLICY_HREF` in `scripts/workshops.js` becomes `/refund-policy#workshops`.
+3. Set `TERMS_VERSION` in `functions/api/_workshops.js` to the same effective date, so every
+   registration records the terms it agreed to.
+4. Set the draft's `"approved": true` and `"legal_review": "complete"`.
 
 ### 9. Merge PR #61
 

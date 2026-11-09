@@ -26,7 +26,10 @@ appointment, and nothing in the training payment path needed changing.
 The **Baseline regression** CI job checks these:
 
 - **Training payment code:** `functions/api/_paystack.js`, `enroll.js`, `installment.js`,
-  `_installments.js`, `installment-scheduler.js`, `_regions.js`, `functions/_middleware.js`.
+  `installment-scheduler.js`, `_regions.js`, `functions/_middleware.js`.
+- **Installment email, by behaviour:** `_installments.js` changed in one place (row 8 below). The
+  baseline job runs main's code and the branch's through the same assertions on the exact Hostinger
+  requests, result codes and installment row updates.
 - **Training webhook:** `supabase/functions/paystack-webhook/`, the production v9 snapshot in
   `supabase/deployed/`, its test file `tests/paystack-webhook.test.ts`, and the ledger fixture.
   **Production v9 needs no redeploy.**
@@ -47,6 +50,7 @@ The **Baseline regression** CI job checks these:
 | 5 | Admin shell (`admin/index.html`, `admin-console.js/.css`, build admin views) | One nav link, one hidden workspace, route `/admin/workshops/` | PRD: webinar admin inside the existing dashboard | Every existing admin element ID is unchanged (admin console test) | Revert the commit |
 | 6 | `_headers` | One appended rule matching `/workshops*` only | CSP for the Meta Pixel on webinar pages only | None (additions-only check) | Delete the rule |
 | 7 | `scripts/build.js`, header and footer markers | Page generator; optional build values | Reusable pages | Output identical while nothing is published; optional values never fail a Cloudflare build | Revert the commit |
+| 8 | `functions/api/_installments.js` | `sendInstallment` sends through the shared Hostinger sender `functions/api/_mail.js` instead of its own copy of the same two API calls | One email sender for the site instead of two copies | None observable: same mailbox, same requests and display name, same result codes and row updates (baseline tests run on main's code and this branch's). Only difference: a network exception now returns `mail_unreachable` (502) instead of throwing | Revert the commit |
 
 ## How isolation is enforced, not just assumed
 

@@ -147,47 +147,26 @@ test("a joining link or joining field in any content file fails the build, draft
   assert.doesNotMatch(raw, /meet\.google\.com|join_instructions/);
 });
 
-test("refund policy: unapproved publishes nothing and the form keeps /refund-policy; approved builds its page and the form links to it", () => {
-  const policy = ws.loadPolicy(contentDir);
-  assert.equal(policy.approved, false, "the workshop refund policy is not approved yet");
+test("refund policy: paid forms link to the site's existing /refund-policy page; no separate policy page is built", () => {
   const s = ws.validate(sample(), file("sample-webinar"));
-
-  const before = fs.mkdtempSync(path.join(os.tmpdir(), "ws-pol-"));
-  const paths = ws.render([s], before, [], policy);
-  assert.equal(paths.includes(ws.POLICY_HREF), false);
-  assert.equal(fs.existsSync(path.join(before, "workshops/refund-policy")), false);
-  assert.match(fs.readFileSync(path.join(before, "workshops/sample-webinar/index.html"), "utf8"), /href="\/refund-policy">refund policy/);
-
-  const approved = Object.assign({}, policy, { approved: true, legal_review: "complete", version: "2026-12-01" });
-  const after = fs.mkdtempSync(path.join(os.tmpdir(), "ws-pol-"));
-  assert.ok(ws.render([s], after, [], approved).includes(ws.POLICY_HREF));
-  assert.match(fs.readFileSync(path.join(after, "workshops/sample-webinar/index.html"), "utf8"), /href="\/workshops\/refund-policy">refund policy/);
-  const page = fs.readFileSync(path.join(after, "workshops/refund-policy/index.html"), "utf8");
-  assert.match(page, /Webinar and workshop refund policy/);
-  assert.match(page, /Version 2026-12-01/);
-});
-
-test("refund policy: approval needs a dated version that matches the terms version registrations record", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ws-pol-"));
-  const draft = ws.loadPolicy(contentDir);
-  fs.writeFileSync(path.join(dir, "refund-policy.json"), JSON.stringify(Object.assign({}, draft, { approved: true })));
-  assert.throws(() => ws.loadPolicy(dir), /legal_review complete/);
-  fs.writeFileSync(path.join(dir, "refund-policy.json"), JSON.stringify(Object.assign({}, draft, { approved: true, legal_review: "complete" })));
-  assert.throws(() => ws.loadPolicy(dir), /effective date/);
-  assert.equal(draft.legal_review, "pending", "the workshop refund policy awaits legal review");
-  // When the owner approves the wording, TERMS_VERSION in functions/api/_workshops.js
-  // must change in the same commit, so every registration records the policy it agreed to.
-  if (draft.approved) {
-    const terms = /TERMS_VERSION = "([^"]+)"/.exec(fs.readFileSync(path.join(__dirname, "..", "functions/api/_workshops.js"), "utf8"))[1];
-    assert.equal(draft.version, terms);
-  }
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), "ws-pol-"));
+  const paths = ws.render([s], out, []);
+  assert.equal(ws.POLICY_HREF, "/refund-policy");
+  assert.equal(paths.some((p) => /refund-policy/.test(p)), false);
+  assert.equal(fs.existsSync(path.join(out, "workshops/refund-policy")), false);
+  assert.match(fs.readFileSync(path.join(out, "workshops/sample-webinar/index.html"), "utf8"), /href="\/refund-policy">refund policy/);
+  // The workshop terms stay an unpublished draft until legal review and approval.
+  const draft = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "docs/workshops-refund-policy-draft.json"), "utf8"));
+  assert.equal(draft.approved, false);
+  assert.equal(draft.legal_review, "pending");
+  assert.equal(fs.existsSync(path.join(__dirname, "..", "content/workshops/refund-policy.json")), false);
 });
 
 test("invitation-only sessions ask for the Google account to join with; others do not", () => {
   const live = ws.loadSessions(contentDir).filter((s) => s.status === "published");
   assert.equal(live[0].admission, "invite", "workshop 01 is joined by Google Calendar invitation");
   const out = fs.mkdtempSync(path.join(os.tmpdir(), "ws-adm-"));
-  ws.render(live, out, ws.loadSeries(contentDir, ws.loadSessions(contentDir)), ws.loadPolicy(contentDir));
+  ws.render(live, out, ws.loadSeries(contentDir, ws.loadSessions(contentDir)));
   const w01 = fs.readFileSync(path.join(out, "workshops/what-to-charge-for-automation/index.html"), "utf8");
   assert.match(w01, /name="attend_email" type="email"[^>]*required/);
   assert.match(w01, /Google account to join with/);
