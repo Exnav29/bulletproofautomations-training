@@ -24,9 +24,11 @@ const DB_PORT = 54331
 
 type Row = Record<string, any>
 const pg = new PGlite()
-// Release 2 (admission, prices, benefits) is loaded too: the webhook must behave the same on top of it.
+// Releases 2 to 4 are loaded too: the webhook must behave the same on top of them, including
+// release 4's payment-confirmation guard (workshop_apply_charge).
 for (const f of ['./fixtures/payment-ledger.sql', './fixtures/supabase-stubs.sql', './fixtures/graduate-records.sql',
-  '../supabase/migrations/20261103120000_workshops.sql', '../supabase/migrations/20261109120000_workshop_admission_benefits.sql']) {
+  '../supabase/migrations/20261103120000_workshops.sql', '../supabase/migrations/20261109120000_workshop_admission_benefits.sql',
+  '../supabase/migrations/20261110120000_workshop_calendar_sync.sql', '../supabase/migrations/20261111120000_workshop_waitlist.sql']) {
   await pg.exec(await Deno.readTextFile(new URL(f, import.meta.url)))
 }
 
@@ -135,7 +137,7 @@ async function reset(session: Row = {}) {
   await insert('payment_plan_installments', installmentRow)
   await insert('workshop_sessions', {
     id: SESSION, slug: 'test-webinar', kind: 'webinar', title: 'Test webinar',
-    starts_at: new Date(Date.now() + 7 * 86400000).toISOString(), duration_minutes: 90,
+    starts_at: new Date(Date.now() + 14 * 86400000).toISOString(), duration_minutes: 90,
     format: 'Online (Zoom)', price_ghs: 150, status: 'published', ...session,
   })
 }

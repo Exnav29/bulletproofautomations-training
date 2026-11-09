@@ -9,6 +9,8 @@ import { rpc } from "./_shared.js";
 import { db as rest } from "./_installments.js";
 import { sendMail, esc, MAILBOX } from "./_mail.js";
 import { sendConversions, metaConfigured } from "./_meta.js";
+import { syncInvitations } from "./_calendar.js";
+import { processWaitlist } from "./_waitlist.js";
 
 export const WORKSHOP_APP = "bulletproof-training-workshops";
 
@@ -90,7 +92,17 @@ export async function verifyWorkshopTransaction(env, reference) {
     amountMinor: typeof t.amount === "number" ? Math.round(t.amount) : null,
     currency: t.currency || null, domain: t.domain || null, paidAt: t.paid_at || t.paidAt || null };
 }
-export const TERMS_VERSION = "2026-11-03";
+// The webinar and workshop terms each registration accepts: the version line of
+// section 23 of refund-policy/index.html. A build test keeps the two in step.
+export const TERMS_VERSION = "2026-11-09";
+
+/* Registration closes this many hours before a session starts. The database
+   enforces it (workshop_session_open, migration 20261110120000); this copy is
+   only for showing it. A test checks the two agree. */
+export const REGISTRATION_CLOSES_HOURS = 168;
+export function registrationClosesAt(startsAt) {
+  return new Date(Date.parse(startsAt) - REGISTRATION_CLOSES_HOURS * 3600000);
+}
 
 const ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
@@ -380,8 +392,8 @@ export function emailFor(kind, registration, session, env) {
    concurrently: rows are claimed with SKIP LOCKED.
    --------------------------------------------------------------------------- */
 export async function processOutbox(env, origin, limits) {
-  const report = { emails: { sent: 0, failed: 0, skipped: 0 }, meta: { sent: 0, failed: 0 }, reconciled: 0 };
-  const max = Object.assign({ emails: 10, meta: 20, reconcile: 10 }, limits || {});
+  const report = { emails: { sent: 0, failed: 0, skipped: 0 }, meta: { sent: 0, failed: 0 }, reconciled: 0, calendar: null, waitlist: null };
+  const max = Object.assign({ emails: 10, meta: 20, reconcile: 10, calendar: 10, waitlist: 1 }, limits || {});
 
   // 1. Reconcile started checkouts the webhook has not settled (missed or late
   //    webhook). Paystack is asked directly; the RPC applies at most once.
@@ -409,7 +421,15 @@ export async function processOutbox(env, origin, limits) {
     }
   }
 
-  // 3. Meta Conversions API. Left queued (not claimed) until it is configured.
+  // 3a. Waitlist (_waitlist.js): offers, expiries and their emails, decided by the
+  //     database under each session's lock. Same test/live split as everything else.
+  if (max.waitlist > 0) report.waitlist = await processWaitlist(env, origin, workshopMode(env) === "test");
+
+  // 3. Google Calendar invitations for invitation-only sessions (_calendar.js).
+  //    A test-mode deployment syncs test sessions only; any other, live only.
+  if (max.calendar > 0) report.calendar = await syncInvitations(env, workshopMode(env) === "test", max.calendar);
+
+  // 4. Meta Conversions API. Left queued (not claimed) until it is configured.
   if (max.meta > 0 && metaConfigured(env)) {
     const claimed = await rpc(env, "workshop_claim_meta_events", { p_limit: max.meta });
     const events = claimed.ok && Array.isArray(claimed.data) ? claimed.data : [];

@@ -4,7 +4,7 @@
  * counter), no join instructions. */
 
 import { json, rpc } from "../_shared.js";
-import { rest, workshopMode } from "../_workshops.js";
+import { rest, workshopMode, registrationClosesAt } from "../_workshops.js";
 
 export async function onRequestGet({ request, env }) {
   const slug = new URL(request.url).searchParams.get("slug") || "";
@@ -27,11 +27,19 @@ export async function onRequestGet({ request, env }) {
     return json({ ok: false, code: "not_found" }, 404);
   }
 
-  const open = row.status === "published" && Date.parse(row.starts_at) > Date.now();
+  // Registration closes seven days before the start (the database refuses after that too).
+  const closesAt = registrationClosesAt(row.starts_at);
+  const started = Date.parse(row.starts_at) <= Date.now();
+  const open = row.status === "published" && Date.now() < closesAt.getTime();
   let full = false;
   if (open && row.capacity) {
     const used = await rpc(env, "workshop_seats_in_use", { p_session_id: row.id, p_except: null });
     full = used.ok && Number(used.data) >= Number(row.capacity);
+    // People already waiting come first: while anyone waits, a place is never open to newcomers.
+    if (!full) {
+      const waiting = await rpc(env, "workshop_waiting", { p_session_id: row.id, p_kind: "general" });
+      full = waiting.ok && Number(waiting.data) > 0;
+    }
   }
   // Reserved Intermediate graduate places are separate from the general ones,
   // so a session can be full for everyone else and still open to a graduate.
@@ -40,6 +48,10 @@ export async function onRequestGet({ request, env }) {
     if (gr && gr.graduate_free === true && Number(gr.reserved_graduate_seats) > 0) {
       const usedG = await rpc(env, "workshop_graduate_seats_in_use", { p_session_id: row.id });
       graduateOpen = usedG.ok && Number(usedG.data) < Number(gr.reserved_graduate_seats);
+      if (graduateOpen) {
+        const waitingG = await rpc(env, "workshop_waiting", { p_session_id: row.id, p_kind: "graduate" });
+        graduateOpen = !(waitingG.ok && Number(waitingG.data) > 0);
+      }
     }
   }
   return json({
@@ -54,6 +66,10 @@ export async function onRequestGet({ request, env }) {
     // Yes/no only: there is deliberately no "places left" counter.
     general_full: open && full,
     graduate_places_open: graduateOpen,
-    status: open ? (full ? (graduateOpen ? "graduates_only" : "full") : "open") : row.status === "published" ? "started" : row.status
+    registration_closes_at: closesAt.toISOString(),
+    // Sold out but registration still open: the page offers the waitlist instead.
+    waitlist_open: open && full,
+    status: open ? (full ? (graduateOpen ? "graduates_only" : "full") : "open")
+      : row.status === "published" ? (started ? "started" : "registration_closed") : row.status
   });
 }

@@ -11,7 +11,8 @@ import { loadDatabase, serveDatabase } from './helpers/postgrest.ts'
 type Row = Record<string, any>
 const u = (p: string) => new URL(p, import.meta.url)
 const pg = await loadDatabase([u('./fixtures/payment-ledger.sql'), u('./fixtures/supabase-stubs.sql'), u('./fixtures/graduate-records.sql'),
-  u('../supabase/migrations/20261103120000_workshops.sql'), u('../supabase/migrations/20261109120000_workshop_admission_benefits.sql')])
+  u('../supabase/migrations/20261103120000_workshops.sql'), u('../supabase/migrations/20261109120000_workshop_admission_benefits.sql'),
+  u('../supabase/migrations/20261110120000_workshop_calendar_sync.sql'), u('../supabase/migrations/20261111120000_workshop_waitlist.sql')])
 const DB = serveDatabase(pg, 54341)
 
 const register = (await import('../functions/api/workshops/register.js')).onRequestPost
@@ -22,12 +23,16 @@ const adminAction = (await import('../functions/api/admin/workshops.js')).onRequ
 
 // --- external services ------------------------------------------------------------------
 const paystack = { paid: new Map<string, Row>(), initialized: [] as Row[], failInit: false }
+// Google Calendar stand-in: the event's guest list and etag, and every write made to it.
+const gcal = { events: new Map<string, Row>(), patches: [] as Row[], tokenFails: false, failNext: [] as number[] }
 const mail: Row[] = []
 const meta: Row[] = []
 const realFetch = globalThis.fetch
 globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url)
-  const body = init?.body ? JSON.parse(String(init.body)) : null
+  // JSON for every service here except Google's token endpoint, which is form-encoded.
+  let body: any = null
+  try { body = init?.body ? JSON.parse(String(init.body)) : null } catch (_) { body = null }
   if (url.host === 'paystack.mock' || url.host === 'api.paystack.co') {
     if (url.pathname === '/transaction/initialize') {
       if (paystack.failInit) return Response.json({ status: false, message: 'declined' }, { status: 400 })
@@ -37,6 +42,24 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const ref = decodeURIComponent(url.pathname.replace('/transaction/verify/', ''))
     const t = paystack.paid.get(ref)
     return Response.json({ status: true, data: t ?? { status: 'abandoned', reference: ref } })
+  }
+  if (url.host === 'oauth2.googleapis.com' && url.pathname === '/token') {
+    const form = new URLSearchParams(String(init?.body))
+    const good = !gcal.tokenFails && form.get('grant_type') === 'refresh_token' && form.get('refresh_token') === 'google-refresh-for-tests'
+    return good ? Response.json({ access_token: 'google-access', expires_in: 3599 }) : Response.json({ error: 'invalid_grant' }, { status: 400 })
+  }
+  if (url.host === 'www.googleapis.com') {
+    const m = url.pathname.match(/^\/calendar\/v3\/calendars\/primary\/events\/([^/]+)$/)
+    if (!m || (init?.headers as Row)?.Authorization !== 'Bearer google-access') return new Response('no', { status: 401 })
+    if (gcal.failNext.length) return new Response('{}', { status: gcal.failNext.shift() })
+    const ev = gcal.events.get(decodeURIComponent(m[1]))
+    if (!ev) return new Response('{}', { status: 404 })
+    if ((init?.method ?? 'GET') === 'GET') return Response.json({ etag: ev.etag, attendees: ev.attendees })
+    if ((init?.headers as Row)['If-Match'] !== ev.etag) return new Response('{}', { status: 412 })
+    const body = JSON.parse(String(init!.body))
+    gcal.patches.push({ event: m[1], sendUpdates: url.searchParams.get('sendUpdates'), emails: body.attendees.map((a: Row) => a.email) })
+    ev.attendees = body.attendees; ev.etag = '"' + (Number(ev.etag.replace(/"/g, '')) + 1) + '"'
+    return Response.json({ etag: ev.etag, attendees: ev.attendees })
   }
   if (url.host === 'api.mail.hostinger.com') {
     if (url.pathname.endsWith('/me')) {
@@ -65,6 +88,9 @@ const ENV: Row = {
   WORKSHOP_PAYSTACK_API_BASE: 'http://paystack.mock',
   PAYSTACK_SECRET_KEY: 'sk_test_training_api_suite_only',
   HOSTINGER_MAIL_API_TOKEN: 'mail-token',
+  // Automatic Google Calendar invitations (functions/api/_calendar.js), against the stand-in above.
+  GOOGLE_CALENDAR_CLIENT_ID: 'client-for-tests', GOOGLE_CALENDAR_CLIENT_SECRET: 'secret-for-tests',
+  GOOGLE_CALENDAR_REFRESH_TOKEN: 'google-refresh-for-tests',
 }
 
 async function call(fn: Function, path: string, body: Row | null, env: Row = ENV, headers: Row = {}) {
@@ -90,7 +116,7 @@ async function reset(over: Row = {}) {
   const row = { slug: 'automate-invoices', kind: 'webinar', title: 'Automate your invoices', duration_minutes: 90,
     // This suite runs as a test-mode deployment (sk_test_ key), so its sessions are test sessions.
     format: 'Online, live', price_ghs: 150, status: 'published', is_test: true, join_instructions: 'Zoom link: https://zoom.example/j/1',
-    starts_at: new Date(Date.now() + 5 * 86400000).toISOString(), ...over }
+    starts_at: new Date(Date.now() + 10 * 86400000).toISOString(), ...over }
   const keys = Object.keys(row)
   await pg.query(`insert into public.workshop_sessions (${keys.join(',')}) values (${keys.map((_, i) => '$' + (i + 1)).join(',')})`,
     keys.map((k) => (row as Row)[k]))
@@ -366,12 +392,12 @@ async function paidAndConfirmed(email = 'ama@example.com') {
     p_domain => 'test', p_paid_at => now(), p_via => 'webhook')`, [r.json.reference])
   return r
 }
-async function dispatchNow() {
+async function dispatchNow(env: Row = ENV) {
   const secret = 'dispatch-secret-for-tests'
   const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(secret))))
     .map((b) => b.toString(16).padStart(2, '0')).join('')
   await pg.query(`insert into public.workshop_dispatch_config (secret_hash) values ($1) on conflict do nothing`, [hash])
-  return call(dispatch, '/api/workshops/dispatch', {}, ENV, { 'x-workshop-dispatch': secret })
+  return call(dispatch, '/api/workshops/dispatch', {}, env, { 'x-workshop-dispatch': secret })
 }
 
 Deno.test('Meet: the paid confirmation email has both clocks, the Meet button and the support address, and no calendar file', opts, async () => {
@@ -794,7 +820,7 @@ const liveReg = (over: Row) => call(register, '/api/workshops/register', form({ 
 const REHEARSAL = { slug: 'rehearsal-what-to-charge', is_test: true, calendar_event_id: 'rehearsalevent01' }
 async function addSession(over: Row) {
   const row = { ...RELEASE, title: 'Rehearsal', format: 'Online, live', status: 'published', duration_minutes: 180,
-    starts_at: new Date(Date.now() + 5 * 86400000).toISOString(), ...over }
+    starts_at: new Date(Date.now() + 10 * 86400000).toISOString(), ...over }
   const keys = Object.keys(row)
   await pg.query(`insert into public.workshop_sessions (${keys.join(',')}) values (${keys.map((_, i) => '$' + (i + 1)).join(',')})`,
     keys.map((k) => (row as Row)[k]))
@@ -927,4 +953,561 @@ Deno.test('referral codes are issued prepared: rehearsal only until activated, f
   // Suspended: valid nowhere.
   await adminPost({ action: 'suspend_referrer', credential_id: 'BPA-TRN-2026-GRAD01' })
   assertEquals([(await liveQuote()).json.code, (await testQuote()).json.code], ['referral_invalid', 'referral_invalid'])
+})
+
+// --- automatic Google Calendar invitations (release 3) ---------------------------------------
+// The real dispatcher, admin endpoint, payment and refund RPCs and database rules, against the
+// Google Calendar stand-in. Each test's event starts with the host on it, who must never be removed.
+const EVENT = 'w01event0001'
+const HOST = { email: 'host@bulletproofautomations.com', organizer: true, responseStatus: 'accepted' }
+async function inviteSession(over: Row = {}) {
+  await reset({ ...RELEASE, calendar_event_id: EVENT, ...over }); await seedRecords()
+  gcal.events.clear(); gcal.patches.length = 0; gcal.tokenFails = false; gcal.failNext.length = 0
+  gcal.events.set(EVENT, { etag: '"1"', attendees: [HOST] })
+}
+const guests = () => gcal.events.get(EVENT)!.attendees.map((a: Row) => a.email)
+const paidTest = async (email: string, attend: string) => {
+  const r = await reg({ email, attend_email: attend, expected_price: 350 })
+  await pay(r.json.reference, 35000)
+  return r
+}
+
+Deno.test('calendar: a confirmed payment is invited automatically, once, keeping everyone else on the event', opts, async () => {
+  await inviteSession()
+  const r = await paidTest('ama@example.com', 'ama.meet@gmail.com')
+  const out = await dispatchNow()
+  assertEquals(out.json.report.calendar, { added: 1, removed: 0, failed: 0, blocked: 0 })
+  assertEquals(guests(), ['host@bulletproofautomations.com', 'ama.meet@gmail.com'])
+  assertEquals(gcal.patches, [{ event: EVENT, sendUpdates: 'all', emails: ['host@bulletproofautomations.com', 'ama.meet@gmail.com'] }],
+    'one update, and Google sends the invitation (sendUpdates=all)')
+  const row = await regRow('ama@example.com')
+  assertEquals([row.invited_email, row.calendar_sync_failures, row.calendar_sync_error], ['ama.meet@gmail.com', 0, null])
+  assert(/calendar-sync added \(ama\.meet@gmail\.com\)/.test(row.admin_notes))
+  // Duplicates change nothing: the same webhook delivered again, and the dispatcher run again.
+  await pay(r.json.reference, 35000)
+  assertEquals((await dispatchNow()).json.report.calendar, { added: 0, removed: 0, failed: 0, blocked: 0 })
+  assertEquals([gcal.patches.length, guests().length], [1, 2])
+})
+
+Deno.test('calendar: unpaid and not-yet-confirmed registrations are never invited', opts, async () => {
+  await inviteSession()
+  await reg({ email: 'unpaid@example.com', attend_email: 'unpaid.meet@gmail.com', expected_price: 350 })
+  await dispatchNow()
+  assertEquals([gcal.patches.length, guests()], [0, ['host@bulletproofautomations.com']])
+})
+
+Deno.test('calendar: a complimentary Intermediate graduate place is invited automatically', opts, async () => {
+  await inviteSession()
+  const t = await verifyCert('abena@example.com', 'BPA-TRN-2026-GRAD02')
+  const g = await reg({ email: 'abena@example.com', verification: t, expected_price: 0, attend_email: 'abena.meet@gmail.com' })
+  assertEquals([g.json.state, g.json.price_tier], ['confirmed', 'graduate'])
+  await dispatchNow()
+  assert(guests().includes('abena.meet@gmail.com'))
+  assertEquals((await regRow('abena@example.com')).invited_email, 'abena.meet@gmail.com')
+})
+
+Deno.test('calendar: a full refund removes the invitation, and Google tells the guest', opts, async () => {
+  await inviteSession()
+  const r = await paidTest('ama@example.com', 'ama.meet@gmail.com')
+  await dispatchNow()
+  await refund(r.json.reference, 35000)
+  assertEquals((await dispatchNow()).json.report.calendar, { added: 0, removed: 1, failed: 0, blocked: 0 })
+  assertEquals(guests(), ['host@bulletproofautomations.com'])
+  assertEquals(gcal.patches.at(-1)!.sendUpdates, 'all', 'the removed guest receives the cancellation')
+  const row = await regRow('ama@example.com')
+  assert(row.invited_email === null && row.invite_removed_at)
+})
+
+Deno.test('calendar: a cancelled complimentary place is removed', opts, async () => {
+  await inviteSession()
+  const t = await verifyCert('abena@example.com', 'BPA-TRN-2026-GRAD02')
+  await reg({ email: 'abena@example.com', verification: t, expected_price: 0, attend_email: 'abena.meet@gmail.com' })
+  await dispatchNow()
+  assertEquals((await admit((await regRow('abena@example.com')).id, 'cancel')).json.ok, true)
+  await dispatchNow()
+  assertEquals(guests(), ['host@bulletproofautomations.com'])
+})
+
+Deno.test('calendar: an approved change of Google account swaps the guest in one update', opts, async () => {
+  await inviteSession()
+  await paidTest('ama@example.com', 'ama.meet@gmail.com')
+  await dispatchNow()
+  const id = (await regRow('ama@example.com')).id
+  assertEquals((await admit(id, 'set_attend_email', 'ama.work@gmail.com')).json.ok, true)
+  assertEquals((await dispatchNow()).json.report.calendar, { added: 1, removed: 1, failed: 0, blocked: 0 })
+  assertEquals(guests(), ['host@bulletproofautomations.com', 'ama.work@gmail.com'])
+  assertEquals(gcal.patches.length, 2)
+  assertEquals((await regRow('ama@example.com')).invited_email, 'ama.work@gmail.com')
+})
+
+Deno.test('calendar: a graduate place whose entitlement lapses before the invitation goes out is never invited, and goes to the exception queue', opts, async () => {
+  await inviteSession()
+  const t = await verifyCert('abena@example.com', 'BPA-TRN-2026-GRAD02')
+  // A free registration runs the dispatcher straight away; register while Google is not yet
+  // connected, so the lapse below happens before any invitation.
+  await call(register, '/api/workshops/register', form({ testOptIn: true, email: 'abena@example.com', verification: t,
+    expected_price: 0, attend_email: 'abena.meet@gmail.com' }), { ...ENV, GOOGLE_CALENDAR_REFRESH_TOKEN: undefined })
+  assertEquals((await regRow('abena@example.com')).invited_email, null)
+  await pg.exec(`update public.payment_plan_installments set status = 'sent' where installment_number = 2
+    and enrollment_id = (select enrollment_id from public.credentials where credential_id = 'BPA-TRN-2026-GRAD02')`)
+  assertEquals((await dispatchNow()).json.report.calendar.blocked, 1)
+  assertEquals(gcal.patches.length, 0)
+  const row = await regRow('abena@example.com')
+  assertEquals([row.invited_email, row.calendar_sync_failures], [null, 5])
+  assert(/no longer matches an active entitlement/.test(row.calendar_sync_error))
+})
+
+Deno.test('calendar: temporary Google errors retry on the next run; a missing event stops and waits for the admin', opts, async () => {
+  await inviteSession()
+  await paidTest('ama@example.com', 'ama.meet@gmail.com')
+  // 503, then an etag race: counted, retried, then done.
+  gcal.failNext.push(503)
+  assertEquals((await dispatchNow()).json.report.calendar.failed, 1)
+  assertEquals((await regRow('ama@example.com')).calendar_sync_failures, 1)
+  await dispatchNow()
+  assertEquals([(await regRow('ama@example.com')).invited_email, (await regRow('ama@example.com')).calendar_sync_failures], ['ama.meet@gmail.com', 0])
+
+  // The event disappears: permanent, no more retries until the admin acts.
+  await inviteSession()
+  gcal.events.delete(EVENT)
+  await paidTest('ama@example.com', 'ama.meet@gmail.com')
+  await dispatchNow()
+  let row = await regRow('ama@example.com')
+  assertEquals(row.calendar_sync_failures, 5)
+  assert(/event was not found/.test(row.calendar_sync_error))
+  await dispatchNow()
+  assertEquals((await regRow('ama@example.com')).calendar_sync_at, row.calendar_sync_at, 'not retried by itself')
+  // The admin fixes the event and retries from the exception queue.
+  gcal.events.set(EVENT, { etag: '"7"', attendees: [HOST] })
+  assertEquals((await admit(row.id, 'retry_calendar')).json.ok, true)
+  row = await regRow('ama@example.com')
+  assertEquals([row.invited_email, row.calendar_sync_failures, row.calendar_sync_error], ['ama.meet@gmail.com', 0, null], 'retried at once')
+  assert(/calendar-sync retry requested/.test(row.admin_notes))
+})
+
+Deno.test('calendar: a refused Google sign-in is recorded on each waiting registration and changes nothing', opts, async () => {
+  await inviteSession()
+  await paidTest('ama@example.com', 'ama.meet@gmail.com')
+  gcal.tokenFails = true
+  assertEquals((await dispatchNow()).json.report.calendar.failed, 1)
+  const row = await regRow('ama@example.com')
+  assert(row.invited_email === null && /Could not sign in to Google Calendar/.test(row.calendar_sync_error))
+  assertEquals(gcal.patches.length, 0)
+})
+
+Deno.test('calendar: without Google settings nothing is called and the manual panel still works', opts, async () => {
+  await inviteSession()
+  await paidTest('ama@example.com', 'ama.meet@gmail.com')
+  const off = { ...ENV, GOOGLE_CALENDAR_REFRESH_TOKEN: undefined }
+  assertEquals((await dispatchNow(off)).json.report.calendar, { skipped: 'not_configured' })
+  assertEquals(gcal.patches.length, 0)
+  assertEquals((await admit((await regRow('ama@example.com')).id, 'mark_invited')).json.ok, true)
+})
+
+Deno.test('calendar: a test deployment never touches a live session\'s event, and a live one never touches a test session\'s', opts, async () => {
+  await inviteSession({ is_test: false })
+  await activate('BPA-TRN-2026-GRAD01')
+  const r = await liveReg({ email: 'kofi@example.com', attend_email: 'kofi.meet@gmail.com', expected_price: 350 })
+  await pay(r.json.reference, 35000)
+  assertEquals((await regRow('kofi@example.com')).status, 'confirmed')
+  await dispatchNow(ENV) // the Preview (test) deployment
+  assertEquals(gcal.patches.length, 0)
+  await dispatchNow(LIVE)
+  assertEquals(guests(), ['host@bulletproofautomations.com', 'kofi.meet@gmail.com'])
+})
+
+
+// --- registration closes seven days (168 hours) before the start ------------------------------
+const HOUR = 3600000
+const startsIn = (ms: number) => new Date(Date.now() + ms).toISOString()
+
+Deno.test('cutoff: open one minute before the cutoff; closed after it, at every price, on the server', opts, async () => {
+  await reset({ ...RELEASE, starts_at: startsIn(168 * HOUR + 60000) }); await seedRecords()
+  const before = await call(session, '/api/workshops/session?slug=automate-invoices', null)
+  assertEquals(before.json.status, 'open')
+  assertEquals(Date.parse(before.json.registration_closes_at), Date.parse(before.json.session.starts_at) - 168 * HOUR)
+  assertEquals((await reg({ email: 'early@example.com', expected_price: 350 })).json.state, 'checkout')
+
+  await reset({ ...RELEASE, starts_at: startsIn(168 * HOUR - 1000) }); await seedRecords()
+  const after = await call(session, '/api/workshops/session?slug=automate-invoices', null)
+  assertEquals([after.json.status, after.json.open], ['registration_closed', false])
+  assertEquals((await reg({ email: 'late@example.com', expected_price: 350 })).json.code, 'closed', 'paid')
+  const t = await verifyCert('abena@example.com', 'BPA-TRN-2026-GRAD02')
+  assertEquals(t, null, 'no certificate code is issued once registration has closed')
+  assertEquals((await rows(`select count(*)::int n from public.workshop_registrations`))[0].n, 0, 'nothing recorded, no place held')
+  assertEquals(paystack.initialized.length, 0)
+})
+
+Deno.test('cutoff: a checkout started before it and paid after it is confirmed, not refused', opts, async () => {
+  await inviteSession({ starts_at: startsIn(168 * HOUR + 60000) })
+  const r = await reg({ email: 'ama@example.com', attend_email: 'ama.meet@gmail.com', expected_price: 350 })
+  assertEquals(r.json.state, 'checkout')
+  // Time passes: the cutoff is now behind us while the customer is on Paystack.
+  await pg.exec(`update public.workshop_sessions set starts_at = now() + interval '160 hours'`)
+  assertEquals((await call(session, '/api/workshops/session?slug=automate-invoices', null)).json.status, 'registration_closed')
+  await pay(r.json.reference, 35000) // the webhook's own RPC
+  const row = await regRow('ama@example.com')
+  assertEquals([row.status, row.payment_status, row.review_reason], ['confirmed', 'paid', null])
+  const st = await call(status, '/api/workshops/status', { token: r.json.token, reference: r.json.reference })
+  assertEquals(st.json.state, 'confirmed', 'the return page confirms the place')
+  await dispatchNow()
+  assert(guests().includes('ama.meet@gmail.com'), 'and the invitation goes out as normal')
+})
+
+Deno.test('cutoff: an unpaid registration cannot start a new checkout after it', opts, async () => {
+  await reset({ ...RELEASE, starts_at: startsIn(168 * HOUR + 60000) }); await seedRecords()
+  await reg({ email: 'ama@example.com', expected_price: 350 })
+  await pg.exec(`update public.workshop_sessions set starts_at = now() + interval '160 hours'`)
+  const again = await reg({ email: 'ama@example.com', expected_price: 350 })
+  assertEquals(again.json.code, 'closed')
+  assertEquals((await rows(`select count(*)::int n from public.workshop_payment_attempts`))[0].n, 1, 'no second charge started')
+})
+
+Deno.test('cutoff: rescheduling the session moves its cutoff with it', opts, async () => {
+  await reset({ ...RELEASE, starts_at: startsIn(100 * HOUR) }); await seedRecords()
+  assertEquals((await call(session, '/api/workshops/session?slug=automate-invoices', null)).json.status, 'registration_closed')
+  await pg.exec(`update public.workshop_sessions set starts_at = now() + interval '20 days'`)
+  assertEquals((await call(session, '/api/workshops/session?slug=automate-invoices', null)).json.status, 'open')
+  assertEquals((await reg({ email: 'ama@example.com', expected_price: 350 })).json.state, 'checkout')
+})
+
+// --- waitlist (release 4): first in, first out, through the existing registration and checkout ----
+const waitlistApi = await import('../functions/api/workshops/waitlist.js')
+const join = (email: string, over: Row = {}) => call(waitlistApi.onRequestPost, '/api/workshops/waitlist',
+  { action: 'join', slug: 'automate-invoices', full_name: 'Wait ' + email.split('@')[0], email,
+    attend_email: email.replace('@', '.meet@'), ack_terms: true, ...over })
+const entry = async (email: string) => (await rows(`select * from public.workshop_waitlist where email_normalized = $1`, [email]))[0]
+const offerLink = (email: string) => {
+  const m = [...mail].reverse().find((x) => x.to[0] === email && /A place is held for you/.test(x.subject))
+  return m ? new URL(m.text.match(/Register: (\S+)/)![1]).searchParams.get('offer')! : null
+}
+const offerReg = (email: string, offer: string, over: Row = {}) =>
+  reg({ email, attend_email: email.replace('@', '.meet@'), expected_price: 350, offer, ...over })
+const used = async () => (await rows(`select public.workshop_seats_in_use(id) g, public.workshop_graduate_seats_in_use(id) r from public.workshop_sessions`))[0]
+// Two open places and one reserved graduate place, both open places sold.
+async function soldOut() {
+  await inviteSession({ capacity: 2, reserved_graduate_seats: 1 })
+  const a = await paidTest('paid1@example.com', 'paid1.meet@gmail.com')
+  const b = await paidTest('paid2@example.com', 'paid2.meet@gmail.com')
+  return [a, b]
+}
+
+Deno.test('waitlist: a sold-out session offers the waitlist; joining is free, FIFO, once per person, and confirmed by email', opts, async () => {
+  await soldOut()
+  const s = await call(session, '/api/workshops/session?slug=automate-invoices', null)
+  assertEquals([s.json.status, s.json.waitlist_open], ['graduates_only', true], 'open places sold; reserved graduate place still free')
+  assertEquals((await reg({ email: 'late@example.com', expected_price: 350 })).json.code, 'full')
+  const before = paystack.initialized.length
+  const one = await join('w1@example.com'), two = await join('w2@example.com'), three = await join('w3@example.com')
+  assertEquals([one.json.position, two.json.position, three.json.position], [1, 2, 3])
+  assertEquals(paystack.initialized.length, before, 'no Paystack call to join')
+  assertEquals((await join('W1@example.com ')).json, { ok: true, outcome: 'already', position: 1 }, 'no duplicate entry')
+  assertEquals((await rows(`select count(*)::int n from public.workshop_waitlist`))[0].n, 3)
+  const confirmations = mail.filter((m) => /You're on the waitlist/.test(m.subject))
+  assertEquals(confirmations.map((m) => m.to[0]), ['w1@example.com', 'w2@example.com', 'w3@example.com'])
+  assert(confirmations[1].text.includes('You are number 2 in the queue') && !confirmations[1].text.includes('w1@example.com'), 'own position only')
+  assertEquals((await join('paid1@example.com')).json.code, 'registered', 'already holding a place')
+})
+
+Deno.test('waitlist: a refund opens a place for the first in line only; the link fills in their details, holds the place, and their payment confirms it', opts, async () => {
+  const [a] = await soldOut()
+  await join('w1@example.com'); await join('w2@example.com')
+  await refund(a.json.reference, 35000)
+  const run = await dispatchNow()
+  assertEquals(run.json.report.waitlist.advanced.offered, 1)
+  assertEquals([(await entry('w1@example.com')).status, (await entry('w2@example.com')).status], ['offered', 'waiting'])
+  const e = await entry('w1@example.com')
+  assertEquals(Date.parse(e.offer_expires_at) - Date.parse(e.offered_at), 24 * HOUR, '24 hours')
+  // The held place is not available to anyone else, including the next in line.
+  assertEquals((await reg({ email: 'late@example.com', expected_price: 350 })).json.code, 'full')
+  const token = offerLink('w1@example.com')!
+  assert(token && !e.offer_token_hash.includes(token), 'only the hash is stored')
+  const pre = await call(waitlistApi.onRequestGet, '/api/workshops/waitlist?offer=' + token, null)
+  assertEquals([pre.json.offer.email, pre.json.offer.full_name, pre.json.offer.attend_email], ['w1@example.com', 'Wait w1', 'w1.meet@example.com'])
+  assertEquals((await call(waitlistApi.onRequestGet, '/api/workshops/waitlist?offer=' + 'X'.repeat(43), null)).status, 404)
+  // The link is personal: someone else's email cannot use it.
+  assertEquals((await offerReg('w2@example.com', token)).json.code, 'offer_not_valid')
+  // Their own registration: the existing price, checkout and webhook.
+  const r = await offerReg('w1@example.com', token)
+  assertEquals([r.json.state, paystack.initialized.at(-1)!.amount], ['checkout', 35000])
+  await pay(r.json.reference, 35000)
+  assertEquals((await regRow('w1@example.com')).status, 'confirmed')
+  await dispatchNow()
+  assertEquals((await entry('w1@example.com')).status, 'converted')
+  assert(guests().includes('w1.meet@example.com'), 'then the existing automatic invitation')
+  assert(!guests().includes('w2.meet@example.com'), 'never anyone still waiting')
+  assertEquals(await used(), { g: 2, r: 0 })
+})
+
+Deno.test('waitlist: an expired offer moves on to the next person; declining releases at once; payment retries stay within the window', opts, async () => {
+  const [a, b] = await soldOut()
+  await join('w1@example.com'); await join('w2@example.com'); await join('w3@example.com')
+  await refund(a.json.reference, 35000)
+  await dispatchNow()
+  // w1 starts a checkout that fails, then retries inside the window: one place, no double charge.
+  const t1 = offerLink('w1@example.com')!
+  const first = await offerReg('w1@example.com', t1)
+  const retry = await offerReg('w1@example.com', t1)
+  assertEquals([first.json.state, retry.json.registration], ['checkout', 'existing'])
+  assertEquals((await rows(`select count(*)::int n from public.workshop_registrations where email_normalized = 'w1@example.com'`))[0].n, 1)
+  // The window passes without payment.
+  await pg.exec(`update public.workshop_waitlist set offer_expires_at = now() - interval '1 minute' where email_normalized = 'w1@example.com'`)
+  // Its checkouts lapse too (attempts are immutable: they are marked failed, as an abandoned checkout is).
+  for (const a of await rows(`select reference from public.workshop_payment_attempts where registration_id = (select id from public.workshop_registrations where email_normalized = 'w1@example.com')`)) {
+    await pg.query(`select public.workshop_attempt_init_failed($1, 'abandoned in test')`, [a.reference])
+  }
+  await dispatchNow()
+  assertEquals([(await entry('w1@example.com')).status, (await entry('w2@example.com')).status], ['expired', 'offered'])
+  assert(mail.some((m) => m.to[0] === 'w1@example.com' && /released/.test(m.subject)), 'told it was released')
+  // w2 declines from the email link: the place goes to w3 straight away.
+  const t2 = offerLink('w2@example.com')!
+  assertEquals((await call(waitlistApi.onRequestPost, '/api/workshops/waitlist', { action: 'decline', offer: t2 })).json.declined, true)
+  assertEquals([(await entry('w2@example.com')).status, (await entry('w3@example.com')).status], ['declined', 'offered'])
+  assert(/declined/.test((await entry('w2@example.com')).audit))
+  // A second place opens while w3's offer is live: nobody else is waiting, so it simply reopens.
+  await refund(b.json.reference, 35000)
+  await dispatchNow()
+  assertEquals((await call(session, '/api/workshops/session?slug=automate-invoices', null)).json.status, 'open')
+})
+
+Deno.test('waitlist: places never oversell, even with offers, holds, refunds and registrations racing', opts, async () => {
+  const [a] = await soldOut()
+  for (const n of [1, 2, 3, 4]) await join('w' + n + '@example.com')
+  await refund(a.json.reference, 35000)
+  // The refund and four attempts to grab the place at once, then the dispatcher.
+  const racing = await Promise.all([
+    reg({ email: 'x1@example.com', expected_price: 350 }), reg({ email: 'x2@example.com', expected_price: 350 }),
+    dispatchNow(), dispatchNow(), reg({ email: 'x3@example.com', expected_price: 350 })])
+  assert(racing.slice(0, 2).concat([racing[4]]).every((r) => r.json.code === 'full'), 'nobody jumps the queue')
+  const offers = await rows(`select email_normalized, status from public.workshop_waitlist order by created_at`)
+  assertEquals(offers.filter((o) => o.status === 'offered').length, 1, 'one place, one offer: ' + JSON.stringify(offers))
+  assertEquals((await used()).g, 2, 'capacity 2, never more')
+  // Running the dispatcher again, and a duplicate webhook, change nothing.
+  const sentBefore = mail.length
+  await dispatchNow(); await dispatchNow()
+  assertEquals(mail.length, sentBefore, 'no duplicate offer email')
+  const t = offerLink('w1@example.com')!
+  const r = await offerReg('w1@example.com', t)
+  await pay(r.json.reference, 35000); await pay(r.json.reference, 35000)
+  assertEquals((await regRow('w1@example.com')).payment_status, 'paid')
+  assertEquals((await rows(`select count(*)::int n from public.workshop_payment_attempts where status = 'succeeded'
+    and registration_id = (select id from public.workshop_registrations where email_normalized = 'w1@example.com')`))[0].n, 1)
+  assertEquals((await used()).g, 2)
+})
+
+Deno.test('waitlist: reserved graduate places go only to verified graduates in their own queue', opts, async () => {
+  await soldOut()
+  // A graduate takes the only reserved place.
+  const t0 = await verifyCert('abena@example.com', 'BPA-TRN-2026-GRAD02')
+  await reg({ email: 'abena@example.com', verification: t0, expected_price: 0, attend_email: 'abena.meet@gmail.com' })
+  // An open-place waiter, then a verified graduate waiter.
+  await join('w1@example.com')
+  const t1 = await verifyCert('kwame@example.com', 'BPA-TRN-2026-GRAD01')
+  const g = await join('kwame@example.com', { verification: t1 })
+  assertEquals([(await entry('kwame@example.com')).seat_kind, g.json.position], ['graduate', 1])
+  // The reserved place opens: it is offered to the graduate, never to the open-place waiter.
+  await admit((await regRow('abena@example.com')).id, 'cancel')
+  await dispatchNow()
+  assertEquals([(await entry('kwame@example.com')).status, (await entry('w1@example.com')).status], ['offered', 'waiting'])
+  // Using it still needs the graduate certificate, through the existing check.
+  const token = offerLink('kwame@example.com')!
+  assertEquals((await offerReg('kwame@example.com', token)).json.code, 'offer_not_valid', 'a standard registration cannot take a graduate place')
+  const t2 = await verifyCert('kwame@example.com', 'BPA-TRN-2026-GRAD01')
+  const r = await offerReg('kwame@example.com', token, { verification: t2, expected_price: 0 })
+  assertEquals([r.json.state, r.json.price_tier], ['confirmed', 'graduate'])
+  assertEquals(await used(), { g: 2, r: 1 })
+})
+
+Deno.test('waitlist: the seven-day cutoff closes it, ends open offers, and nothing is offered too close to it', opts, async () => {
+  const [a] = await soldOut()
+  await join('w1@example.com'); await join('w2@example.com')
+  // 169 hours to go: inside the last 2 hours before the cutoff, so no new offer.
+  await pg.exec(`update public.workshop_sessions set starts_at = now() + interval '169 hours'`)
+  await refund(a.json.reference, 35000)
+  await dispatchNow()
+  assertEquals((await entry('w1@example.com')).status, 'waiting', 'no offer that could not be used')
+  // An offer made earlier never outlives the cutoff.
+  await pg.exec(`update public.workshop_sessions set starts_at = now() + interval '180 hours'`)
+  await dispatchNow()
+  const e = await entry('w1@example.com')
+  assertEquals(e.status, 'offered')
+  assert(Date.parse(e.offer_expires_at) <= Date.now() + 12 * HOUR + 60000, 'expires at the cutoff, not after 24 hours')
+  // The cutoff passes: the offer ends, the queue closes, and joining is refused.
+  await pg.exec(`update public.workshop_sessions set starts_at = now() + interval '160 hours'`)
+  await pg.exec(`update public.workshop_waitlist set offer_expires_at = now() - interval '1 minute' where status = 'offered'`)
+  await dispatchNow()
+  assertEquals([(await entry('w1@example.com')).status, (await entry('w2@example.com')).status], ['expired', 'closed'])
+  assertEquals((await join('w9@example.com')).json.code, 'closed')
+  assertEquals((await call(session, '/api/workshops/session?slug=automate-invoices', null)).json.status, 'registration_closed')
+  assertEquals((await rows(`select count(*)::int n from public.workshop_registrations where status = 'confirmed'`))[0].n, 1, 'confirmed registrations kept')
+})
+
+Deno.test('waitlist: admin exceptions only: removal needs a reason and is recorded; nothing else moves the queue', opts, async () => {
+  await soldOut()
+  await join('w1@example.com'); await join('w2@example.com')
+  const id = (await entry('w1@example.com')).id
+  const noReason = await call(adminAction, '/api/admin/workshops', { action: 'waitlist_remove', waitlist_id: id, value: '' }, ENV, adminEnv)
+  assertEquals(noReason.status, 409)
+  const ok = await call(adminAction, '/api/admin/workshops', { action: 'waitlist_remove', waitlist_id: id, value: 'Asked to be taken off by phone' }, ENV, adminEnv)
+  assertEquals(ok.json.ok, true)
+  const e = await entry('w1@example.com')
+  assert(e.status === 'removed' && /Asked to be taken off/.test(e.audit))
+  assertEquals((await call(waitlistApi.onRequestPost, '/api/workshops/waitlist', { action: 'join', slug: 'automate-invoices', full_name: 'X', email: 'w3@example.com', ack_terms: true })).status, 400, 'a name is required')
+})
+
+
+// --- waitlist: payment in flight, late payments, queue-jumping, and the exact cutoff instant --------
+const failAttempts = async (email: string) => {
+  for (const a of await rows(`select reference from public.workshop_payment_attempts where registration_id =
+      (select id from public.workshop_registrations where email_normalized = $1)`, [email])) {
+    await pg.query(`select public.workshop_attempt_init_failed($1, 'checkout abandoned in test')`, [a.reference])
+  }
+}
+const lapseOffer = (email: string) => pg.query(`update public.workshop_waitlist set offer_expires_at = now() - interval '1 minute'
+  where email_normalized = $1`, [email])
+
+Deno.test('waitlist: a payment in flight when the offer lapses still converts, and the place is offered to nobody else meanwhile', opts, async () => {
+  const [a] = await soldOut()
+  await join('w1@example.com'); await join('w2@example.com')
+  await refund(a.json.reference, 35000)
+  await dispatchNow()
+  const r = await offerReg('w1@example.com', offerLink('w1@example.com')!)
+  assertEquals(r.json.state, 'checkout')
+  await lapseOffer('w1@example.com') // the window ends while w1 is on Paystack
+  await dispatchNow()
+  assertEquals([(await entry('w1@example.com')).status, (await entry('w2@example.com')).status], ['offered', 'waiting'], 'held while the payment is in flight')
+  assertEquals((await used()).g, 2)
+  await pay(r.json.reference, 35000) // the webhook arrives late, inside the 30-minute hold
+  await dispatchNow()
+  assertEquals([(await regRow('w1@example.com')).status, (await entry('w1@example.com')).status, (await entry('w2@example.com')).status],
+    ['confirmed', 'converted', 'waiting'])
+  assertEquals((await used()).g, 2, 'never oversold')
+})
+
+Deno.test('waitlist: a payment arriving after the hold lapsed and the place was re-offered is held for review, never oversold or lost', opts, async () => {
+  const [a] = await soldOut()
+  await join('w1@example.com'); await join('w2@example.com')
+  await refund(a.json.reference, 35000)
+  await dispatchNow()
+  const r = await offerReg('w1@example.com', offerLink('w1@example.com')!)
+  await lapseOffer('w1@example.com'); await failAttempts('w1@example.com') // window and hold both over
+  await dispatchNow()
+  assertEquals([(await entry('w1@example.com')).status, (await entry('w2@example.com')).status], ['expired', 'offered'])
+  // w1's payment on a checkout started well before (its 30-minute hold long over) is verified
+  // only now, for a place that is now w2's. Attempts are immutable, so the aged one is inserted
+  // as it would exist, the same way the webhook suite builds a stale attempt.
+  assert(r.json.reference)
+  await pg.query(`insert into public.workshop_payment_attempts (registration_id, reference, amount_minor, mode, created_at)
+    values ((select id from public.workshop_registrations where email_normalized = 'w1@example.com'),
+            'BPA-WTEST-2026-LATEPAYMNT', 35000, 'test', now() - interval '2 hours')`)
+  await pay('BPA-WTEST-2026-LATEPAYMNT', 35000)
+  const late = await regRow('w1@example.com')
+  assertEquals([late.status, late.review_reason], ['payment_received_review', 'capacity'], 'an exception for refund, not a seat')
+  assertEquals(Number(late.amount_paid_minor), 35000, 'the money is recorded, not lost')
+  // Places actually given: confirmed registrations plus live offers stay within capacity (2).
+  const given = (await rows(`select (select count(*)::int from public.workshop_registrations where status = 'confirmed' and price_tier <> 'graduate')
+    + (select count(*)::int from public.workshop_waitlist where status = 'offered' and offer_expires_at > now()) n`))[0].n
+  assertEquals(given, 2, 'not oversold')
+  // Release 1 counts money held for review as occupying a place until the admin admits or refunds
+  // it, so nothing further is offered meanwhile (conservative, by design).
+  assertEquals((await used()).g, 3)
+  await dispatchNow()
+  assertEquals((await rows(`select count(*)::int n from public.workshop_waitlist where status = 'offered'`))[0].n, 1, 'no extra offer')
+  assert(!guests().includes('w1.meet@example.com'), 'no meeting access')
+})
+
+Deno.test('waitlist: an expired offer, or an old unpaid registration, cannot start a new checkout while others wait', opts, async () => {
+  const [a] = await soldOut()
+  await join('w1@example.com'); await join('w2@example.com')
+  await refund(a.json.reference, 35000)
+  await dispatchNow()
+  await offerReg('w1@example.com', offerLink('w1@example.com')!)
+  await lapseOffer('w1@example.com'); await failAttempts('w1@example.com')
+  await dispatchNow() // w2 now holds the place
+  const before = paystack.initialized.length
+  const again = await reg({ email: 'w1@example.com', attend_email: 'w1.meet@example.com', expected_price: 350 })
+  assertEquals(again.json.code, 'full')
+  assertEquals(paystack.initialized.length, before, 'Paystack is never called')
+  // Even with the place momentarily free (w2 declines), w1 cannot take it while anyone waits.
+  await join('w3@example.com')
+  await call(waitlistApi.onRequestPost, '/api/workshops/waitlist', { action: 'decline', offer: offerLink('w2@example.com') })
+  assertEquals((await reg({ email: 'w1@example.com', attend_email: 'w1.meet@example.com', expected_price: 350 })).json.code, 'full')
+  assertEquals((await entry('w3@example.com')).status, 'offered', 'FIFO: the next in line gets it')
+})
+
+Deno.test('cutoff: closed at exactly 168 hours before the start, open a second before; recalculated on reschedule', opts, async () => {
+  await reset({ ...RELEASE }); await seedRecords()
+  const open = async (interval: string) => (await rows(`update public.workshop_sessions set starts_at = now() + interval '${interval}'
+    returning public.workshop_session_open(workshop_sessions.*) o`))[0].o
+  assertEquals(await open('168 hours 1 second'), true, 'one second before the cutoff')
+  assertEquals(await open('168 hours'), false, 'at the cutoff')
+  assertEquals(await open('167 hours 59 minutes 59 seconds'), false, 'one second after')
+  assertEquals(await open('30 days'), true, 'rescheduled later: open again')
+  // Workshop 01: Saturday 12 December 2026, 11:30 Accra (UTC+0), closes Saturday 5 December 2026, 11:30.
+  const w = (await rows(`select ('2026-12-12 11:30:00+00'::timestamptz - interval '168 hours') at time zone 'Africa/Accra' c`))[0].c
+  assertEquals(new Date(w).toISOString().slice(0, 16), '2026-12-05T11:30')
+})
+
+// --- late payment versus the waitlist: the payment-confirmation guard (release 4) ------------------
+// x registers while a place is free and starts a checkout, then abandons it; the session sells out,
+// someone joins the waitlist, and a place frees. x's payment for a checkout whose 30-minute hold
+// lapsed long ago is verified now, before the dispatcher has offered that place.
+async function lateCheckoutSetup() {
+  await inviteSession({ capacity: 2, reserved_graduate_seats: 1 })
+  await paidTest('paid1@example.com', 'paid1.meet@gmail.com')
+  await reg({ email: 'x@example.com', attend_email: 'x.meet@gmail.com', expected_price: 350 })
+  await failAttempts('x@example.com') // its live checkout ended
+  // Its earlier checkout, started two hours ago (attempts are immutable, so inserted aged).
+  await pg.query(`insert into public.workshop_payment_attempts (registration_id, reference, amount_minor, mode, created_at)
+    values ((select id from public.workshop_registrations where email_normalized = 'x@example.com'),
+            'BPA-WTEST-2026-XLATEPAYMT', 35000, 'test', now() - interval '2 hours')`)
+  const b = await paidTest('paid2@example.com', 'paid2.meet@gmail.com')
+  await join('w1@example.com')
+  await refund(b.json.reference, 35000) // a place frees; the dispatcher has NOT run yet
+}
+
+Deno.test('late payment: with someone waiting, a lapsed-hold payment is held for refund, not confirmed, even before the dispatcher runs', opts, async () => {
+  await lateCheckoutSetup()
+  assertEquals((await entry('w1@example.com')).status, 'waiting', 'dispatcher delayed: no offer yet')
+  // The same webhook delivered twice at once, and the reconciliation path racing it.
+  await Promise.all([pay('BPA-WTEST-2026-XLATEPAYMT', 35000), pay('BPA-WTEST-2026-XLATEPAYMT', 35000)])
+  const x = await regRow('x@example.com')
+  assertEquals([x.status, x.review_reason, Number(x.amount_paid_minor)], ['payment_received_review', 'capacity', 35000],
+    'recorded for resolution; the money is not lost')
+  assertEquals((await rows(`select count(*)::int n from public.workshop_payment_attempts where reference = 'BPA-WTEST-2026-XLATEPAYMT' and status = 'succeeded'`))[0].n, 1, 'applied once')
+  assertEquals((await rows(`select count(*)::int n from public.workshop_registrations where status = 'confirmed'`))[0].n, 1, 'only paid1 holds a place')
+  // The dispatcher finally runs. The held payment counts against capacity until resolved (owner
+  // decision), so the place is not offered yet; nothing oversells and x gets no meeting access.
+  await dispatchNow()
+  assert(!guests().includes('x.meet@gmail.com'))
+  // The admin refunds x: the place goes to w1, first in line.
+  assertEquals((await admit(x.id, 'request_refund')).json.ok, true)
+  await refund('BPA-WTEST-2026-XLATEPAYMT', 35000)
+  await dispatchNow()
+  assertEquals([(await regRow('x@example.com')).status, (await entry('w1@example.com')).status], ['refunded', 'offered'])
+})
+
+Deno.test('late payment: a payment inside its hold is a legitimate payment in flight and is confirmed even with people waiting', opts, async () => {
+  await inviteSession({ capacity: 2, reserved_graduate_seats: 1 })
+  await paidTest('paid1@example.com', 'paid1.meet@gmail.com')
+  const x = await reg({ email: 'x@example.com', attend_email: 'x.meet@gmail.com', expected_price: 350 })
+  assertEquals(x.json.state, 'checkout') // x's hold makes the session full
+  await join('w1@example.com')
+  assertEquals((await join('w1@example.com')).json.outcome, 'already')
+  await pay(x.json.reference, 35000)
+  assertEquals((await regRow('x@example.com')).status, 'confirmed', 'its place was rightfully held')
+  await dispatchNow()
+  assertEquals((await entry('w1@example.com')).status, 'waiting', 'no place to offer: still FIFO')
+})
+
+Deno.test('late payment: with nobody waiting and a place free, a lapsed-hold payment is still confirmed (unchanged behaviour)', opts, async () => {
+  await inviteSession({ capacity: 2, reserved_graduate_seats: 1 })
+  await paidTest('paid1@example.com', 'paid1.meet@gmail.com')
+  await reg({ email: 'x@example.com', attend_email: 'x.meet@gmail.com', expected_price: 350 })
+  await failAttempts('x@example.com')
+  await pg.query(`insert into public.workshop_payment_attempts (registration_id, reference, amount_minor, mode, created_at)
+    values ((select id from public.workshop_registrations where email_normalized = 'x@example.com'),
+            'BPA-WTEST-2026-XLATEPAYMT', 35000, 'test', now() - interval '2 hours')`)
+  await pay('BPA-WTEST-2026-XLATEPAYMT', 35000)
+  assertEquals((await regRow('x@example.com')).status, 'confirmed')
 })

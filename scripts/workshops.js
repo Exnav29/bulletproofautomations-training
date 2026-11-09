@@ -166,10 +166,9 @@ function loadSeries(dir, sessions) {
   });
 }
 
-/* Paid forms link to the site's existing refund policy page. The webinar and
-   workshop terms (draft: docs/workshops-refund-policy-draft.json, pending legal
-   review) become a section of that page once approved; no separate page is built. */
-const POLICY_HREF = "/refund-policy";
+/* Paid forms link to the webinar and workshop terms: section 23 of the site's
+   existing refund policy page. No separate policy page is built. */
+const POLICY_HREF = "/refund-policy#workshops";
 
 /* The series and entry a session belongs to, if any. */
 function membership(seriesList, slug) {
@@ -199,8 +198,14 @@ function when(s) {
     wd: fmt(s.starts_at, tz, { weekday: "short" }),
     accra: fmt(s.starts_at, "Africa/Accra", clock).toUpperCase(),
     lagos: fmt(s.starts_at, "Africa/Lagos", clock).toUpperCase(),
-    gmt: fmt(s.starts_at, "UTC", clock).toUpperCase()
+    gmt: fmt(s.starts_at, "UTC", clock).toUpperCase(),
+    // Registration closes 168 hours before the start (REGISTRATION_CLOSES_HOURS; the database enforces it).
+    closes: fmt(closesAt(s), "Africa/Accra", { weekday: "long", day: "numeric", month: "long" }) + ", " +
+      fmt(closesAt(s), "Africa/Accra", clock).toUpperCase()
   };
+}
+function closesAt(s) {
+  return new Date(Date.parse(s.starts_at) - 168 * 3600000).toISOString();
 }
 function duration(min) {
   if (min % 60 === 0) return min / 60 === 1 ? "1 hour" : min / 60 + " hours";
@@ -244,6 +249,7 @@ function page(title, description, canonical, body, extraBodyAttrs) {
 function factsList(s, w) {
   return '<dl class="ws-facts">\n' +
     '  <dt>When</dt><dd><span class="ws-date">' + esc(w.long) + '</span><small>' + esc(w.accra) + ' in Accra<br>' + esc(w.lagos) + ' in Lagos</small></dd>\n' +
+    '  <dt>Registration closes</dt><dd><strong>' + esc(w.closes) + ' in Accra</strong><small>Seven days before the start. No registrations after that, at any price.</small></dd>\n' +
     '  <dt>Length</dt><dd>' + esc(duration(s.duration_minutes)) + ', ' + esc(s.format) + '</dd>\n' +
     '  <dt>Fee</dt><dd>' + esc(fee(s)) + (s.price_ghs > 0 ? '<small>MoMo or card, through Paystack</small>' : '') +
       (s.referral_discount_ghs > 0 ? '<small>' + esc(referralFee(s)) + ' with a graduate\'s referral code</small>' : '') +
@@ -301,7 +307,7 @@ function form(s) {
     '  <div class="ws-field"><label for="ws-wa">WhatsApp <span class="ws-hint">Optional</span></label><input id="ws-wa" name="whatsapp" type="tel" autocomplete="tel" inputmode="tel" maxlength="40" placeholder="+233"></div>\n' +
     '  <label class="ws-check" data-wa-consent hidden><input type="checkbox" name="whatsapp_consent"> <span>Send me session reminders on WhatsApp.</span></label>\n' +
     '  <label class="ws-check"><input type="checkbox" name="ack_terms" required> <span>I agree to the <a href="/privacy">privacy notice</a>' +
-    (s.price_ghs > 0 ? ' and the <a href="' + POLICY_HREF + '">refund policy</a>' : '') + '.</span></label>\n' +
+    (s.price_ghs > 0 ? ' and the <a href="' + POLICY_HREF + '">webinar and workshop refund terms</a>. I understand a paid registration is non-refundable except as those terms or the law provide' : '') + '.</span></label>\n' +
     '  <div class="ws-hp" aria-hidden="true"><label for="ws-company">Company website</label><input id="ws-company" name="company_website" type="text" tabindex="-1" autocomplete="off"></div>\n' +
     '  <p class="ws-error" data-ws-error role="alert" hidden></p>\n' +
     (s.referral_discount_ghs > 0 || hasBenefits(s) ? '  <p class="ws-note" data-ws-quote aria-live="polite">You pay ' + esc(fee(s)) + '.</p>\n' : '') +
@@ -374,7 +380,7 @@ function detailPage(s, seriesList, live) {
 '<aside class="ws-aside" id="register" aria-labelledby="ws-reg">\n' +
 '  <div class="ws-sheet" data-ws-sheet>\n' +
 '    <h2 id="ws-reg">Register</h2>\n' +
-'    <p class="ws-sumline">' + esc(w.long) + ', ' + esc(w.gmt) + ' GMT. ' + esc(fee(s)) + '.</p>\n' +
+'    <p class="ws-sumline">' + esc(w.long) + ', ' + esc(w.gmt) + ' GMT. ' + esc(fee(s)) + '. Registration closes ' + esc(w.closes) + ' in Accra.</p>\n' +
 '    <p class="ws-banner" data-ws-banner role="status" hidden></p>\n' +
 '    ' + trace(s, w).replace(/\n/g, "\n    ") + '\n' +
 '    ' + form(s).replace(/\n/g, "\n    ") + '\n' +

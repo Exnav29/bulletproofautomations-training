@@ -98,6 +98,13 @@
     var banner = $("[data-ws-banner]");
     var label = submit ? submit.textContent : "";
     var testOptIn = /[?&]paystack=test\b/.test(location.search);
+    // Waitlist (migration 20261111120000). An offer link (?offer=...) holds a place
+    // for one person: the form is filled in from their waitlist entry and the
+    // registration carries the offer. Sold out with registration still open: the
+    // same form joins the waitlist instead, with no payment.
+    var pageParams = new URLSearchParams(location.search);
+    var offerToken = pageParams.get("offer") || "";
+    var waitlistMode = false;
 
     // Phone register bar: visible only when neither the hero button nor the
     // sheet is in view, and never while the consent bar is showing.
@@ -242,18 +249,88 @@
           submit.disabled = true;
           return;
         }
+        // A valid offer link holds a place for this person, whatever the page would
+        // otherwise say about places (until registration closes).
+        if (offerToken && d.status !== "registration_closed" && d.status !== "started") return;
         // General places are taken but a reserved graduate place is free: the
-        // form stays open for a confirmed Intermediate graduate certificate only.
+        // form stays open for a confirmed Intermediate graduate certificate, and
+        // anyone else joins the waitlist for an open place.
         if (d.status === "graduates_only") {
           graduatesOnly = true;
-          banner.textContent = "The open places are taken. Places reserved for Intermediate graduates are still available: confirm your certificate below to claim one.";
+          banner.textContent = "The open places are taken. Intermediate graduates: confirm your certificate below to claim a reserved place. Everyone else: send the form to join the waitlist, free.";
           banner.hidden = false;
           return;
         }
-        if (d.status === "full") closeForm("This session is full", "No payment was taken. Other dates are listed on the webinars page.", [{ href: "/workshops", text: "See other sessions", quiet: true }]);
+        if (d.status === "full" && d.waitlist_open) { enterWaitlist(); return; }
+        if (d.status === "registration_closed") closeForm("Registration closed", "Registration closes seven days before the session starts, so places are confirmed and invitations sent in good time. Other sessions are listed on the webinars page.", [{ href: "/workshops", text: "See other sessions", quiet: true }]);
+        else if (d.status === "full") closeForm("This session is full", "No payment was taken. Other dates are listed on the webinars page.", [{ href: "/workshops", text: "See other sessions", quiet: true }]);
         else if (d.status !== "open") closeForm("Registration has closed", "This session has started or registration is no longer open.", [{ href: "/workshops", text: "See other sessions", quiet: true }]);
       })
       .catch(function () { /* the registration endpoint checks again */ });
+
+    function enterWaitlist() {
+      waitlistMode = true;
+      banner.textContent = "Sold out — join the waitlist. It's free: if a place opens, we email you a link that holds it for you for up to 24 hours.";
+      banner.hidden = false;
+      label = "Join the waitlist";
+      submit.textContent = label;
+      if (quoteLine) quoteLine.textContent = "Joining the waitlist is free. You pay only if you take a place we offer you.";
+      Array.prototype.forEach.call(document.querySelectorAll(".ws-jump .ws-btn, [data-ws-sticky] .ws-btn"), function (a) { a.textContent = "Sold out — join the waitlist"; });
+    }
+
+    // An offer link: fill in the form from the waitlist entry, or give the place back.
+    if (offerToken && form) {
+      if (pageParams.get("decline") === "1") {
+        if (window.confirm("Give this place back so it can go to the next person on the waitlist?")) {
+          post("/api/workshops/waitlist", { action: "decline", offer: offerToken }).then(function (r) {
+            closeForm(r.ok ? "Place given back" : "This offer has already ended",
+              r.ok ? "Thank you. The place goes to the next person on the waitlist. Nothing was charged." : "It expired, was already used, or was given back. Nothing was charged.",
+              [{ href: "/workshops", text: "See other sessions", quiet: true }]);
+          });
+        }
+      } else {
+        fetch("/api/workshops/waitlist?offer=" + encodeURIComponent(offerToken)).then(function (r) { return r.json(); }).then(function (r) {
+          if (!r.ok) { offerToken = ""; banner.textContent = "This waitlist offer has expired or was already used."; banner.hidden = false; return; }
+          var o = r.offer;
+          form.elements.full_name.value = o.full_name || "";
+          form.elements.email.value = o.email || "";
+          if (form.elements.attend_email && o.attend_email) form.elements.attend_email.value = o.attend_email;
+          if (o.whatsapp) form.elements.whatsapp.value = o.whatsapp;
+          if (refInput && o.referral_code) refInput.value = o.referral_code;
+          banner.textContent = "A place is held for you until " + new Date(o.expires_at).toLocaleString("en-GB", { timeZone: "Africa/Accra", weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" }) +
+            " (Accra time)." + (o.seat_kind === "graduate" ? " Confirm your graduate certificate below to claim the reserved place." : " Check your details, then register and pay.");
+          banner.hidden = false;
+          requote();
+        }).catch(function () { /* the registration endpoint checks the offer again */ });
+      }
+    }
+
+    function joinWaitlist() {
+      busy(true, "Adding you to the waitlist");
+      post("/api/workshops/waitlist", {
+        action: "join", slug: slug,
+        full_name: form.elements.full_name.value.trim(),
+        email: form.elements.email.value.trim(),
+        attend_email: form.elements.attend_email ? form.elements.attend_email.value.trim() : "",
+        ref: refInput ? refInput.value.trim() : referralCode(),
+        verification: benefit.tier === "graduate" ? benefit.token : "",
+        whatsapp: form.elements.whatsapp.value.trim(),
+        whatsapp_consent: form.elements.whatsapp_consent ? form.elements.whatsapp_consent.checked : false,
+        ack_terms: form.elements.ack_terms.checked,
+        company_website: form.elements.company_website.value
+      }).then(function (r) {
+        busy(false);
+        if (r.ok) {
+          return closeForm(r.outcome === "already" ? "You're already on the waitlist" : "You're on the waitlist",
+            "You're number " + r.position + " in the queue. We've emailed you a confirmation. If a place opens, we email you a link that holds it for you for up to 24 hours. Nothing has been charged.",
+            [{ href: "/workshops", text: "See other sessions", quiet: true }]);
+        }
+        if (r.code === "not_full") { location.reload(); return; }
+        if (r.code === "registered") return showError("You already have a registration for this session. Check your email for its details.");
+        if (r.code === "closed") return closeForm("Registration closed", "Registration and the waitlist close seven days before the session starts.", [{ href: "/workshops", text: "See other sessions", quiet: true }]);
+        return showError("We couldn't add you to the waitlist just now. Try again, or " + contact() + ".");
+      }).catch(function () { busy(false); showError("We couldn't add you to the waitlist just now. Try again in a moment."); });
+    }
 
     function validateForm() {
       var bad = [];
@@ -276,8 +353,7 @@
       if (!phoneOk) bad.push(form.elements.whatsapp);
       if (bad.length) { showError("Check the highlighted details: your name, a working email address" + (form.elements.attend_email ? ", the Google account you will join with" : "") + (phoneOk ? "" : ", and a full WhatsApp number") + "."); bad[0].focus(); return false; }
       if (!form.elements.ack_terms.checked) { showError(price > 0 ? "Tick the box to agree to the privacy notice and refund policy." : "Tick the box to agree to the privacy notice."); form.elements.ack_terms.focus(); return false; }
-      if (graduatesOnly && benefit.tier !== "graduate") { showError("Only the reserved Intermediate graduate places are left. Confirm your graduate certificate above to claim one."); return false; }
-      if (!quoteOk) { showError(quoteLine ? quoteLine.textContent : "Check your referral code."); return false; }
+      if (!quoteOk && !waitlistMode) { showError(quoteLine ? quoteLine.textContent : "Check your referral code."); return false; }
       showError("");
       return true;
     }
@@ -305,6 +381,8 @@
       e.preventDefault();
       if (submit.disabled) return;
       if (!validateForm()) return;
+      // Sold out, or only reserved graduate places left and no graduate certificate confirmed.
+      if (waitlistMode || (graduatesOnly && !offerToken && benefit.tier !== "graduate")) { joinWaitlist(); return; }
       busy(true, "Saving your details");
       var consent = window.BPATracking ? window.BPATracking.attribution() : { attribution: {}, ad_consent: false };
       post("/api/workshops/register", {
@@ -323,7 +401,8 @@
         attribution: consent.attribution,
         ad_consent: consent.ad_consent,
         company_website: form.elements.company_website.value,
-        testOptIn: testOptIn
+        testOptIn: testOptIn,
+        offer: offerToken || undefined
       }).then(function (r) {
         if (r.token) saveAccess(slug, { token: r.token, reference: r.reference || null });
         if (!r.ok) {
@@ -334,6 +413,7 @@
             stale_page: ["The details have changed", "Refresh this page to see the current date and fee, then register."],
             not_found: ["Registration isn't open", "This session isn't taking registrations. Nothing has been charged."]
           };
+          if (r.code === "offer_not_valid") return showError("This waitlist offer has expired, was already used, or is for a different email address. Nothing has been charged.");
           if (r.code === "attend_email_required") return showError("Add the Google account you will join with. Only that account can get into the meeting.");
           if (r.code === "price_changed") { requote(); return showError("Your price has changed to " + ghsText(r.price_ghs) + ". Check it, then register again. Nothing has been charged."); }
           if (r.code === "referral_invalid") { requote(); return showError("That referral code isn't valid. Check it, or clear it to register at " + ghsText(price) + ". Nothing has been charged."); }

@@ -1,5 +1,6 @@
 /* POST /api/workshops/dispatch — run the outbox: reconcile open checkouts with
- * Paystack, send queued emails, send queued Conversions API events.
+ * Paystack, send queued emails, keep Google Calendar invitations in step, send
+ * queued Conversions API events.
  *
  * Called every five minutes by pg_cron + pg_net with the x-workshop-dispatch
  * header; only the SHA-256 of that secret is stored
@@ -25,5 +26,5 @@ export async function onRequestPost({ request, env }) {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return json({ ok: false, error: "not_configured" }, 503);
   if (!(await authorized(env, request))) return json({ ok: false, error: "not_authorized" }, 403);
   const report = await processOutbox(env, new URL(request.url).origin);
-  return json({ ok: report.emails.failed === 0 && report.meta.failed === 0, report: report });
+  return json({ ok: report.emails.failed === 0 && report.meta.failed === 0 && !(report.calendar && report.calendar.failed), report: report });
 }

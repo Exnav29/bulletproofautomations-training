@@ -35,7 +35,7 @@
   };
   var ATTENDANCE = { unknown: "Not recorded", attended: "Attended", no_show: "No-show" };
 
-  var ws = { sessions: {}, rows: [], attempts: {}, referrers: [], payouts: {} };
+  var ws = { sessions: {}, rows: [], attempts: {}, referrers: [], payouts: {}, waitlist: [] };
   var TIER = { standard: "", foundations: "Foundations price", graduate: "Graduate, complimentary" };
   var $ = function (id) { return document.getElementById(id); };
 
@@ -95,9 +95,12 @@
       // Referral tables arrive with migration 20261109120000; without them the page still loads.
       getJson("/rest/v1/workshop_referrers?select=*&order=created_at.asc").catch(function () { return []; }),
       getJson("/rest/v1/workshop_referral_payouts?select=*").catch(function () { return []; }),
-      getJson("/rest/v1/workshop_sessions?select=id,referral_commission_ghs").catch(function () { return []; })
+      getJson("/rest/v1/workshop_sessions?select=id,referral_commission_ghs").catch(function () { return []; }),
+      // The waitlist arrives with migration 20261111120000; without it the page still loads.
+      getJson("/rest/v1/workshop_waitlist?select=*&order=created_at.asc,id.asc").catch(function () { return []; })
     ]).then(function (out) {
       ws.referrers = out[3];
+      ws.waitlist = out[6] || [];
       ws.payouts = {};
       out[4].forEach(function (p) { ws.payouts[p.registration_id] = p; });
       ws.commission = {};
@@ -170,9 +173,88 @@
   function toRemove(r) { return isInvite(r) && !!r.invited_email && (r.status !== "confirmed" || r.attend_email !== r.invited_email); }
   function noAccount(r) { return isInvite(r) && r.status === "confirmed" && !r.attend_email; }
 
+  /* Invitations are sent automatically by the dispatcher (functions/api/_calendar.js).
+   * The exception queue lists what it could not do: an error recorded and the
+   * change still outstanding. "Retry" clears the error and tries again at once. */
+  function calendarException(r) {
+    return !!r.calendar_sync_error && (toAdd(r) || toRemove(r) || Number(r.calendar_sync_failures) >= 5);
+  }
+  /* Places and waitlists: capacity, places left, reserved graduate places, the
+   * queue in order, live offers, outcomes, and the exceptions that need a person.
+   * Offers are made by the dispatcher; the admin never moves the queue by hand. */
+  function waitlists() {
+    var WL = { waiting: "Waiting", offered: "Offer open", converted: "Registered from an offer", expired: "Offer expired",
+      declined: "Declined", skipped: "Skipped", closed: "Closed at the cutoff", removed: "Removed by the admin" };
+    var counted = ["confirmed", "payment_received_review", "refund_pending"];
+    var waitingTotal = 0;
+    var html = Object.keys(ws.sessions).map(function (id) {
+      var s = ws.sessions[id];
+      var list = ws.waitlist.filter(function (w) { return w.session_id === id; });
+      var regs = ws.rows.filter(function (r) { return r.session_id === id && counted.indexOf(r.status) !== -1; });
+      if (!s.capacity && !list.length) return "";
+      var grad = regs.filter(function (r) { return r.price_tier === "graduate"; }).length;
+      var general = regs.length - grad;
+      var live = list.filter(function (w) { return w.status === "offered" && Date.parse(w.offer_expires_at) > Date.now(); });
+      var liveGeneral = live.filter(function (w) { return w.seat_kind === "general"; }).length;
+      var liveGrad = live.length - liveGeneral;
+      var waiting = list.filter(function (w) { return w.status === "waiting"; });
+      waitingTotal += waiting.length;
+      var tally = {};
+      list.forEach(function (w) { tally[w.status] = (tally[w.status] || 0) + 1; });
+      var errors = list.filter(function (w) { return w.email_error; });
+      var queue = ["general", "graduate"].map(function (k) {
+        var q = waiting.filter(function (w) { return w.seat_kind === k; });
+        return q.length ? "<p><strong>" + (k === "general" ? "Open places" : "Reserved graduate places") + ": " + q.length + " waiting, in order</strong></p><ol>" +
+          q.map(function (w) {
+            return "<li>" + esc(w.full_name) + " " + esc(w.email_normalized) + " <small>joined " + esc(when(w.created_at)) + "</small> " +
+              '<button class="mini" type="button" data-wl="waitlist_remove" data-id="' + esc(w.id) + '">Remove</button></li>';
+          }).join("") + "</ol>" : "";
+      }).join("");
+      return '<div class="ws-inv"><h4>' + esc(s.title) + " &mdash; " + esc(when(s.starts_at)) + (s.is_test ? ' <span class="tag tag--bad">TEST SESSION</span>' : "") + "</h4>" +
+        "<p>Open places: " + general + " confirmed and " + liveGeneral + " held by offers, of " + (s.capacity || 0) +
+        " (" + Math.max(0, (s.capacity || 0) - general - liveGeneral) + " left before pending checkouts). " +
+        (s.reserved_graduate_seats ? "Reserved graduate places: " + grad + " confirmed and " + liveGrad + " held, of " + s.reserved_graduate_seats + ". " : "") +
+        "Total " + ((s.capacity || 0) + (s.reserved_graduate_seats || 0)) + ".</p>" +
+        (live.length ? "<p><strong>Offers open</strong></p><ul>" + live.map(function (w) {
+          return "<li>" + esc(w.full_name) + " " + esc(w.email_normalized) + " (" + esc(w.seat_kind) + ") until " + esc(when(w.offer_expires_at)) +
+            (w.registration_id ? " <small>registered, payment pending</small>" : "") + "</li>";
+        }).join("") + "</ul>" : "") + queue +
+        "<p><small>" + Object.keys(WL).filter(function (k) { return tally[k]; }).map(function (k) { return WL[k] + ": " + tally[k]; }).join(" &middot; ") + "</small></p>" +
+        (errors.length ? '<p class="msg msg--bad">Emails that failed:</p><ul>' + errors.map(function (w) {
+          return "<li>" + esc(w.full_name) + " " + esc(w.email_normalized) + ": " + esc(w.email_error) + " (" + esc(w.email_failures) + " tries) " +
+            '<button class="mini" type="button" data-wl="waitlist_retry_email" data-id="' + esc(w.id) + '">Retry email</button></li>';
+        }).join("") + "</ul>" : "") + "</div>";
+    }).join("");
+    $("ws-wl-count").textContent = waitingTotal;
+    $("ws-waitlist").innerHTML = html || '<p class="msg msg--empty">No session has places to show.</p>';
+  }
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("[data-wl]");
+    if (!b) return;
+    var action = b.getAttribute("data-wl");
+    var reason = null;
+    if (action === "waitlist_remove") {
+      reason = window.prompt("Why remove this person from the waitlist? This is recorded, and the queue order is otherwise unchanged.");
+      if (!reason) return;
+    }
+    b.disabled = true;
+    apiPost({ waitlist_id: b.getAttribute("data-id"), action: action, value: reason })
+      .then(function () { show("ws-message", "Saved."); return load(); })
+      .catch(function (err) { show("ws-error", err.message); b.disabled = false; });
+  });
+
   function invites() {
     var ids = Object.keys(ws.sessions).filter(function (id) { return ws.sessions[id].admission === "invite"; });
     var total = 0;
+    var failed = ws.rows.filter(function (r) { return isInvite(r) && calendarException(r); });
+    var queue = failed.length ? '<div class="ws-inv"><h4>Needs attention: automatic invitation failed</h4><ul>' + failed.map(function (r) {
+      var s = ws.sessions[r.session_id] || {};
+      return "<li><strong>" + esc(r.full_name) + "</strong> " + esc(r.attend_email || r.invited_email || r.email_normalized) +
+        (isTest(r) ? ' <span class="tag tag--bad">TEST</span>' : "") + " <small>(" + esc(s.title || "") + ")</small><br>" +
+        '<span class="msg msg--bad">' + esc(r.calendar_sync_error) + (Number(r.calendar_sync_failures) >= 5 ? " Retries stopped." : " Retrying automatically.") + "</span> " +
+        '<button class="mini" type="button" data-ws="retry_calendar" data-id="' + esc(r.id) + '">Retry now</button></li>';
+    }).join("") + "</ul></div>" : "";
+    total += failed.length;
     var html = ids.map(function (id) {
       var s = ws.sessions[id];
       var mine = ws.rows.filter(function (r) { return r.session_id === id; });
@@ -209,7 +291,7 @@
         "</div>";
     }).join("");
     $("ws-inv-count").textContent = total;
-    $("ws-invites").innerHTML = html || '<p class="msg msg--empty">No session is set to join by invitation.</p>';
+    $("ws-invites").innerHTML = queue + (html || '<p class="msg msg--empty">No session is set to join by invitation.</p>');
   }
 
   function render() {
@@ -246,6 +328,7 @@
 
     campaigns(rows);
     invites();
+    waitlists();
     referrals();
   }
 

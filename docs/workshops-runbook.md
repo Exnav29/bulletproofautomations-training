@@ -3,7 +3,7 @@
 _Updated 9 November 2026, from a read-only inspection of the production database on that date.
 Live checkout is off, and no workshop registration is open._
 
-- Product contract: `docs/PRD-WEBINARS-WORKSHOPS.md` (PR #59).
+- Direction: `docs/WEBINAR-REUSE-FIRST-RESET.md` (on main). It supersedes the 2 November PRD (PR #59, closed).
 - Design: `docs/workshops-design.md`.
 - Non-regression record: `docs/workshops-shared-changes.md`. **Read it before any production step.**
 
@@ -22,7 +22,7 @@ Checked read-only against the existing Supabase project, not taken from earlier 
 | Test session `test-webinar-checkout` | `draft`. 3 confirmed test registrations and 4 test-mode attempts (`BPA-WTEST-`). No live attempt exists anywhere |
 | Workshop 01, `what-to-charge-for-automation` | `draft`, GHS 350, 25 places, joining details stored on the row (never in this repository, which is public), no registrations |
 | Certificate records release 2 reads | PR #54's entitlement view exists: **2** active graduate entitlements and **10** valid Foundations certificates |
-| Refund policy | **Drafted, not approved**: `docs/workshops-refund-policy-draft.json` (`"approved": false`, `"legal_review": "pending"`), unpublished. Paid workshop forms link to the site's existing `/refund-policy` page |
+| Webinar and workshop refund terms | **Owner Approved, 9 November 2026** (non-refundable; transfers 72 hours or more ahead). No external legal review: not a launch gate, by owner decision. Section 23 of the existing `refund-policy/index.html` (`#workshops`), version `2026-11-09` = `TERMS_VERSION`. Publishes when the webinar release is merged |
 
 ## Test and live never mix (release 2, part 3)
 
@@ -61,45 +61,61 @@ carries **no Meet link and no calendar file**: the link only works for invited a
 Google invitation is the calendar entry, so a second one would duplicate it. Google sends the
 invitation, with the Meet link, when the admin adds the guest.
 
-**Admitting people (manual, in `/admin/workshops/`, panel "Google Calendar invitations").** For each
-invitation-only session it derives:
+**Admitting people: automatic (release 3, `20261110120000_workshop_calendar_sync.sql`).** The existing
+dispatcher (cron `workshop-dispatch`, every minute; also straight after a free registration or an
+admin retry) runs `functions/api/_calendar.js`:
 
-| List | Who | What the admin does |
-|---|---|---|
-| Add to the event | `confirmed` and either paid (Paystack-verified, or admitted from review) or a complimentary graduate place still matching an active entitlement, with an account not on the event | Copy the addresses, add them as guests on that session's event, choose **Send** when Calendar asks, then click "Added in Calendar" |
-| Remove from the event | An account on the event whose registration is no longer `confirmed` (refund requested, refunded, cancelled) or that was replaced | Remove the guest in Calendar, then click "Removed in Calendar" |
-| Paid, no Google account yet | `confirmed` without an account | Email them; set it with "Set Google account" |
+| When | What happens on the session's Google Calendar event |
+|---|---|
+| A registration is confirmed and paid, or is a complimentary graduate place still matching an active entitlement | Its Google account is added, and Google emails the invitation (`sendUpdates=all`) |
+| Refund requested, refunded or cancelled | The account it added is removed, and Google emails the cancellation |
+| An approved change of Google account (admin "Set Google account") | Old account removed and new one added, in one update |
+| Duplicate payment webhook, a second run, an account already on the event | Nothing is sent; the record is brought in step |
 
-The database refuses to record an invitation for a registration that is not `confirmed` and paid or legitimately free, a graduate place whose entitlement has lapsed, a second
-registration with the same account, or a new account while the old one is still on the event.
-"Added" twice is a no-op. Account changes are made only on a request from the registered email.
+**What it never does:**
+- It never touches anyone else on the event (the host, a co-host).
+- It never invites an unpaid, unconfirmed or ineligible registration.
+- It never invites the same account twice in a session.
+- Test and live never mix: a test-mode deployment syncs test sessions only, and any other deployment syncs live sessions only.
 
-**Event settings, once per event:** guests cannot see the guest list and cannot invite others, so
-participants never see each other's addresses. Keep the Meet access setting restricted to invited
-guests. Do not add anyone who has not appeared under "Add to the event".
+**Exception queue.** Temporary Google errors (rate limits, 5xx, an etag race) are retried on each run, up
+to 5 times. A missing event, an address Google refuses, or a lapsed graduate place stops at once. All of
+them appear first in the "Google Calendar invitations" panel under **Needs attention**, with the reason
+and a **Retry now** button. The manual buttons stay as a fallback and still record a change made by hand.
+
+**Event settings, once per event:** guests cannot see the guest list and cannot invite others, and Meet
+access is restricted to invited guests.
 
 **Joining instructions stay private.** `join_instructions` and `calendar_event_id` live only on the
 session row: `anon` and `authenticated` have no grant, and no public endpoint selects them. An
 invitation-only session never prints `join_instructions`. The build fails on a meeting link or a
 join field in any content file, and CI fails if one reaches `dist/`.
 
-### Can invitations be automated?
+### Connecting Google Calendar (owner, once)
 
-**Yes, technically, but not with what exists today, and it needs the owner's authorization.** The
-events live on a personal Google account, so a Google service account cannot reach them:
-domain-wide delegation exists only for Workspace. Automation would need:
+Reuses the Google OAuth client Bulletproof Scheduling already uses, so no new Google Cloud project is
+needed. It is a **separate** authorisation for this site, limited to calendar events. Scheduling's own
+stored connection is never copied.
 
-1. a Google Cloud project with the Calendar API enabled, at no cost;
-2. an OAuth client and consent screen, published "In production". In "Testing" the refresh token
-   expires after 7 days. An unverified app is allowed for the owner's own account, behind
-   Google's warning screen;
-3. the owner signing in once to grant `calendar.events` on that account, with the refresh token
-   stored as a Supabase or Cloudflare secret, never in this repository;
-4. code calling `events.patch` on each event's `calendar_event_id` to add or remove the derived
-   guests, with `sendUpdates=all`.
+1. In Google Cloud console, open the OAuth client Scheduling uses.
+   - Add `https://developers.google.com/oauthplayground` as an authorised redirect URI.
+   - Create a new client secret for this site.
+   - Check the consent screen's publishing status is **In production**. In "Testing", Google expires the token after 7 days and invitations stop.
+2. In Google's OAuth Playground (settings: "Use your own OAuth credentials"):
+   - Authorise scope `https://www.googleapis.com/auth/calendar.events`, signed in to the Google account that **owns the workshop events**.
+   - Exchange the code for tokens.
+3. In Cloudflare Pages, set these as **encrypted** variables, Production and Preview separately, then redeploy:
+   - `GOOGLE_CALENDAR_CLIENT_ID`
+   - `GOOGLE_CALENDAR_CLIENT_SECRET`
+   - `GOOGLE_CALENDAR_REFRESH_TOKEN`
+   - Optional: `GOOGLE_CALENDAR_ID` (default `primary`)
 
-The manual panel is the first version because it needs none of that. If automated later, the same
-derived lists and `workshop_admin_admission` records stay as they are; only the clicking changes.
+   Never paste them anywhere else.
+4. Test on the rehearsal session (`rehearsal-what-to-charge`, test-mode Preview) with its own test event: a test payment should appear as a guest within a minute, and a refund should remove it.
+
+Until the three values are set, nothing calls Google and the manual panel works as before. **Rollback:**
+remove `GOOGLE_CALENDAR_REFRESH_TOKEN` and redeploy, then (optionally) run
+`rollback/20261110120000_workshop_calendar_sync_down.sql`.
 
 ### Access test before taking money (owner, with two Google accounts)
 
@@ -153,6 +169,78 @@ the figure it showed, so a changed price is refused rather than charged.
   - A test registration's commission is never payable, and the database refuses to record a payout for one (see "Test and live never mix").
 - **Admin reporting** shows the advertised price, discount and its kind, customer payment, commission and net retained separately, with totals, plus general and reserved places used.
 - Verified read-only on 9 November 2026: the eligibility rules match exactly the **2** active graduate entitlements and **10** valid Foundations certificates.
+
+## Registration cutoff: seven days (release 3)
+
+Registration closes **168 hours before each session starts**, at every price, including complimentary
+graduate places. For workshop 01 (Saturday 12 December 2026, 11:30 AM Accra) that is **Saturday 5 December
+2026, 11:30 AM Accra**.
+
+- **Enforcement.** The database refuses after the cutoff, through the one function that already decides
+  "open" (`workshop_session_open`). That covers registration, new checkouts, certificate codes and
+  waitlist joins. The page shows the closing date and time and switches to "Registration closed".
+- **Defaults and changes.** It is derived from `starts_at`, so every future session has it by default
+  and a rescheduled session's cutoff moves with it. Existing registrations are unaffected by a
+  reschedule; the refund terms (section 23) give those people the choice.
+- **Late payments.** A checkout started before the cutoff and paid after it is confirmed, through
+  the webhook or the dispatcher's reconciliation. Confirmed registrations, invitations and emails
+  carry on as normal after the cutoff.
+- **Not the same as statutory rights.** It does not shorten any statutory cancellation right. See
+  step 8.
+
+## Waitlist (release 4)
+
+When a session sells out while registration is open, the page shows **"Sold out — join the
+waitlist"**. The same form adds the person to a free waitlist: no payment and no Paystack. A verified
+Intermediate graduate (confirmed by the emailed code) joins the queue for the reserved places; everyone
+else joins the queue for open places. They get an email with their position in the queue, and nothing
+about anyone else.
+
+The existing per-minute dispatcher (`workshop_waitlist_advance`, under each session's lock) does the rest:
+
+| When | What happens |
+|---|---|
+| A place opens (refund, cancellation, expired checkout hold, a capacity increase) | It is offered to the earliest person waiting for that kind of place: by time of joining, then id. The place is held for them. They get an email with a single-use link that fills in their details; they register and pay with the normal form, prices, discounts and Paystack checkout |
+| A place opens but people are waiting | Newcomers cannot take it: the session shows as sold out until the queue is served |
+| An offer is open | It expires at the earlier of 24 hours and the registration cutoff. A reminder goes 6 hours before expiry, for offers longer than 12 hours. A failed payment can be retried within the window |
+| An offer expires or is declined (link in the email) | The place goes to the next person at once (declining) or at the next minute (expiry). The person is told it was released |
+| The offered person has registered in the meantime, or their graduate entitlement has lapsed | They are skipped, with the reason recorded, and the queue order is otherwise unchanged |
+| Less than 2 hours before the cutoff | No new offer is made; one could not be used in time |
+| The cutoff | Open offers end, people still waiting are closed out and told, and joining is refused. Confirmed registrations and the full history remain |
+
+**Guarantees:**
+- An offer holds its place in the same count that registrations and checkout holds use, under the same lock, so nothing can oversell (tested with racing registrations and dispatcher runs).
+- Nobody is charged by an offer: payment always starts from the person's own registration.
+- **Checkout is rechecked atomically before Paystack is called** (`workshop_start_attempt`, under the session lock). A checkout can start only in three cases:
+  - for a live offer;
+  - for a registration whose own checkout hold is still running;
+  - when a place is free and nobody is waiting.
+
+  An expired offer or an old unpaid registration can never jump the queue.
+- **Payment in flight, bounded.** A checkout started before an offer lapses keeps the offer open until it resolves or its 30-minute hold (`hold_minutes`) ends, so a slightly late webhook still converts the place. A payment verified after that is confirmed only if a place is free **and nobody is waiting**, a rule in the payment confirmation itself (`workshop_apply_charge`), so it holds even before the dispatcher has offered a freed place. Otherwise it is held for review (`payment_received_review`, reason `capacity`). It appears under "Needs resolution" for admit or refund: it never oversells, and the money is never lost. Money held for review counts as occupying a place until you resolve it, so nothing more is offered meanwhile.
+- Reserved graduate places are offered only to verified graduates, and only used with the graduate certificate check. A reserved place is released to open-place waiters only if the admin changes the session's `capacity` / `reserved_graduate_seats`.
+- Waitlisted people get no meeting access: the automatic invitation runs only after the registration is confirmed.
+
+**Admin** (`/admin/workshops/`, "Places and waitlists"):
+- The panel shows capacity and places left, reserved graduate places, the queue in order, open offers with their expiry, and counts of every outcome.
+- The only actions are exceptions: **Remove** (a reason is required and recorded) and **Retry email**.
+- Every row keeps an audit trail of joins, offers, emails, expiries, conversions and admin actions.
+
+## Releases 3 and 4: deployment
+
+Apply after release 2, in order, each as one transaction recorded in the history, with the same backup
+and snapshot discipline as steps 1 to 4 below:
+
+1. `20261110120000_workshop_calendar_sync.sql`: automatic invitations and the seven-day cutoff.
+   Rollback: `rollback/20261110120000_workshop_calendar_sync_down.sql`, which restores
+   `workshop_session_open` verbatim.
+2. `20261111120000_workshop_waitlist.sql`: the waitlist. Rollback:
+   `rollback/20261111120000_workshop_waitlist_down.sql`. It restores release 2's
+   `workshop_seats_in_use`, `workshop_graduate_seats_in_use` and `workshop_register` verbatim. Export
+   `workshop_waitlist` first.
+
+Both are tested up, re-applied and rolled back in `tests/workshops-migration.test.ts`. Neither touches a
+payment, enrollment, cohort or credential object.
 
 ## Release 2 deployment checklist
 
@@ -255,17 +343,31 @@ update public.workshop_sessions
 
 Run the access test above. The rehearsal (step 5) can already have run it on the rehearsal event.
 
-### 8. Refund policy
+### 8. Refund policy: done, no launch step
 
-Legal review first, then the owner's approval of the wording. The workshop terms are a draft in
-`docs/workshops-refund-policy-draft.json`; there is no separate policy page. Once approved, in one commit:
+**Status: Owner Approved, 9 November 2026, by the business owner as final approval authority.** No
+external legal review was carried out, and none is a launch gate (owner decision, 9 November 2026). Do
+not describe the policy as independently reviewed. It publishes as section 23 of `/refund-policy` when the
+webinar release is merged.
 
-1. Add the approved text as a "Webinars and workshops" section, `id="workshops"`, on the existing
-   `refund-policy/index.html`, with its effective date.
-2. Point the paid form at it: `POLICY_HREF` in `scripts/workshops.js` becomes `/refund-policy#workshops`.
-3. Set `TERMS_VERSION` in `functions/api/_workshops.js` to the same effective date, so every
-   registration records the terms it agreed to.
-4. Set the draft's `"approved": true` and `"legal_review": "complete"`.
+- **Where:** section 23 of the existing `refund-policy/index.html`.
+  - Paid registrations are non-refundable except as stated or as the law requires.
+  - A one-time transfer within 12 months is available when cancelling 72 hours or more ahead.
+  - Within 72 hours, and for no-shows, there is no voluntary refund or transfer.
+  - If we cancel or materially reschedule: a refund or another session.
+  - Duplicate payments and registrations we cannot fulfil are refunded.
+  - Discounts and complimentary places have no cash value.
+- **Acceptance:** paid forms link to `/refund-policy#workshops` and require an explicit, ticked acceptance that names the non-refundable term. The server refuses a registration without it. Every registration records the accepted `terms_version` (`2026-11-09`, the section's version line) and, in `created_at`, the time of acceptance.
+- **Sections 1 to 22 (cohort and certification terms) are byte-identical to `main`:** `tests/baseline/compare-site.sh` removes section 23 and compares the rest.
+
+**Statutory rights are preserved by the wording, not by assumption:**
+- The section does not limit rights that cannot be waived, and names Ghana's Electronic Transactions Act, 2008 (Act 772).
+- Where the law gives a period to cancel, it states that the period runs from the purchase, not from the event.
+- It does not rely on any exception for services already begun, and does not treat ticking the box at checkout as waiving a statutory right.
+- It claims no deduction from a statutory refund.
+
+**If the wording ever changes,** update section 23's version line and `TERMS_VERSION` in the same
+commit; a build test fails if they differ.
 
 ### 9. Merge PR #61
 
