@@ -105,11 +105,17 @@
     var pageParams = new URLSearchParams(location.search);
     var offerToken = pageParams.get("offer") || "";
     var waitlistMode = false;
+    // Check availability before accepting customer details or attempting payment.
+    var formHeading = $("#ws-reg");
+    var traceBlock = $("[data-trace]");
+    var heroNotice = el("p", { class: "ws-banner", role: "status" }, "Checking remaining places...");
+    if (submit) submit.disabled = true;
 
     // Phone register bar: visible only when neither the hero button nor the
     // sheet is in view, and never while the consent bar is showing.
     var sticky = $("[data-ws-sticky]");
     var jump = $(".ws-jump");
+    if (jump) jump.parentNode.insertBefore(heroNotice, jump);
     var sheetEl = $("[data-ws-sheet]");
     if (sticky && jump && sheetEl && "IntersectionObserver" in window) {
       var seen = { jump: true, sheet: false };
@@ -164,7 +170,7 @@
       if (quoteLine) quoteLine.textContent = note;
     }
     function requote() {
-      if (!quoteLine) return;
+      if (waitlistMode || !quoteLine) return;
       var ref = refInput ? refInput.value.trim() : "";
       if (!ref && !benefit.token) { quoteOk = true; setPrice(price, "You pay " + ghsText(price) + "."); return; }
       post("/api/workshops/quote", { slug: slug, email: form.elements.email.value.trim(), ref: ref, verification: benefit.token })
@@ -245,7 +251,10 @@
           Array.prototype.forEach.call(document.querySelectorAll(".ws-jump .ws-btn, [data-ws-sticky] .ws-btn"), function (a) { a.textContent = "Registration not open yet"; });
           return;
         }
-        if (!d || !d.ok) return;
+        if (!d || !d.ok) {
+          heroNotice.textContent = "We couldn't confirm availability. Refresh before registering.";
+          return;
+        }
         var s = d.session;
         if (Number(s.price_ghs) !== price || new Date(s.starts_at).toISOString() !== starts) {
           banner.textContent = "The details on this page have changed. Refresh to see the current date and fee before you register.";
@@ -254,39 +263,74 @@
           return;
         }
         graduateFull = !!d.graduate_waitlist_open;
+        submit.disabled = false;
+        submit.textContent = label;
+        heroNotice.hidden = true;
         // A valid offer link holds a place for this person, whatever the page would
         // otherwise say about places (until registration closes).
-        if (offerToken && d.status !== "registration_closed" && d.status !== "started") return;
+        if (offerToken && d.status !== "registration_closed" && d.status !== "started") {
+          heroNotice.hidden = false;
+          heroNotice.textContent = "You have a personal waitlist offer. Review the held place below.";
+          return;
+        }
         // This browser already registered for this session (it holds the status
         // token): "full" may be counting its own held place. Keep the form, so a
         // payment that failed or was abandoned can be retried. The server decides
         // whether that place is still theirs (Codex audit: sold-out pages blocked
         // legitimate payment retries by switching the form to the waitlist).
-        if (loadAccess(slug) && d.status !== "registration_closed" && d.status !== "started") return;
+        if (loadAccess(slug) && d.status !== "registration_closed" && d.status !== "started") {
+          heroNotice.hidden = false;
+          heroNotice.textContent = "Session full. You have an existing registration in this browser. You can continue that registration, or join the free waitlist using different attendee details.";
+          if (jump && !document.querySelector('[data-ws-switch-waitlist]')) {
+            var switchBtn = el("button", { type: "button", class: "ws-btn ws-btn--quiet", "data-ws-switch-waitlist": "" }, "Join the waitlist instead");
+            switchBtn.addEventListener("click", function () { switchBtn.hidden = true; enterWaitlist(); });
+            jump.parentNode.insertBefore(switchBtn, jump);
+          }
+          return;
+        }
         // General places are taken but a reserved graduate place is free: the
         // form stays open for a confirmed Intermediate graduate certificate, and
         // anyone else joins the waitlist for an open place.
         if (d.status === "graduates_only") {
           graduatesOnly = true;
+          heroNotice.hidden = false;
+          heroNotice.textContent = "General places are full. Eligible Intermediate graduates may still claim reserved places. Everyone else can join the free waitlist below; joining does not reserve a seat.";
           banner.textContent = "The open places are taken. Intermediate graduates: confirm your certificate below to claim a reserved place. Everyone else: send the form to join the waitlist, free.";
           banner.hidden = false;
           return;
         }
         if (d.status === "full" && d.waitlist_open) { enterWaitlist(); return; }
+        if (d.status === "open") heroNotice.hidden = true;
         if (d.status === "registration_closed") closeForm("Registration closed", "Registration closes seven days before the session starts, so places are confirmed and invitations sent in good time. Other sessions are listed on the webinars page.", [{ href: "/workshops", text: "See other sessions", quiet: true }]);
         else if (d.status === "full") closeForm("This session is full", "No payment was taken. Other dates are listed on the webinars page.", [{ href: "/workshops", text: "See other sessions", quiet: true }]);
         else if (d.status !== "open") closeForm("Registration has closed", "This session has started or registration is no longer open.", [{ href: "/workshops", text: "See other sessions", quiet: true }]);
       })
-      .catch(function () { /* the registration endpoint checks again */ });
+      .catch(function () {
+        heroNotice.textContent = "We couldn't confirm remaining places. Refresh before submitting your details.";
+      });
 
     function enterWaitlist() {
       waitlistMode = true;
+      graduatesOnly = false;
       banner.textContent = "Sold out — join the waitlist. It's free: if a place opens, we email you a link that holds it for you for up to 24 hours.";
       banner.hidden = false;
       label = "Join the waitlist";
       submit.textContent = label;
       if (quoteLine) quoteLine.textContent = "Joining the waitlist is free. You pay only if you take a place we offer you.";
       Array.prototype.forEach.call(document.querySelectorAll(".ws-jump .ws-btn, [data-ws-sticky] .ws-btn"), function (a) { a.textContent = "Sold out — join the waitlist"; });
+      // Explain full capacity before collecting details, and make it clear this is not registration.
+      heroNotice.hidden = false;
+      heroNotice.textContent = "SESSION FULL. Join the FREE waitlist below. You are NOT registered and no seat is reserved. No payment is collected. If a seat opens, we'll email you a time-limited offer.";
+      banner.textContent = "WAITLIST ONLY: Enter your details to join the queue. This is not a registration and does not guarantee a place.";
+      if (formHeading) formHeading.textContent = "Join the waitlist (free)";
+      if (traceBlock) traceBlock.hidden = true;
+      if (sheetEl) {
+        var summary = sheetEl.querySelector(".ws-sumline");
+        if (summary) summary.textContent = "All places are taken. Waitlist requests are free. You only pay if you later accept a seat offer.";
+      }
+      var paymentNote = form.querySelector(".ws-note:last-child");
+      if (paymentNote) paymentNote.hidden = true;
+      Array.prototype.forEach.call(document.querySelectorAll(".ws-jump .ws-btn, [data-ws-sticky] .ws-btn"), function (a) { a.textContent = "Session full - join the FREE waitlist"; });
     }
 
     // An offer link: fill in the form from the waitlist entry, or give the place back.
@@ -430,7 +474,10 @@
             not_found: ["Registration isn't open", "This session isn't taking registrations. Nothing has been charged."]
           };
           // The reserved places filled after this page loaded.
-          if (r.code === "full" && benefit.tier === "graduate" && !offerToken) return joinWaitlist();
+          if (r.code === "full" && !offerToken) {
+            enterWaitlist();
+            return showError("The final place was taken while you were completing the form. No payment was taken. Review the waitlist notice, then select Join the waitlist to be added to the queue.");
+          }
           if (r.code === "registered") return showError("This email already has a registration for this session. Check your email for its details, or " + contact() + " and we'll help. Nothing has been charged.");
           if (r.code === "offer_not_valid") return showError("This waitlist offer has expired, was already used, or is for a different email address. Nothing has been charged.");
           if (r.code === "attend_email_required") return showError("Add the Google account you will join with. Only that account can get into the meeting.");
