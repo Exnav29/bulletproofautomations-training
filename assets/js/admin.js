@@ -588,7 +588,10 @@ document.getElementById("csv").addEventListener("click", function () {
   var cell = function (v) {
     if (v == null) return "";
     var s = String(v);
-    return /[",\n]/.test(s) ? '"' + s.split('"').join('""') + '"' : s;
+    // A value starting with = + - @ or a tab/CR is a formula to Excel and Sheets;
+    // prefixing ' makes it text (Codex audit: CSV formula injection).
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return /[",\r\n]/.test(s) ? '"' + s.split('"').join('""') + '"' : s;
   };
 
   var csv = [cols.join(",")].concat(visibleRows().map(function (r) {
@@ -964,7 +967,10 @@ document.getElementById("pay-csv").addEventListener("click", function () {
   var cell = function (v) {
     if (v == null) return "";
     var s = String(v);
-    return /[",\n]/.test(s) ? '"' + s.split('"').join('""') + '"' : s;
+    // A value starting with = + - @ or a tab/CR is a formula to Excel and Sheets;
+    // prefixing ' makes it text (Codex audit: CSV formula injection).
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return /[",\r\n]/.test(s) ? '"' + s.split('"').join('""') + '"' : s;
   };
 
   var csv = [cols.join(",")].concat(visiblePayments().map(function (e) {
@@ -1310,7 +1316,10 @@ document.getElementById("cred-csv").addEventListener("click", function () {
   var cell = function (v) {
     if (v == null) return "";
     var s = String(v);
-    return /[",\n]/.test(s) ? '"' + s.split('"').join('""') + '"' : s;
+    // A value starting with = + - @ or a tab/CR is a formula to Excel and Sheets;
+    // prefixing ' makes it text (Codex audit: CSV formula injection).
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return /[",\r\n]/.test(s) ? '"' + s.split('"').join('""') + '"' : s;
   };
 
   var csv = [cols.join(",")].concat(visibleCredentials().map(function (r) {

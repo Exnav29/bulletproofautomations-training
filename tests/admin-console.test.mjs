@@ -2,7 +2,7 @@ import fs from "node:fs";
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
 
-const pages = ["overview", "enrollments", "payments", "credentials", "studio", "verification"];
+const pages = ["overview", "enrollments", "payments", "credentials", "studio", "verification", "workshops"];
 const paths = Object.fromEntries(pages.map((p) => [
   p, p === "overview" ? "dist/admin/index.html" : "dist/admin/" + p + "/index.html"
 ]));
@@ -19,14 +19,14 @@ const css = fs.readFileSync("assets/css/admin-console.css", "utf8");
 for (const page of pages) {
   const html = fs.readFileSync(paths[page], "utf8");
   assert.match(html, new RegExp('data-admin-view="' + page + '"'));
-  assert.equal((html.match(/data-ops-link=/g) || []).length, 6);
-  assert.equal((html.match(/data-ops-view=/g) || []).length, 6);
+  assert.equal((html.match(/data-ops-link=/g) || []).length, 7);
+  assert.equal((html.match(/data-ops-view=/g) || []).length, 7);
   for (const id of essentialIds) {
     assert.equal((html.match(new RegExp('id="' + id + '"', "g")) || []).length, 1,
       "Missing/duplicate legacy " + id + " on " + page);
   }
-  assert.ok(html.includes('href="/assets/css/admin-console.css?v=20261017-b"'));
-  assert.ok(html.includes('/assets/js/admin-console.js?v=20261017-a'));
+  assert.ok(html.includes('href="/assets/css/admin-console.css?v=20261103-a"'));
+  assert.ok(html.includes('/assets/js/admin-console.js?v=20261103-a'));
   const url = "https://training.bulletproofautomations.com/admin/" +
     (page === "overview" ? "" : page + "/");
   const dom = new JSDOM(html, { url, runScripts: "outside-only" });
@@ -70,4 +70,4 @@ assert.match(admin, /\/admin\/enrollments\/\?flag=/);
 assert.match(studio, /window\.openStudioCorrection/);
 assert.match(studio, /admin:authenticated/);
 assert.match(studio, /root\.dataset\.routeOpen/);
-console.log("PASS: 6 independent routes, consistent authenticated DOM, navigation, deep links, responsive styles and audited certificate-correction routing.");
+console.log("PASS: 7 independent routes, consistent authenticated DOM, navigation, deep links, responsive styles and audited certificate-correction routing.");

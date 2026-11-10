@@ -46,6 +46,7 @@ Never blur them.
    indication of employment. Where the builder pool or hiring standard is mentioned, the
    non-guarantee wording from the framework must appear on the same page.
 3. **No waitlists and no "Coming Soon" course cards.** Every course that is open gets a real signup with dates, price, and a payment path. Stage 3 (BCAE) is an exception: it is named on the pathway page as defined-but-not-yet-open, with no date, no signup, and no email capture. Naming it gives the pathway a visible ceiling; selling it early would devalue Stages 1 and 2.
+   **Second exception, approved by the owner on 8 November 2026: the Get Paid for Automation workshop series.** Its unscheduled workshops may have public "Coming soon" preview pages, on these conditions: they collect no registrations, payments or email addresses; they carry no date, price or capacity until the owner has approved them (the build refuses a planned workshop that has one); and they open for booking only through an approved `workshop_sessions` row. The exception covers that series only. Everything else in this rule, including the whole certification pathway, is unchanged, and the series keeps every branding, terminology and non-affiliation rule in this file.
 4. **Never invent dates, prices, testimonials, learner names, or outcome statistics.**
    Use clearly bracketed placeholders like `[START DATE]`, `[GHS 0,000]`. Flag them in a
    summary at the end of your turn so they can be filled in.

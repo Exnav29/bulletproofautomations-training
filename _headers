@@ -64,6 +64,19 @@
   ! Content-Security-Policy
   Content-Security-Policy: default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.supabase.co; font-src 'self'; connect-src 'self'; form-action 'self'; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests
 
+# Webinar and workshop pages. The ONLY pages allowed to load the Meta Pixel,
+# and assets/js/workshop-tracking.js loads it only after the visitor allows ad
+# measurement. Scoped here rather than relaxing /* for the whole site, and the
+# inherited policy is unset first (see the note at the top of this file).
+/workshops*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), interest-cohort=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  ! Content-Security-Policy
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://connect.facebook.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://www.facebook.com; font-src 'self'; connect-src 'self' https://www.facebook.com https://connect.facebook.net; form-action 'self' https://checkout.paystack.com; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests
+
 # The verification endpoints. Never cached, never framed, never crawled.
 /api/*
   Cache-Control: no-store

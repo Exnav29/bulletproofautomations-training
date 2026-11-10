@@ -73,7 +73,8 @@ html[data-admin-view="enrollments"] [data-ops-view="enrollments"],
 html[data-admin-view="payments"] [data-ops-view="payments"],
 html[data-admin-view="credentials"] [data-ops-view="credentials"],
 html[data-admin-view="studio"] [data-ops-view="studio"],
-html[data-admin-view="verification"] [data-ops-view="verification"] {display:block !important;}
+html[data-admin-view="verification"] [data-ops-view="verification"],
+html[data-admin-view="workshops"] [data-ops-view="workshops"] {display:block !important;}
 html[data-admin-view="credentials"] [data-ops-view="credentials"] {display:flex!important;flex-direction:column;}
 .ops-view .sec-gap,.ops-view.sec-gap {margin-top:0;padding-top:0;border-top:0;}
 .ops-view .panel {border-color:var(--ops-line);border-radius:9px;box-shadow:none;}

@@ -306,7 +306,7 @@
 }
 
 </style>
-<link rel="stylesheet" href="/assets/css/admin-console.css?v=20261017-b">
+<link rel="stylesheet" href="/assets/css/admin-console.css?v=20261103-a">
 </head>
 <body>
 
@@ -346,6 +346,7 @@
         <a data-ops-link="credentials" href="/admin/credentials/"><span aria-hidden="true">▣</span> Credentials</a>
         <a data-ops-link="studio" href="/admin/studio/"><span aria-hidden="true">✧</span> Certificate Studio</a>
         <a data-ops-link="verification" href="/admin/verification/"><span aria-hidden="true">⌕</span> Verification activity</a>
+        <a data-ops-link="workshops" href="/admin/workshops/"><span aria-hidden="true">▦</span> Webinars &amp; workshops</a>
       </nav>
       <div class="ops-sidebar__foot">Official training records<br><span>Private administrator workspace</span></div>
     </aside>
@@ -656,6 +657,105 @@
   </div>
 
   <!-- Verification enquiries ---------------------------------------------- -->
+  <!-- Webinars and workshops ----------------------------------------- -->
+  <section class="sec-gap ops-view" data-ops-view="workshops" aria-labelledby="ws-title">
+    <h2 class="panel__title" id="ws-title">Webinars &amp; workshops &mdash; <span id="ws-count">0</span> registrations</h2>
+    <p class="sec-gap__lede">Registrations for standalone sessions, kept apart from the cohort roll. Money is only ever
+      marked received by the Paystack webhook or a server-side verification. Refunds are issued in the Paystack
+      dashboard; a seat is released only when the refund is processed.</p>
+    <p class="msg msg--bad" id="ws-error" role="alert" hidden></p>
+    <p class="msg" id="ws-message" role="status" hidden></p>
+
+    <section class="panel" aria-labelledby="ws-attn-title">
+      <h3 class="panel__title" id="ws-attn-title">Needs resolution &mdash; <span id="ws-attn-count">0</span></h3>
+      <div id="ws-attention"><p class="msg msg--empty">Nothing waiting.</p></div>
+    </section>
+
+    <section class="panel" aria-labelledby="ws-wl-title">
+      <h3 class="panel__title" id="ws-wl-title">Places and waitlists &mdash; <span id="ws-wl-count">0</span> waiting</h3>
+      <p class="sec-gap__lede">When a session sells out, people join a free waitlist. As places open, they are offered
+        automatically, first in, first out, each held for up to 24 hours or until registration closes seven days before
+        the session. Nothing here needs doing for that to happen; only errors and exceptions are listed for action.</p>
+      <div id="ws-waitlist"><p class="msg msg--empty">No waitlists.</p></div>
+    </section>
+
+    <section class="panel" aria-labelledby="ws-inv-title">
+      <h3 class="panel__title" id="ws-inv-title">Google Calendar invitations &mdash; <span id="ws-inv-count">0</span> to do</h3>
+      <p class="sec-gap__lede">For sessions joined by invitation only. Invitations are sent automatically, within a minute:
+        a confirmed registration that is paid, or a still-eligible complimentary graduate place, is added to the session's
+        Google Calendar event, and a refund, cancellation or change of Google account removes it. Anything the automation
+        could not do is listed first, under &ldquo;Needs attention&rdquo;. The lists below show what is still waiting; the
+        buttons record a change made by hand in Calendar.</p>
+      <div id="ws-invites"><p class="msg msg--empty">Nothing to do.</p></div>
+    </section>
+
+    <section class="panel" aria-labelledby="ws-ref-title">
+      <h3 class="panel__title" id="ws-ref-title">Referrals &mdash; <span id="ws-ref-due">0</span> commissions due</h3>
+      <p class="sec-gap__lede">Codes are issued only to eligible Intermediate graduates, checked against the certificate register.
+        A commission is due on a confirmed registration paid once in full, not refunded, with a valid code. Pay it by
+        MoMo yourself, then record the reference here. Each registration can be paid once. A refund after payout shows
+        for review; nothing is clawed back automatically.</p>
+      <p><button class="mini" type="button" id="ws-ref-new">Issue a referral code</button>
+        <button class="mini" type="button" id="ws-grant-new">Authorise another email for a certificate</button></p>
+      <div id="ws-referrals"><p class="msg msg--empty">No referral codes issued.</p></div>
+      <h4>Places</h4>
+      <ul id="ws-places"></ul>
+    </section>
+
+    <div class="filters">
+      <label class="vh" for="ws-session">Session</label>
+      <select id="ws-session"><option value="">All sessions</option></select>
+      <label class="vh" for="ws-status">Registration status</label>
+      <select id="ws-status"><option value="">All registration states</option></select>
+      <label class="vh" for="ws-payment">Payment status</label>
+      <select id="ws-payment"><option value="">All payment states</option></select>
+      <label class="vh" for="ws-attendance">Attendance</label>
+      <select id="ws-attendance"><option value="">All attendance</option></select>
+      <label class="vh" for="ws-q">Search name, email or campaign</label>
+      <input type="search" id="ws-q" placeholder="Search name, email, campaign">
+      <button class="mini" type="button" id="ws-csv">Export CSV</button>
+    </div>
+
+    <div class="roll-wrap">
+      <table class="roll">
+        <caption class="vh">Webinar and workshop registrations</caption>
+        <thead>
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col">Session</th>
+            <th scope="col">Registration</th>
+            <th scope="col">Payment</th>
+            <th scope="col" class="num">Paid</th>
+            <th scope="col">Attendance</th>
+            <th scope="col">Campaign / ad</th>
+            <th scope="col">Registered</th>
+            <th scope="col"><span class="vh">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody id="ws-rows"></tbody>
+      </table>
+    </div>
+
+    <section class="panel" aria-labelledby="ws-camp-title">
+      <h3 class="panel__title" id="ws-camp-title">Results by campaign</h3>
+      <p class="sec-gap__lede">Grouped by <code>utm_campaign</code> and <code>utm_content</code> from the ad URL, for the
+        current filters. Confirmed paid means a confirmed registration with a payment Paystack verified: the same
+        definition Meta receives as a Purchase. Payments held for review are counted separately until admitted, and
+        refunds come off revenue. Enter the spend from Ads Manager for the same period to
+        see the cost per paid registration; it is calculated here and not stored.</p>
+      <label for="ws-spend">Ad spend for this selection (GHS)</label>
+      <input id="ws-spend" type="number" min="0" step="0.01" inputmode="decimal">
+      <div class="roll-wrap">
+        <table class="roll">
+          <caption class="vh">Registrations and verified payments by campaign</caption>
+          <thead><tr><th scope="col">Campaign</th><th scope="col">Ad</th><th scope="col" class="num">Registrations</th>
+            <th scope="col" class="num">Confirmed paid</th><th scope="col" class="num">Held for review</th><th scope="col" class="num">Revenue (GHS)</th></tr></thead>
+          <tbody id="ws-camp-rows"></tbody>
+          <tfoot><tr><th scope="row" colspan="3">Cost per confirmed paid enrollment</th><td class="num" id="ws-cac">&mdash;</td><td></td><td></td></tr></tfoot>
+        </table>
+      </div>
+    </section>
+  </section>
   <section class="sec-gap ops-view" data-ops-view="verification" aria-labelledby="enq-title">
     <h2 class="panel__title" id="enq-title">Verification enquiries &mdash; <span id="enq-count">0</span></h2>
     <p class="sec-gap__lede">Everyone who identified themselves to use the lookup. The ones marked
@@ -774,11 +874,12 @@
     <pre class="raw" id="pdrawer-raw"></pre>
   </div>
 </div>
-<script src="/assets/js/admin-console.js?v=20261017-a" defer></script>
+<script src="/assets/js/admin-console.js?v=20261103-a" defer></script>
 <script src="/assets/js/admin.js?v=20261017-b" defer></script>
 <script src="/assets/js/admin-archives.js?v=20261016-auto2" defer></script>
 <script src="/assets/js/admin-previews.js?v=20261016-auto1" defer></script>
 <script src="/assets/js/admin-payments.js" defer></script>
 <script src="/assets/js/admin-studio.js?v=20261017-a" defer></script>
+<script src="/assets/js/admin-workshops.js?v=20261111-a" defer></script>
 </body>
 </html>
