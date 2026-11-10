@@ -35,7 +35,9 @@ function where(params: URLSearchParams, first: number): [string, unknown[]] {
       const sqlOp = { eq: '=', neq: '<>', gte: '>=', lte: '<=', gt: '>', lt: '<' }[op]
       if (!sqlOp) throw new Error(`stand-in: unsupported operator ${op}`)
       // Compare timestamps as timestamps, everything else as text.
-      const cast = ['gte', 'lte', 'gt', 'lt'].includes(op) ? `${col} ${sqlOp} $${first + values.length}::timestamptz`
+      // Numbers as numbers (attempts=gte.5), anything else as a timestamp.
+      const cast = ['gte', 'lte', 'gt', 'lt'].includes(op)
+        ? `${col} ${sqlOp} $${first + values.length}::${/^-?\d+(\.\d+)?$/.test(operand) ? 'numeric' : 'timestamptz'}`
         : `${col}::text ${sqlOp} $${first + values.length}`
       parts.push(cast)
       values.push(operand)

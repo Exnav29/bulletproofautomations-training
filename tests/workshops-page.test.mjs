@@ -69,3 +69,63 @@ async function soldOutPage(stored) {
 }
 
 console.log("workshops page: sold-out retry and token resume ok");
+
+// Codex audit 2: the open places are free but the reserved graduate places are taken.
+// A confirmed graduate is told so and joins the graduate waitlist, instead of being
+// told the session is full. Rendered from the fixture with graduate places added.
+{
+  const { createRequire } = await import("node:module");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const gen = createRequire(import.meta.url)("../scripts/workshops.js");
+  const src = fs.mkdtempSync(path.join(os.tmpdir(), "ws-grad-src-"));
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), "ws-grad-out-"));
+  const data = JSON.parse(fs.readFileSync("tests/fixtures/workshops/sample-webinar.json", "utf8"));
+  Object.assign(data, { graduate_free: true, reserved_graduate_seats: 5, foundations_discount_pct: 20 });
+  fs.writeFileSync(path.join(src, "sample-webinar.json"), JSON.stringify(data));
+  gen.render(gen.loadSessions(src), out, []);
+  const gradHtml = fs.readFileSync(path.join(out, "workshops", "sample-webinar", "index.html"), "utf8");
+  const dom = new JSDOM(gradHtml, { url: "https://training.example/workshops/sample-webinar/", runScripts: "outside-only" });
+  const w = dom.window;
+  const main = w.document.querySelector("main[data-ws-page]");
+  const posts = [];
+  const reply = (body, status = 200) => ({ status, ok: status < 400, json: async () => body });
+  w.fetch = async (url, init) => {
+    const u = String(url);
+    if (u.startsWith("/api/workshops/session")) {
+      return reply({ ok: true, session: { slug: "sample-webinar", price_ghs: Number(main.dataset.price), starts_at: main.dataset.starts },
+        open: true, full: false, general_full: false, graduate_places_open: false, waitlist_open: false,
+        graduate_waitlist_open: true, status: "open" });
+    }
+    const body = init && init.body ? JSON.parse(init.body) : {};
+    posts.push({ url: u, body });
+    if (u === "/api/workshops/benefit" && body.step === "confirm") return reply({ ok: true, verification: TOKEN, tier: "graduate" });
+    if (u === "/api/workshops/quote") return reply({ ok: true, price_ghs: 0, list_price_ghs: 150, discount_kind: "graduate" });
+    if (u === "/api/workshops/waitlist") return reply({ ok: true, outcome: "joined", position: 1 });
+    return reply({ ok: true });
+  };
+  w.eval(script);
+  await new Promise((r) => setTimeout(r, 50));
+  const form = w.document.querySelector("[data-ws-form]");
+  form.elements.full_name.value = "Kwame Graduate";
+  form.elements.email.value = "kwame@example.com";
+  if (form.elements.attend_email) form.elements.attend_email.value = "kwame.meet@gmail.com";
+  form.elements.certificate_id.value = "BPA-TRN-2026-GRAD01";
+  w.document.querySelector("[data-ws-cert-send]").click();
+  await new Promise((r) => setTimeout(r, 30));
+  form.elements.cert_code.value = "123456";
+  w.document.querySelector("[data-ws-cert-confirm]").click();
+  await new Promise((r) => setTimeout(r, 50));
+  assert.match(w.document.querySelector("[data-ws-cert-status]").textContent, /reserved graduate places are taken/);
+  form.elements.ack_terms.checked = true;
+  form.dispatchEvent(new w.Event("submit", { cancelable: true }));
+  await new Promise((r) => setTimeout(r, 50));
+  const sent = posts.filter((p) => p.url === "/api/workshops/register" || p.url === "/api/workshops/waitlist");
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].url, "/api/workshops/waitlist", "a graduate was sent to registration, where the reserved places are full");
+  assert.equal(sent[0].body.verification, TOKEN, "joins the graduate queue, with the confirmed certificate");
+  fs.rmSync(src, { recursive: true, force: true });
+  fs.rmSync(out, { recursive: true, force: true });
+}
+
+console.log("workshops page: graduate waitlist when the reserved places are taken ok");

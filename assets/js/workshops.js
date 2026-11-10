@@ -152,6 +152,8 @@
     var quoted = price;
     var quoteOk = true;
     var graduatesOnly = false;
+    // The reserved graduate places are taken, even if open places remain.
+    var graduateFull = false;
     var ghsText = function (n) { return n === 0 ? "nothing" : "GHS " + Number(n).toLocaleString("en-GB"); };
     if (refInput && !refInput.value) refInput.value = referralCode();
 
@@ -224,7 +226,9 @@
           if (!r.ok) { certStatus(r.remaining > 0 ? "That code didn't match. " + r.remaining + " tries left." : "That code can't be used. Send a new one."); return; }
           benefit = { token: r.verification, tier: r.tier };
           codeBox.hidden = true;
-          certStatus(r.tier === "graduate" ? "Certificate confirmed: a complimentary reserved place." : "Certificate confirmed: the Foundations certificate price.");
+          certStatus(r.tier !== "graduate" ? "Certificate confirmed: the Foundations certificate price."
+            : graduateFull && !offerToken ? "Certificate confirmed. The reserved graduate places are taken: send the form to join the graduate waitlist, free. To take an open place now at the standard fee instead, reload the page and register without the certificate."
+            : "Certificate confirmed: a complimentary reserved place.");
           requote();
         }).catch(function () { certStatus("We couldn't check the code just now. Try again in a moment."); });
       });
@@ -249,6 +253,7 @@
           submit.disabled = true;
           return;
         }
+        graduateFull = !!d.graduate_waitlist_open;
         // A valid offer link holds a place for this person, whatever the page would
         // otherwise say about places (until registration closes).
         if (offerToken && d.status !== "registration_closed" && d.status !== "started") return;
@@ -389,6 +394,8 @@
       if (!validateForm()) return;
       // Sold out, or only reserved graduate places left and no graduate certificate confirmed.
       if (waitlistMode || (graduatesOnly && !offerToken && benefit.tier !== "graduate")) { joinWaitlist(); return; }
+      // A confirmed graduate when the reserved places are taken: their own queue (Codex audit 2).
+      if (graduateFull && !offerToken && benefit.tier === "graduate") { joinWaitlist(); return; }
       busy(true, "Saving your details");
       var consent = window.BPATracking ? window.BPATracking.attribution() : { attribution: {}, ad_consent: false };
       post("/api/workshops/register", {
@@ -422,6 +429,8 @@
             stale_page: ["The details have changed", "Refresh this page to see the current date and fee, then register."],
             not_found: ["Registration isn't open", "This session isn't taking registrations. Nothing has been charged."]
           };
+          // The reserved places filled after this page loaded.
+          if (r.code === "full" && benefit.tier === "graduate" && !offerToken) return joinWaitlist();
           if (r.code === "registered") return showError("This email already has a registration for this session. Check your email for its details, or " + contact() + " and we'll help. Nothing has been charged.");
           if (r.code === "offer_not_valid") return showError("This waitlist offer has expired, was already used, or is for a different email address. Nothing has been charged.");
           if (r.code === "attend_email_required") return showError("Add the Google account you will join with. Only that account can get into the meeting.");

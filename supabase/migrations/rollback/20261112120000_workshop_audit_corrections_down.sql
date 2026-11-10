@@ -525,6 +525,7 @@ drop function if exists public.workshop_apply_pending_refunds(text);
 drop function if exists public.workshop_refund_awaiting_note();
 
 -- Last, once nothing refers to them.
+alter table public.workshop_registrations drop column if exists calendar_managed_emails;
 alter table public.workshop_registrations drop column if exists calendar_claimed_at;
 alter table public.workshop_waitlist drop column if exists mail_claimed_at;
 alter table public.workshop_payment_attempts drop column if exists hold_until;

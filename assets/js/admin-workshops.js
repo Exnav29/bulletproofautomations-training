@@ -99,7 +99,8 @@
       // The waitlist arrives with migration 20261111120000; without it the page still loads.
       getJson("/rest/v1/workshop_waitlist?select=*&order=created_at.asc,id.asc").catch(function () { return []; }),
       // Emails the dispatcher gave up on after 5 attempts: each can be retried from its row.
-      getJson("/rest/v1/workshop_notifications?select=registration_id,kind,error&status=eq.failed").catch(function () { return []; })
+      // Failed, or stranded "sending" with no attempts left (its last result was never recorded).
+      getJson("/rest/v1/workshop_notifications?select=registration_id,kind,error,status&status=in.(failed,sending)&attempts=gte.5").catch(function () { return []; })
     ]).then(function (out) {
       ws.failedMail = {};
       (out[7] || []).forEach(function (n) { (ws.failedMail[n.registration_id] = ws.failedMail[n.registration_id] || []).push(n); });
@@ -158,7 +159,7 @@
     if (isInvite(r) && r.status === "confirmed") b.push('<button class="mini" type="button" data-ws-account="' + esc(r.id) + '">Google account</button>');
     var undelivered = (ws.failedMail || {})[r.id];
     if (undelivered) {
-      b.push('<span class="msg msg--bad">Email not delivered: ' + esc(undelivered.map(function (n) { return n.kind.replace(/_/g, " ") + " (" + (n.error || "failed") + ")"; }).join(", ")) + '</span>' +
+      b.push('<span class="msg msg--bad">Email not delivered: ' + esc(undelivered.map(function (n) { return n.kind.replace(/_/g, " ") + " (" + (n.error || (n.status === "sending" ? "result never recorded" : "failed")) + ")"; }).join(", ")) + '</span>' +
         ' <button class="mini" type="button" data-ws="retry_email" data-id="' + esc(r.id) + '">Retry email</button>');
     }
     return b.join(" ");

@@ -27,5 +27,30 @@ export async function onRequestPost({ request, env }) {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return json({ ok: false, error: "not_configured" }, 503);
   if (!(await authorized(env, request))) return json({ ok: false, error: "not_authorized" }, 403);
   const report = await processOutbox(env, new URL(request.url).origin);
-  return json({ ok: report.emails.failed === 0 && report.meta.failed === 0 && !(report.calendar && report.calendar.failed), report: report });
+  // Codex audit 2, F: health covers every part of the run, and the problems that
+  // persist between runs, not only what failed in this one.
+  report.health = await health(env, report);
+  return json({ ok: report.emails.failed === 0 && report.meta.failed === 0 && report.health.length === 0, report: report });
+}
+
+/* What still needs a person, as short codes. Empty means healthy. */
+async function health(env, report) {
+  const problems = [];
+  const w = report.waitlist, c = report.calendar;
+  if (w === null) problems.push("waitlist_not_run");
+  else if (w && (w.failed || w.unrecorded)) problems.push("waitlist_email");
+  if (c && (c.failed || c.unrecorded)) problems.push("calendar_sync");
+  // Emails the dispatcher has given up on, failed or stranded "sending": the admin's "Retry email".
+  const stuck = await rest(env, "workshop_notifications?select=id&status=in.(failed,sending)&attempts=gte.5&limit=1");
+  const stuckRows = stuck.ok ? await stuck.json().catch(function () { return null; }) : null;
+  if (!Array.isArray(stuckRows)) problems.push("health_check_failed");
+  else if (stuckRows.length) problems.push("emails_need_retry");
+  // An invitation-only session is coming up but Google Calendar is not connected.
+  if (c && c.skipped === "not_configured") {
+    const s = await rest(env, "workshop_sessions?select=id&admission=eq.invite&status=eq.published&starts_at=gt." +
+      encodeURIComponent(new Date().toISOString()) + "&limit=1");
+    const rows = s.ok ? await s.json().catch(function () { return null; }) : null;
+    if (Array.isArray(rows) && rows.length) problems.push("calendar_not_configured");
+  }
+  return problems;
 }

@@ -628,3 +628,28 @@ Deno.test({ name: 'audit 2: a refund delivered before its charge is applied when
   assertEquals(Number((await attempt(reference)).refunded_minor), 15000)
   await assertCohortUntouched(before)
 } })
+
+// --- Codex audit 2, 9 November 2026 (A) ------------------------------------------------------
+
+Deno.test({ name: 'audit 2A: an unsigned request first cannot stop a signed early refund from being applied', ...opts, fn: async () => {
+  await reset()
+  const before = await cohortSnapshot()
+  const id = await register()
+  const reference = await start(id)
+  // Somebody without the key gets this refund's identity into the ledger first, with a fake amount.
+  const forged = await deliver(refund(reference, 100, 7201), 'sk_live_not-the-key')
+  assertEquals([forged.status, forged.signature_valid], [200, false])
+  // Paystack's genuine delivery of the same refund, before the charge.
+  const early = await deliver(refund(reference, 15000, 7201))
+  assertEquals([early.status, early.outcome], [200, 'awaiting_charge'])
+  const ev = (await select(`select * from public.workshop_payment_events where event = 'refund.processed'`))[0]
+  assertEquals([ev.signature_valid, Number(ev.amount_minor)], [true, 15000], 'the verified delivery replaced the forged contents')
+  await deliver(charge(reference))
+  assertEquals(Number((await attempt(reference)).refunded_minor), 15000, 'the genuine amount, not the forged one')
+  const g = await reg(id)
+  assertEquals([g.status, g.payment_status, Number(g.amount_paid_minor)], ['refunded', 'refunded', 0])
+  // A later unsigned request cannot undo it.
+  await deliver(refund(reference, 1, 7201), 'sk_live_not-the-key')
+  assertEquals((await select(`select signature_valid from public.workshop_payment_events where event = 'refund.processed'`))[0].signature_valid, true)
+  await assertCohortUntouched(before)
+} })

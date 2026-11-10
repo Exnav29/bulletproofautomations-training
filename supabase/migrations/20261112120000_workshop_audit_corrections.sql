@@ -27,16 +27,29 @@
 --   recovery  workshop_admin_notification_retry requeues emails the dispatcher
 --      gave up on.
 --
+-- Amended for Codex audit 2 (9 November 2026), before this release was applied
+-- anywhere:
+--   D  workshop_calendar_plan records each account it is about to add
+--      (calendar_managed_emails) before Google is asked, and plans its removal if
+--      the result was never recorded; workshop_calendar_record clears it.
+--   E  a waitlist offer link proves ownership only while that offer is open.
+--   F  workshop_admin_notification_retry also requeues an email stranded
+--      'sending' after its fifth attempt.
+--
 -- Columns added (all nullable, no backfill; a row from before this migration
 -- behaves exactly as it did):
 --   workshop_payment_attempts.hold_until       end of this checkout's hold
 --   workshop_waitlist.mail_claimed_at          a dispatcher run is emailing it
 --   workshop_registrations.calendar_claimed_at a dispatcher run is syncing it
+--   workshop_registrations.calendar_managed_emails  accounts a run may have put
+--                                              on the event and not yet removed
+--                                              (Codex audit 2, D)
 -- ---------------------------------------------------------------------------
 
 alter table public.workshop_payment_attempts add column if not exists hold_until timestamptz;
 alter table public.workshop_waitlist add column if not exists mail_claimed_at timestamptz;
 alter table public.workshop_registrations add column if not exists calendar_claimed_at timestamptz;
+alter table public.workshop_registrations add column if not exists calendar_managed_emails text[];
 
 -- ---------------------------------------------------------------------------
 -- Findings 1 and 2: refunds
@@ -459,7 +472,7 @@ language sql volatile security definer set search_path = '' as $$
       (r.status = 'confirmed' and r.payment_status in ('paid', 'partially_refunded', 'not_required')) as entitled,
       -- coalesce: a lapsed certificate's tier is null, which must read as "not eligible", never as unknown.
       coalesce(r.price_tier <> 'graduate' or public.workshop_credential_tier(r.benefit_credential_id) = 'graduate', false) as eligible,
-      r.attend_email, r.invited_email
+      r.attend_email, r.invited_email, r.calendar_managed_emails
     from public.workshop_registrations r
     join public.workshop_sessions s on s.id = r.session_id
     where s.admission = 'invite' and s.calendar_event_id is not null and s.is_test = p_test
@@ -479,7 +492,17 @@ language sql volatile security definer set search_path = '' as $$
            then c.attend_email end as add_email,
       case when c.invited_email is not null
                 and (not c.entitled or c.attend_email is distinct from c.invited_email)
-           then c.invited_email end as remove_email,
+           then c.invited_email
+           -- Codex audit 2, D: an account a run put on the event whose result was never
+           -- recorded (Google accepted the change, the database write failed). It is
+           -- removed like any other the registration no longer names, unless another
+           -- registration for the session holds it.
+           else (select m from unnest(c.calendar_managed_emails) m
+                  where m is distinct from c.invited_email
+                    and (not c.entitled or m is distinct from c.attend_email)
+                    and not exists (select 1 from public.workshop_registrations o
+                                     where o.session_id = c.session_id and o.id <> c.id and o.invited_email = m)
+                  limit 1) end as remove_email,
       case when c.entitled and not c.eligible and c.invited_email is null and c.attend_email is not null
            then 'graduate_not_eligible' end as blocked
     from candidates c
@@ -495,7 +518,13 @@ language sql volatile security definer set search_path = '' as $$
        and (r.calendar_claimed_at is null or r.calendar_claimed_at < now() - interval '10 minutes')
        for update skip locked
   ), claimed as (
-    update public.workshop_registrations r set calendar_claimed_at = now() from locked where r.id = locked.id returning r.id
+    -- Codex audit 2, D: the account about to be added is recorded before Google is
+    -- asked, so a change Google accepts is never lost when recording its result fails.
+    update public.workshop_registrations r set calendar_claimed_at = now(),
+      calendar_managed_emails = case when p.add_email is null or p.add_email = any(coalesce(r.calendar_managed_emails, '{}'))
+                                     then r.calendar_managed_emails
+                                     else array_append(coalesce(r.calendar_managed_emails, '{}'), p.add_email) end
+      from locked join picked p on p.id = locked.id where r.id = locked.id returning r.id
   )
   select p.id, p.session_id, p.calendar_event_id, p.add_email, p.remove_email, p.blocked
     from picked p join claimed c on c.id = p.id
@@ -520,6 +549,8 @@ begin
       invited_at = case when p_added is not null then now() else invited_at end,
       invite_removed_at = case when p_removed is not null then now() else invite_removed_at end,
       calendar_sync_failures = 0, calendar_sync_error = null, calendar_sync_at = now(), calendar_claimed_at = null,
+      calendar_managed_emails = case when p_removed is not null then array_remove(calendar_managed_emails, p_removed)
+                                     else calendar_managed_emails end,
       admin_notes = concat_ws(E'\n', admin_notes,
         case when p_removed is not null then stamp || 'removed (' || p_removed || ')' end,
         case when p_added is not null then stamp || 'added (' || p_added || ')' end)
@@ -586,7 +617,9 @@ begin
               select 1 from public.workshop_status_tokens t
                where t.registration_id = r.id and t.token_hash = a->>'existing_token_hash')
          or (offer_hash is not null and exists (
-              select 1 from public.workshop_waitlist w where w.registration_id = r.id and w.offer_token_hash = offer_hash))) then
+              -- Codex audit 2, E: only while that offer is open and unexpired.
+              select 1 from public.workshop_waitlist w where w.registration_id = r.id and w.offer_token_hash = offer_hash
+                 and w.status = 'offered' and w.offer_expires_at > now()))) then
       return jsonb_build_object('outcome', 'existing_unverified');
     end if;
     if p_token_hash is not null then
@@ -707,7 +740,11 @@ begin
   end if;
   update public.workshop_notifications
      set status = 'queued', attempts = 0, error = null, claimed_at = null
-   where registration_id = p_registration_id and status = 'failed';
+   where registration_id = p_registration_id
+     and (status = 'failed'
+          -- Codex audit 2, F: the fifth send's result was never recorded, so the row is
+          -- left 'sending' with no attempts left and the dispatcher never claims it again.
+          or (status = 'sending' and attempts >= 5 and claimed_at < now() - interval '10 minutes'));
   get diagnostics n = row_count;
   if n = 0 then return jsonb_build_object('ok', false, 'error', 'nothing_failed'); end if;
   update public.workshop_registrations

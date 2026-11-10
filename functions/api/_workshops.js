@@ -402,11 +402,14 @@ export async function processOutbox(env, origin, limits) {
   //    about the same ten abandoned checkouts on every run and never reached a paid
   //    one queued behind them. workshop_claim_verify stamps last_verify_at on each
   //    one it checks, so every open checkout is reached in turn.
+  //    Codex audit 2 (B): no age cutoff, and init_failed is included. A checkout
+  //    older than 48 hours (a long outage) or whose initialize answer was lost is
+  //    still unresolved, so it stays in the rotation; the per-run limit bounds the
+  //    cost, and the runbook's "Unresolved checkouts" query is the human review.
   if (max.reconcile > 0 && workshopMode(env) !== "off") {
-    const since = new Date(Date.now() - 48 * 3600000).toISOString();
     const older = new Date(Date.now() - 10 * 60000).toISOString();
-    const res = await rest(env, "workshop_payment_attempts?select=reference&status=eq.initialized" +
-      "&created_at=gte." + encodeURIComponent(since) + "&created_at=lte." + encodeURIComponent(older) +
+    const res = await rest(env, "workshop_payment_attempts?select=reference&status=in.(initialized,init_failed)" +
+      "&created_at=lte." + encodeURIComponent(older) +
       "&order=last_verify_at.asc.nullsfirst,created_at.asc&limit=" + max.reconcile);
     const rows = res.ok ? await res.json().catch(function () { return []; }) : [];
     for (const row of Array.isArray(rows) ? rows : []) {

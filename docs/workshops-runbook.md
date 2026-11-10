@@ -16,12 +16,12 @@ Checked read-only against the existing Supabase project, not taken from earlier 
 | Piece | Production state |
 |---|---|
 | Release 1, `20261103120000_workshops.sql` | **Applied, and recorded in `supabase_migrations.schema_migrations`.** All 8 `workshop_*` tables and their functions exist. **Never apply it again.** Its rollback is for removing the whole feature only |
-| Release 2, `20261109120000_workshop_admission_benefits.sql` | **Not applied.** No release 2 column, table or function exists. Until it is applied, every session reads as `link` at its own `price_ghs` |
+| Release 2, `20261109120000_workshop_admission_benefits.sql` | **Applied**, per both independent Codex read-only inspections of 9 November (this table previously said otherwise, which was wrong). Re-check with the queries below |
 | Webinar webhook `workshop-paystack-webhook` | **Deployed** with the Webinars business's **test** key only, and registered as that business's **test** webhook |
-| Release 3, `20261110120000_workshop_calendar_sync.sql` | **Not applied** as of the 9 November inspection |
-| Release 4, `20261111120000_workshop_waitlist.sql` | **Not applied** as of the 9 November inspection |
+| Release 3, `20261110120000_workshop_calendar_sync.sql` | **Not applied** as of both 9 November inspections |
+| Release 4, `20261111120000_workshop_waitlist.sql` | **Not applied** as of both 9 November inspections |
 | Release 5, `20261112120000_workshop_audit_corrections.sql` | **Not applied.** Written after the inspection, for the Codex audit findings. Requires release 4 |
-| Dispatcher | **Scheduled** (9 November): cron job `workshop-dispatch`, every minute, secret in Vault. Points at the **preview** `webinar-e2e-test` until merge |
+| Dispatcher | **Scheduled**: cron job `workshop-dispatch`. At the Codex inspection it called the **preview** `webinar-e2e-test-r2`, not `webinar-e2e-test`. Read the actual target before step 10; never assume it |
 
 **This table is a record of one inspection, not a live reading.** Before any production step, re-read the
 state with the read-only queries below and correct the table. Do not act on it if they disagree.
@@ -62,6 +62,29 @@ select p.proname, pg_get_function_identity_arguments(p.oid) args
 -- Workshop tables without row level security. Expected: no rows.
 select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
  where n.nspname = 'public' and c.relkind = 'r' and c.relname like 'workshop%' and not c.relrowsecurity;
+```
+
+**Unresolved checkouts (human review).** The dispatcher keeps asking Paystack about every unresolved
+checkout, in rotation, with no age limit (Codex audit 2, B), so a payment is never dropped for being
+old. Anything still unresolved a day after it started has almost certainly been abandoned, but check
+it in the Paystack dashboard before treating it so:
+
+```sql
+select a.reference, a.status, a.created_at, a.last_verify_at, r.email_normalized, r.status as registration
+  from public.workshop_payment_attempts a join public.workshop_registrations r on r.id = a.registration_id
+ where a.status in ('initialized', 'init_failed') and a.created_at < now() - interval '24 hours'
+ order by a.created_at;
+```
+
+**Dispatcher health.** Each run answers `{"ok": …, "report": {…, "health": [...]}}`, stored by pg_net in
+`net._http_response`. `health` is empty when nothing needs a person; otherwise it lists:
+`emails_need_retry` (use "Retry email" on the row), `waitlist_email` or `waitlist_not_run`,
+`calendar_sync`, `calendar_not_configured` (an upcoming invitation-only session and no Google
+connection) and `health_check_failed`.
+
+```sql
+select created, status_code, content::jsonb->'report'->'health' as health
+  from net._http_response order by created desc limit 10;
 ```
 
 ## Test and live never mix (release 2, part 3)
@@ -286,7 +309,8 @@ payment, enrollment, cohort or credential object.
    (duplicate and early refunds, checkout holds, waitlist email and Calendar overlap, status-token
    disclosure, email retry). Apply after release 4, the same way. Rollback:
    `rollback/20261112120000_workshop_audit_corrections_down.sql`, which restores every function it
-   replaces verbatim and drops its three columns. Tested up, re-applied and rolled back in
+   replaces verbatim and drops its four columns (settle in-flight work first: see "Rollback of the whole
+   feature", step 4). Tested up, re-applied and rolled back in
    `tests/workshops-migration.test.ts`, and its races on a real PostgreSQL server in
    `tests/workshops-concurrency.test.ts`. It touches no payment, enrollment, cohort or credential object.
 
@@ -423,11 +447,32 @@ This publishes `/workshops` with registration still closed.
 
 ### 10. Repoint the dispatcher to production
 
+The job's target is read from the job, not from this document. An earlier version of this step replaced
+a fixed preview host, while the job actually called a different preview (`webinar-e2e-test-r2`), so it
+would have changed nothing and left live work running against the rehearsal (Codex audit 2, G).
+
 ```sql
+-- 10a. Read-only: what does the job call now?
+select jobid, schedule, active, substring(command from 'https://[^/'']+') as target
+  from cron.job where jobname = 'workshop-dispatch';
+
+-- 10b. Point it at production, whichever preview it calls now.
 select cron.alter_job((select jobid from cron.job where jobname = 'workshop-dispatch'),
-  command := replace((select command from cron.job where jobname = 'workshop-dispatch'),
-    'webinar-e2e-test.bulletproofautomations-training.pages.dev', 'training.bulletproofautomations.com'));
+  command := regexp_replace((select command from cron.job where jobname = 'workshop-dispatch'),
+    'https://[a-z0-9-]+\.bulletproofautomations-training\.pages\.dev', 'https://training.bulletproofautomations.com', 'g'));
+
+-- 10c. Assert. Raises an error, rather than passing quietly, unless the job now calls production only.
+do $$
+declare c text := (select command from cron.job where jobname = 'workshop-dispatch');
+begin
+  if c is null then raise exception 'no workshop-dispatch job'; end if;
+  if c like '%pages.dev%' or c not like '%https://training.bulletproofautomations.com/api/workshops/dispatch%' then
+    raise exception 'workshop-dispatch does not call production: %', substring(c from 'https://[^/'']+');
+  end if;
+end $$;
 ```
+
+Then confirm a `200` from production in `net._http_response` within two minutes (Dispatcher, below).
 
 ### 11. Live keys
 
@@ -670,8 +715,26 @@ does.
 2. Set sessions to `draft` (or delete their files) and merge. The pages disappear.
 3. Keep `workshop-paystack-webhook` deployed while any webinar payment or refund may still arrive.
    The training side never needs rolling back.
-4. Export first, then run the rollback SQL only if the data is no longer needed:
-   `20261109120000_workshop_admission_benefits_down.sql` first, then `20261103120000_workshops_down.sql`.
+4. **Settle before any destructive step.** Rolling back release 5 drops `hold_until`,
+   `mail_claimed_at`, `calendar_claimed_at` and `calendar_managed_emails`: in-flight checkout
+   deadlines, claims and the record of which Google accounts this system added. Before it:
+   - pause the dispatcher: `select cron.alter_job((select jobid from cron.job where jobname = 'workshop-dispatch'), active := false);`
+   - wait until no checkout is open:
+     `select count(*) from public.workshop_payment_attempts where status in ('initialized', 'init_failed') and coalesce(hold_until, created_at + interval '30 minutes') > now();`
+     is `0`, and resolve every row of the "Unresolved checkouts" query (Operational checks);
+   - remove from each Calendar event every account in `calendar_managed_emails` that should not be
+     there, or export that column, because after the rollback nothing records it.
+5. Export the `workshop_*` tables, then run the rollback SQL only if the data is no longer needed,
+   **newest first, one release at a time, skipping any release that was never applied**
+   (check `supabase_migrations.schema_migrations`):
+   1. `20261112120000_workshop_audit_corrections_down.sql` (release 5)
+   2. `20261111120000_workshop_waitlist_down.sql` (release 4)
+   3. `20261110120000_workshop_calendar_sync_down.sql` (release 3)
+   4. `20261109120000_workshop_admission_benefits_down.sql` (release 2)
+   5. `20261103120000_workshops_down.sql` (release 1, the whole feature)
+
+   To undo only the latest release, stop after its step. Unpause the dispatcher only if release 1 is
+   still in place.
 
 ## Meta ads: URL parameters
 

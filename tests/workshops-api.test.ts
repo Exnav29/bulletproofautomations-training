@@ -1625,3 +1625,142 @@ Deno.test('audit recovery: the admin can retry an email the dispatcher gave up o
   // Nothing left to retry: refused, nothing changed.
   assertEquals((await adminPost({ action: 'retry_email', registration_id: id })).status, 409)
 })
+
+// --- Codex audit 2, 9 November 2026 (B and C) -------------------------------------------------
+
+Deno.test('audit 2B: a paid checkout older than 48 hours, or whose initialize failed, is still reconciled', opts, async () => {
+  await reset()
+  const old = (await call(register, '/api/workshops/register', form({ testOptIn: true, email: 'old@example.com' }))).json.reference
+  const lost = (await call(register, '/api/workshops/register', form({ testOptIn: true, email: 'lost@example.com' }))).json.reference
+  // One sat through a long dispatcher outage; the other's initialize answer was lost.
+  await pg.exec(`set session_replication_role = replica`)
+  await pg.query(`update public.workshop_payment_attempts set created_at = now() - interval '72 hours' where reference = $1`, [old])
+  await pg.query(`update public.workshop_payment_attempts set created_at = now() - interval '20 minutes' where reference = $1`, [lost])
+  await pg.exec(`set session_replication_role = origin`)
+  await pg.query(`select public.workshop_attempt_init_failed($1, 'initialize timed out in test')`, [lost])
+  for (const r of [old, lost]) {
+    paystack.paid.set(r, { status: 'success', reference: r, amount: 15000, currency: 'GHS', domain: 'test', paid_at: new Date().toISOString() })
+  }
+  await dispatchNow()
+  const st = async (r: string) => (await rows(`select r.status from public.workshop_registrations r join public.workshop_payment_attempts a
+    on a.registration_id = r.id where a.reference = $1`, [r]))[0].status
+  assertEquals([await st(old), await st(lost)], ['confirmed', 'confirmed'])
+})
+
+Deno.test('audit 2C: an offer email sent but not recorded is sent again with the same, still-working link', opts, async () => {
+  const [a] = await soldOut()
+  await join('w1@example.com')
+  await dispatchNow()
+  await refund(a.json.reference, 35000)
+  mail.length = 0
+  // Hostinger accepts the offer email; recording that it went out fails.
+  DB.fail.add('rpc/workshop_waitlist_mail_done')
+  try { await dispatchNow() } finally { DB.fail.delete('rpc/workshop_waitlist_mail_done') }
+  const first = offerLink('w1@example.com')
+  assert(first, 'the offer email went out')
+  // The claim lapses, and a later run sends the offer again.
+  await pg.exec(`update public.workshop_waitlist set mail_claimed_at = now() - interval '11 minutes' where email_normalized = 'w1@example.com'`)
+  await dispatchNow()
+  const offers = mail.filter((m) => m.to[0] === 'w1@example.com' && /A place is held for you/.test(m.subject))
+  assertEquals(offers.length, 2, 'sent again, because the first was not recorded')
+  assertEquals(offerLink('w1@example.com'), first, 'the same link')
+  const r = await offerReg('w1@example.com', first!)
+  assertEquals(r.json.state, 'checkout', 'the link in the first email still holds the place')
+})
+
+Deno.test('audit 2D: an account Google accepted but the database never recorded is removed after a refund', opts, async () => {
+  await inviteSession()
+  const r = await paidTest('ama@example.com', 'ama.meet@gmail.com')
+  // Google adds the account; recording that it did fails.
+  DB.fail.add('rpc/workshop_calendar_record')
+  try { await dispatchNow() } finally { DB.fail.delete('rpc/workshop_calendar_record') }
+  assertEquals(guests(), ['host@bulletproofautomations.com', 'ama.meet@gmail.com'])
+  assertEquals((await regRow()).invited_email, null, 'not recorded')
+  // The registration is refunded before any later run, and the run's claim lapses.
+  await refund(r.json.reference, 35000)
+  await pg.exec(`update public.workshop_registrations set calendar_claimed_at = now() - interval '11 minutes'`)
+  await dispatchNow()
+  assertEquals(guests(), ['host@bulletproofautomations.com'], 'removed; the host is left alone')
+  assertEquals((await regRow()).calendar_managed_emails, [])
+})
+
+Deno.test('audit 2D: an unrecorded add is confirmed, not duplicated, when the registration still holds it', opts, async () => {
+  await inviteSession()
+  await paidTest('ama@example.com', 'ama.meet@gmail.com')
+  DB.fail.add('rpc/workshop_calendar_record')
+  try { await dispatchNow() } finally { DB.fail.delete('rpc/workshop_calendar_record') }
+  await pg.exec(`update public.workshop_registrations set calendar_claimed_at = now() - interval '11 minutes'`)
+  const patches = gcal.patches.length
+  await dispatchNow()
+  assertEquals(guests(), ['host@bulletproofautomations.com', 'ama.meet@gmail.com'])
+  assertEquals(gcal.patches.length, patches, 'already on the event: nothing sent again')
+  assertEquals((await regRow()).invited_email, 'ama.meet@gmail.com')
+})
+
+Deno.test('audit 2E: a lapsed offer link no longer proves ownership of the registration it made', opts, async () => {
+  const [a] = await soldOut()
+  await join('w1@example.com')
+  await refund(a.json.reference, 35000)
+  await dispatchNow()
+  const link = offerLink('w1@example.com')!
+  await offerReg('w1@example.com', link)
+  // While the offer is open, the link resumes the registration on another device.
+  assertEquals((await offerReg('w1@example.com', link)).json.registration, 'existing')
+  await lapseOffer('w1@example.com')
+  const late = await offerReg('w1@example.com', link)
+  assertEquals([late.status, late.json.code], [409, 'registered'], 'nothing attached, nothing returned')
+  assertEquals(late.json.token, undefined)
+})
+
+// --- Codex audit 2, 9 November 2026 (F) ------------------------------------------------------
+
+Deno.test('audit 2F: an email stranded "sending" after its fifth attempt is reported and can be retried', opts, async () => {
+  await reset({ price_ghs: 0 })
+  await call(register, '/api/workshops/register', form())
+  const id = (await regRow()).id
+  // The fifth send's result was never recorded: 'sending', no attempts left, claim long gone.
+  await pg.query(`update public.workshop_notifications set status = 'sending', attempts = 5,
+    claimed_at = now() - interval '11 minutes' where registration_id = $1`, [id])
+  mail.length = 0
+  const before = await dispatchNow()
+  assertEquals(mail.length, 0, 'the dispatcher never claims it again')
+  assertEquals(before.json.ok, false)
+  assert(before.json.report.health.includes('emails_need_retry'), JSON.stringify(before.json.report.health))
+  assertEquals([(await adminPost({ action: 'retry_email', registration_id: id })).status], [200])
+  const after = await dispatchNow()
+  assertEquals(mail.map((m) => m.subject), ["You're registered: Automate your invoices"])
+  assertEquals(after.json.report.health, [])
+})
+
+Deno.test('audit 2F: an upcoming invitation-only session with no Google connection is reported', opts, async () => {
+  await inviteSession()
+  await paidTest('ama@example.com', 'ama.meet@gmail.com')
+  const out = await dispatchNow({ ...ENV, GOOGLE_CALENDAR_REFRESH_TOKEN: undefined })
+  assertEquals(out.json.ok, false)
+  assert(out.json.report.health.includes('calendar_not_configured'), JSON.stringify(out.json.report.health))
+})
+
+Deno.test('audit 2F: a waitlist email sent but not recorded makes the run unhealthy', opts, async () => {
+  const [a] = await soldOut()
+  await join('w1@example.com')
+  await dispatchNow()
+  await refund(a.json.reference, 35000)
+  DB.fail.add('rpc/workshop_waitlist_mail_done')
+  let out
+  try { out = await dispatchNow() } finally { DB.fail.delete('rpc/workshop_waitlist_mail_done') }
+  assert(out.json.report.health.includes('waitlist_email'), JSON.stringify(out.json.report.health))
+})
+
+Deno.test('audit 2 (item 9): reserved graduate places taken while open places remain: graduates can queue for them', opts, async () => {
+  await reset({ ...RELEASE, capacity: 10, reserved_graduate_seats: 1 }); await seedRecords()
+  const tg = await verifyCert('kwame@example.com', 'BPA-TRN-2026-GRAD01')
+  assertEquals((await reg({ email: 'kwame@example.com', verification: tg, expected_price: 0 })).json.state, 'confirmed')
+  const s = await call(session, '/api/workshops/session?slug=automate-invoices', null)
+  assertEquals([s.json.status, s.json.open, s.json.graduate_places_open, s.json.graduate_waitlist_open], ['open', true, false, true])
+  const ta = await verifyCert('abena@example.com', 'BPA-TRN-2026-GRAD02')
+  assertEquals((await reg({ email: 'abena@example.com', verification: ta, expected_price: 0 })).json.code, 'full', 'the reserved place is used')
+  const joined = await join('abena@example.com', { verification: ta })
+  assertEquals([joined.json.ok, joined.json.kind ?? (await entry('abena@example.com')).seat_kind], [true, 'graduate'])
+  // Capacity and entitlement unchanged: the open places still sell at the standard fee.
+  assertEquals((await reg({ email: 'kofi@example.com', expected_price: 350 })).json.ok, true)
+})

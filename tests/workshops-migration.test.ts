@@ -371,7 +371,7 @@ Deno.test('release 5 (audit corrections): idempotent, closed to anon, ledger unt
     'the training ledger, enrollments and sessions are untouched')
   assert(during.workshop_payment_attempts.endsWith(',hold_until'))
   assert(during.workshop_waitlist.endsWith(',mail_claimed_at'))
-  assert(during.workshop_registrations.endsWith(',calendar_claimed_at'))
+  assert(during.workshop_registrations.endsWith(',calendar_claimed_at,calendar_managed_emails'))
   for (const fn of ['workshop_apply_refund(text,bigint,text,uuid)', 'workshop_apply_pending_refunds(text)', 'workshop_refund_awaiting_note()',
     'workshop_admin_notification_retry(text,uuid)', 'workshop_waitlist_mail_due(boolean,integer)', 'workshop_calendar_plan(boolean,integer)',
     'workshop_register(text,text,text,text,boolean,text,text,jsonb,boolean,numeric,timestamptz)', 'workshop_start_attempt(uuid,text,text)']) {
@@ -382,6 +382,6 @@ Deno.test('release 5 (audit corrections): idempotent, closed to anon, ledger unt
   }
   await pg.exec(DOWN5)
   assertEquals(await fns(), before.f, 'rollback restores every function exactly, including volatility')
-  assertEquals(await snap(), before.c, 'rollback removes exactly the three added columns')
+  assertEquals(await snap(), before.c, 'rollback removes exactly the four added columns')
   await pg.exec(UP5)
 })
