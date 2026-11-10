@@ -44,8 +44,9 @@ export async function onRequestGet({ request, env }) {
   // Reserved Intermediate graduate places are separate from the general ones,
   // so a session can be full for everyone else and still open to a graduate.
   let graduateOpen = false;
+  const reserved = !!(gr && gr.graduate_free === true && Number(gr.reserved_graduate_seats) > 0);
   if (open) {
-    if (gr && gr.graduate_free === true && Number(gr.reserved_graduate_seats) > 0) {
+    if (reserved) {
       const usedG = await rpc(env, "workshop_graduate_seats_in_use", { p_session_id: row.id });
       graduateOpen = usedG.ok && Number(usedG.data) < Number(gr.reserved_graduate_seats);
       if (graduateOpen) {
@@ -69,6 +70,9 @@ export async function onRequestGet({ request, env }) {
     registration_closes_at: closesAt.toISOString(),
     // Sold out but registration still open: the page offers the waitlist instead.
     waitlist_open: open && full,
+    // The reserved graduate places are taken (or graduates are queued for them),
+    // whatever the open places are doing: a graduate joins that queue (Codex audit 2).
+    graduate_waitlist_open: open && reserved && !graduateOpen,
     status: open ? (full ? (graduateOpen ? "graduates_only" : "full") : "open")
       : row.status === "published" ? (started ? "started" : "registration_closed") : row.status
   });

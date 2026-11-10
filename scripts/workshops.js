@@ -6,8 +6,13 @@
  *
  * What it guarantees, so a bad file cannot reach an advert:
  *   - only status "published" files render; drafts never ship;
- *   - a published file with a missing field, a past date or any [BRACKETED]
- *     placeholder fails the build rather than publishing;
+ *   - a published file with a missing field or any [BRACKETED] placeholder
+ *     fails the build rather than publishing;
+ *   - a published session that has already started is left out of the pages,
+ *     with a warning, and does not fail the build. It used to fail it, so the
+ *     day after a workshop ran no part of the site could deploy until someone
+ *     edited its file (Codex audit, 9 November 2026). Its database row still
+ *     refuses registration either way;
  *   - with nothing published, NOTHING is emitted: no /workshops route, no nav
  *     item, no sitemap entry. There is no empty page;
  *   - a series (content/workshops/series/*.json) may also list workshops that
@@ -93,9 +98,10 @@ function validate(s, file, now) {
       if (/\[[A-Z0-9 ,.$:'\-]{2,}\]/.test(text)) problems.push("placeholder left in published file: " + text.slice(0, 60));
       if (/TODO|TBC|TBD|lorem ipsum/i.test(text)) problems.push("unfinished text in published file: " + text.slice(0, 60));
     });
-    if (s.starts_at && Date.parse(s.starts_at) <= (now || Date.now())) problems.push("published session has already started; set it to draft");
   }
   if (problems.length) throw new Error("content/workshops/" + path.basename(file) + ": " + problems.join("; "));
+  // Started: kept as a record (a series may name it) but never rendered as bookable.
+  s.past = s.status === "published" && Date.parse(s.starts_at) <= (now || Date.now());
   return s;
 }
 
@@ -106,7 +112,9 @@ function loadSessions(dir, now) {
     let data;
     try { data = JSON.parse(fs.readFileSync(file, "utf8")); }
     catch (err) { throw new Error("content/workshops/" + f + ": not valid JSON (" + err.message + ")"); }
-    return validate(data, file, now);
+    const s = validate(data, file, now);
+    if (s.past) console.warn("content/workshops/" + f + ": this session has started, so it is not published. Set it to draft or remove it.");
+    return s;
   });
 }
 
@@ -414,7 +422,8 @@ function directoryPage(list) {
 
 /* The series in order. The entry for the page being viewed is not a link. */
 function seriesItems(series, live, current) {
-  const bySlug = new Map((live || []).map(function (s) { return [s.slug, s]; }));
+  // A session that has already run stays in its series as plain text: it has no page to link to.
+  const bySlug = new Map((live || []).concat((live && live.past) || []).map(function (s) { return [s.slug, s]; }));
   return '<ol class="ws-series">' + series.entries.map(function (e) {
     const s = e.session ? bySlug.get(e.session) : null;
     const slug = s ? s.slug : e.slug;
@@ -423,6 +432,7 @@ function seriesItems(series, live, current) {
     const w = s ? when(s) : null;
     const name = e.number === current
       ? '<span aria-current="page">' + esc(title) + '</span>'
+      : s && s.past ? '<span>' + esc(title) + '</span>'
       : '<a href="/workshops/' + esc(slug) + '">' + esc(title) + '</a>';
     return '<li class="ws-ser"><span class="ws-ser__n">' + num(e.number) + '</span>' +
       '<div class="ws-ser__text"><h3>' + name + '</h3><p>' + esc(line) + '</p></div>' +
@@ -511,8 +521,9 @@ function registeredPage() {
    A series only renders alongside at least one published session, so there
    is never a directory with nothing on it that can be booked. */
 function render(sessions, outDir, seriesList) {
-  const live = sessions.filter(function (s) { return s.status === "published"; })
+  const live = sessions.filter(function (s) { return s.status === "published" && !s.past; })
     .sort(function (a, b) { return Date.parse(a.starts_at) - Date.parse(b.starts_at); });
+  live.past = sessions.filter(function (s) { return s.past; });
   if (!live.length) return [];
   const series = (seriesList || [])[0] || null;
   const base = path.join(outDir, "workshops");

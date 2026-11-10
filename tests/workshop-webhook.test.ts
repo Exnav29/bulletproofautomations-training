@@ -28,7 +28,8 @@ const pg = new PGlite()
 // release 4's payment-confirmation guard (workshop_apply_charge).
 for (const f of ['./fixtures/payment-ledger.sql', './fixtures/supabase-stubs.sql', './fixtures/graduate-records.sql',
   '../supabase/migrations/20261103120000_workshops.sql', '../supabase/migrations/20261109120000_workshop_admission_benefits.sql',
-  '../supabase/migrations/20261110120000_workshop_calendar_sync.sql', '../supabase/migrations/20261111120000_workshop_waitlist.sql']) {
+  '../supabase/migrations/20261110120000_workshop_calendar_sync.sql', '../supabase/migrations/20261111120000_workshop_waitlist.sql',
+  '../supabase/migrations/20261112120000_workshop_audit_corrections.sql']) {
   await pg.exec(await Deno.readTextFile(new URL(f, import.meta.url)))
 }
 
@@ -64,6 +65,8 @@ function where(params: URLSearchParams, first: number): [string, unknown[]] {
 }
 
 let failRpc = false
+// Latency before an RPC runs, in ms: the window in which two deliveries of one event overlap.
+let rpcDelayMs = 0
 let failAttemptLookup = false
 
 Deno.serve({ port: DB_PORT, onListen() {} }, async (req) => {
@@ -75,6 +78,7 @@ Deno.serve({ port: DB_PORT, onListen() {} }, async (req) => {
       const name = ident(path.slice(4))
       if (!RPCS.has(name)) return Response.json({ code: 'PGRST202', message: 'no such function' }, { status: 404 })
       if (failRpc) return new Response('db down', { status: 500 })
+      if (rpcDelayMs) await new Promise((r) => setTimeout(r, rpcDelayMs))
       const args = await req.json()
       const keys = Object.keys(args).map(ident)
       const sql = `select public.${name}(${keys.map((k, i) => `${k} => $${i + 1}`).join(', ')}) as j`
@@ -581,5 +585,71 @@ Deno.test({ name: 'a referral-priced registration (GHS 300) is confirmed only by
   const g = await reg(b)
   assertEquals([g.status, g.referral_code, Number(g.commission_ghs)], ['confirmed', 'GRAD50', 50])
   assertEquals((await select(`select public.workshop_commission_payable(r) p from public.workshop_registrations r where id = $1`, [b]))[0].p, true)
+  await assertCohortUntouched(before)
+} })
+
+// --- Codex audit, 9 November 2026 (findings 1 and 2) ----------------------------------------
+// The database-level races are also run on a real PostgreSQL server, with two connections,
+// in tests/workshops-concurrency.test.ts. These drive the deployed handler itself.
+
+Deno.test({ name: 'audit 1: the same refund delivered twice at once is reversed once', ...opts, fn: async () => {
+  await reset()
+  const before = await cohortSnapshot()
+  const id = await register()
+  const reference = await start(id)
+  await deliver(charge(reference))
+  // Both deliveries log the event and read it back before either has applied it.
+  rpcDelayMs = 100
+  let a: Row, b: Row
+  try { [a, b] = await Promise.all([deliver(refund(reference, 5000, 7101)), deliver(refund(reference, 5000, 7101))]) } finally { rpcDelayMs = 0 }
+  assertEquals([a.status, b.status], [200, 200])
+  assertEquals(Number((await attempt(reference)).refunded_minor), 5000, 'reversed once, not twice')
+  const g = await reg(id)
+  assertEquals([g.status, g.payment_status, Number(g.amount_paid_minor)], ['confirmed', 'partially_refunded', 10000])
+  await assertCohortUntouched(before)
+} })
+
+Deno.test({ name: 'audit 2: a refund delivered before its charge is applied when the charge arrives', ...opts, fn: async () => {
+  await reset()
+  const before = await cohortSnapshot()
+  const id = await register()
+  const reference = await start(id)
+  const early = await deliver(refund(reference, 15000, 7102))
+  assertEquals([early.status, early.outcome, early.applied], [200, 'awaiting_charge', false])
+  assertEquals((await lastEvent()).matched, false, 'held for the charge, not marked done')
+  await deliver(charge(reference))
+  const g = await reg(id)
+  assertEquals([g.status, g.payment_status, Number(g.amount_paid_minor)], ['refunded', 'refunded', 0],
+    'money returned before the charge was seen never holds a place')
+  assertEquals(await count(`select 1 from public.workshop_payment_events where event = 'refund.processed' and matched`), 1)
+  assertEquals(await count(`select 1 from public.workshop_meta_events where event_name = 'Purchase'`), 0)
+  // Paystack retrying the early delivery changes nothing.
+  assertEquals((await deliver(refund(reference, 15000, 7102))).duplicate, true)
+  assertEquals(Number((await attempt(reference)).refunded_minor), 15000)
+  await assertCohortUntouched(before)
+} })
+
+// --- Codex audit 2, 9 November 2026 (A) ------------------------------------------------------
+
+Deno.test({ name: 'audit 2A: an unsigned request first cannot stop a signed early refund from being applied', ...opts, fn: async () => {
+  await reset()
+  const before = await cohortSnapshot()
+  const id = await register()
+  const reference = await start(id)
+  // Somebody without the key gets this refund's identity into the ledger first, with a fake amount.
+  const forged = await deliver(refund(reference, 100, 7201), 'sk_live_not-the-key')
+  assertEquals([forged.status, forged.signature_valid], [200, false])
+  // Paystack's genuine delivery of the same refund, before the charge.
+  const early = await deliver(refund(reference, 15000, 7201))
+  assertEquals([early.status, early.outcome], [200, 'awaiting_charge'])
+  const ev = (await select(`select * from public.workshop_payment_events where event = 'refund.processed'`))[0]
+  assertEquals([ev.signature_valid, Number(ev.amount_minor)], [true, 15000], 'the verified delivery replaced the forged contents')
+  await deliver(charge(reference))
+  assertEquals(Number((await attempt(reference)).refunded_minor), 15000, 'the genuine amount, not the forged one')
+  const g = await reg(id)
+  assertEquals([g.status, g.payment_status, Number(g.amount_paid_minor)], ['refunded', 'refunded', 0])
+  // A later unsigned request cannot undo it.
+  await deliver(refund(reference, 1, 7201), 'sk_live_not-the-key')
+  assertEquals((await select(`select signature_valid from public.workshop_payment_events where event = 'refund.processed'`))[0].signature_valid, true)
   await assertCohortUntouched(before)
 } })

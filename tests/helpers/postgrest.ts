@@ -35,7 +35,9 @@ function where(params: URLSearchParams, first: number): [string, unknown[]] {
       const sqlOp = { eq: '=', neq: '<>', gte: '>=', lte: '<=', gt: '>', lt: '<' }[op]
       if (!sqlOp) throw new Error(`stand-in: unsupported operator ${op}`)
       // Compare timestamps as timestamps, everything else as text.
-      const cast = ['gte', 'lte', 'gt', 'lt'].includes(op) ? `${col} ${sqlOp} $${first + values.length}::timestamptz`
+      // Numbers as numbers (attempts=gte.5), anything else as a timestamp.
+      const cast = ['gte', 'lte', 'gt', 'lt'].includes(op)
+        ? `${col} ${sqlOp} $${first + values.length}::${/^-?\d+(\.\d+)?$/.test(operand) ? 'numeric' : 'timestamptz'}`
         : `${col}::text ${sqlOp} $${first + values.length}`
       parts.push(cast)
       values.push(operand)
@@ -97,8 +99,13 @@ export function serveDatabase(pg: PGlite, port: number): StandIn {
       }
       const cols = (params.get('select') ?? '*').split(',').map((c) => (c === '*' ? c : ident(c))).join(', ')
       const [w, wv] = where(params, 1)
+      // PostgREST order syntax: col[.asc|.desc][.nullsfirst|.nullslast], comma-separated.
       const order = params.get('order')
-      const by = order ? ` order by ${ident(order.split('.')[0])} ${order.endsWith('.desc') ? 'desc' : 'asc'}` : ''
+      const by = order ? ' order by ' + order.split(',').map((term) => {
+        const [col, ...mods] = term.split('.')
+        return `${ident(col)} ${mods.includes('desc') ? 'desc' : 'asc'}` +
+          (mods.includes('nullsfirst') ? ' nulls first' : mods.includes('nullslast') ? ' nulls last' : '')
+      }).join(', ') : ''
       const limit = params.get('limit') ? ` limit ${Number(params.get('limit'))}` : ''
       const rows = (await pg.query<{ j: Row }>(`select row_to_json(x) as j from (select ${cols} from public.${table}${w}${by}${limit}) x`, wv)).rows
       return Response.json(rows.map((r) => r.j))

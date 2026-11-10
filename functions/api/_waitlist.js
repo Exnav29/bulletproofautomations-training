@@ -5,7 +5,8 @@
  * waitlist closes at the seven-day cutoff. This module only sends the emails
  * those decisions owe (workshop_waitlist_mail_due), with the site's Hostinger
  * sender, and records each one on the waitlist row. An offer email carries a
- * fresh single-use link; only its SHA-256 is stored, and a resend replaces it.
+ * link derived from that offer; only its SHA-256 is stored, and a resend of the
+ * same offer carries the same link.
  *
  * Not routed (leading underscore). */
 
@@ -13,17 +14,25 @@ import { rpc } from "./_shared.js";
 import { db } from "./_installments.js";
 import { sendMail, esc, MAILBOX } from "./_mail.js";
 
-function token() {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  return btoa(String.fromCharCode.apply(null, Array.from(bytes))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+// One link per offer (Codex audit 2, C). The token is derived from the offer itself, so
+// if an email was accepted but its acknowledgement was lost and the row is sent again,
+// the second email carries the same link and the first one still works. A new offer
+// (re-offered after expiry) has a new offer_expires_at, so a new link.
+async function offerToken(env, row) {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(env.SUPABASE_SERVICE_ROLE_KEY || ""),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode("workshop-waitlist-offer:" + row.id + ":" + row.offer_expires_at));
+  return btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(mac)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 async function sha256Hex(value) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(digest)).map(function (b) { return b.toString(16).padStart(2, "0"); }).join("");
 }
-// A void function answers 204, which the shared rpc() would try to parse.
+// A void function answers 204, which the shared rpc() would try to parse. Resolves to
+// whether the write succeeded.
 function rpcVoid(env, name, args) {
-  return db(env, "rpc/" + name, { method: "POST", body: JSON.stringify(args) }).then(function (r) { return r.text(); }).catch(function () {});
+  return db(env, "rpc/" + name, { method: "POST", body: JSON.stringify(args) })
+    .then(function (r) { return r.text().then(function () { return r.ok; }); }).catch(function () { return false; });
 }
 
 function accra(iso, withDay) {
@@ -82,7 +91,7 @@ export async function processWaitlist(env, origin, test) {
   for (const row of due.ok && Array.isArray(due.data) ? due.data : []) {
     let links = null;
     if (row.kind === "offer") {
-      const t = token();
+      const t = await offerToken(env, row);
       const set = await rpc(env, "workshop_waitlist_set_token", { p_id: row.id, p_token_hash: await sha256Hex(t) });
       if (!set.ok || set.data !== true) continue;
       const base = origin + "/workshops/" + encodeURIComponent(row.slug) + "/?offer=" + encodeURIComponent(t);
@@ -90,8 +99,10 @@ export async function processWaitlist(env, origin, test) {
     }
     const m = message(row.kind, row, links);
     const sent = await sendMail(env, { to: row.email, subject: m.subject, text: m.text, html: m.html });
-    await rpcVoid(env, "workshop_waitlist_mail_done", { p_id: row.id, p_kind: row.kind, p_ok: sent.ok, p_error: sent.ok ? null : sent.code });
+    const acked = await rpcVoid(env, "workshop_waitlist_mail_done", { p_id: row.id, p_kind: row.kind, p_ok: sent.ok, p_error: sent.ok ? null : sent.code });
     if (sent.ok) report.sent += 1; else report.failed += 1;
+    // Sent but not recorded: it is sent again after the 10-minute claim (same link).
+    if (!acked) report.unrecorded = (report.unrecorded || 0) + 1;
   }
   return report;
 }

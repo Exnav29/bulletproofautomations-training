@@ -9,20 +9,88 @@ Live checkout is off, and no workshop registration is open._
 
 **The production training webhook (v9) is not changed and is not redeployed at any step.**
 
-## Where it stands (9 November 2026)
+## Where it stands (10 November 2026)
 
-Checked read-only against the existing Supabase project, not taken from earlier notes.
+Read on 10 November, read-only, against project `ikkldbhgjleelviwttir` with
+`supabase/checks/20261112120000_releases_3_5_check.sql`, the queries below, `supabase functions list`,
+`supabase backups list` and `wrangler pages secret list` (names only, never values).
 
 | Piece | Production state |
 |---|---|
 | Release 1, `20261103120000_workshops.sql` | **Applied, and recorded in `supabase_migrations.schema_migrations`.** All 8 `workshop_*` tables and their functions exist. **Never apply it again.** Its rollback is for removing the whole feature only |
-| Release 2, `20261109120000_workshop_admission_benefits.sql` | **Not applied.** No release 2 column, table or function exists. Until it is applied, every session reads as `link` at its own `price_ghs` |
-| Webinar webhook `workshop-paystack-webhook` | **Deployed** with the Webinars business's **test** key only, and registered as that business's **test** webhook |
-| Dispatcher | **Scheduled**: cron job `workshop-dispatch`, every minute, token in Vault. Points at the **preview** `webinar-e2e-test` until merge |
+| Release 2, `20261109120000_workshop_admission_benefits.sql` | **Applied and recorded** (verified 10 November; an earlier version of this table wrongly said otherwise) |
+| Webinar webhook `workshop-paystack-webhook` | **Deployed, version 2**, with the Webinars business's **test** key only (`WORKSHOP_PAYSTACK_TEST_SECRET_KEY`; no live key). Its source is byte-identical to the code before Codex audit 2's fix A: **redeploy from PR #65 after release 5** |
+| Cohort webhook `paystack-webhook` | Deployed version 10, whose source is byte-identical to the protected snapshot `supabase/deployed/paystack-webhook-v9` (the version number counts deploys). Untouched by this work |
+| Releases 3, 4 and 5 | **Not applied** (verified 10 November). Each release's objects are absent, matching the history |
+| Dispatcher | Cron job `workshop-dispatch`, active, every minute, secret read from Vault (`workshop_dispatch_token`), pg_net timeout **10 seconds**. Calls the **preview** `webinar-e2e-test-r2`, which runs code from before releases 3 to 5, and answers `200`. Read the actual target before changing it; never assume it |
+| Backups | **None held by Supabase**: point-in-time recovery off, backup list empty. Take the read-only snapshot in "Launch integration" before each release |
+| Google Calendar | **Not connected**: no `GOOGLE_CALENDAR_*` variable on Pages, Production or Preview |
+| Webinar Paystack key on Pages | `WORKSHOP_PAYSTACK_SECRET_KEY` on **Preview only**. Production has none, so production takes no webinar money. `WORKSHOP_PAID_CHECKOUT` is a plain variable and could not be read; check it in the dashboard |
+| The live site (`main`) | Contains no webinar code at all, so applying releases 3 to 5 cannot change it |
+
+**This table is a record of one inspection, not a live reading.** Before any production step, re-read the
+state with the read-only queries below and correct the table. Do not act on it if they disagree.
+
+```sql
+-- Which workshop releases are recorded (1 is expected; 2 to 5 are not, until applied).
+select version, name from supabase_migrations.schema_migrations where version >= '20261103120000' order by version;
+-- The dispatcher: schedule, target and how it authenticates. The command must read the
+-- secret from Vault and must never contain it; if it does, rotate the secret.
+select jobname, schedule, active, command from cron.job where jobname = 'workshop-dispatch';
+select name from vault.secrets where name = 'workshop_dispatch_token';
+```
 | Test session `test-webinar-checkout` | `draft`. 3 confirmed test registrations and 4 test-mode attempts (`BPA-WTEST-`). No live attempt exists anywhere |
-| Workshop 01, `what-to-charge-for-automation` | `draft`, GHS 350, 25 places, joining details stored on the row (never in this repository, which is public), no registrations |
+| Workshop 01, `what-to-charge-for-automation` | `draft`, GHS 350, 25 places, no registrations. **Still `link` admission, no Calendar event, no reserved graduate places and no discounts**, while its page advertises GHS 300 / GHS 280 / free graduate places: step 6 must run before it opens |
 | Certificate records release 2 reads | PR #54's entitlement view exists: **2** active graduate entitlements and **10** valid Foundations certificates |
 | Webinar and workshop refund terms | **Owner Approved, 9 November 2026** (non-refundable; transfers 72 hours or more ahead). No external legal review: not a launch gate, by owner decision. Section 23 of the existing `refund-policy/index.html` (`#workshops`), version `2026-11-09` = `TERMS_VERSION`. Publishes when the webinar release is merged |
+
+## Operational checks before launch (Codex audit, 9 November 2026)
+
+What the repository can prove is proved by tests. What lives in a dashboard or in the production
+database has **not** been checked: nothing here was read from production for the audit corrections.
+Each item below needs the owner, and the queries are read-only.
+
+| Area | Proved in the repository | Still to verify or set up in production |
+|---|---|---|
+| **Abuse protection on public endpoints** | Honeypot on registration; amounts, prices and places decided server-side; certificate codes single-use; status needs a token (and, from release 5, re-registering an existing email needs that browser's token or its offer link) | No Turnstile on `/api/workshops/register`, `/waitlist`, `/benefit`, `/quote` or `/status`. `/benefit` and waitlist joining **send email**, so they can be used to mail-bomb an address. Confirm the Cloudflare rate-limiting rule recorded in `docs/build-status.md` (on `/api/*`, dashboard state, not in version control) exists, covers `/api/workshops/*`, and is tight enough for `/benefit` and `/waitlist`. Bot Fight Mode likewise |
+| **Google Calendar** | Only the account a registration added is ever removed; overlapping runs are serialised per registration (release 5); test and live never mix | Which Google account the refresh token belongs to, and that its scope is calendar events only. **Guest privacy is a manual setting on each event**: "guests can see the guest list" and "guests can invite others" must be off, and Meet access restricted to invited guests. The code does not set or check them. Run the access test above on every new event |
+| **Hostinger email** | Failed sends retry 5 times; from release 5 the admin can retry an exhausted email from its row ("Retry email"), as already for waitlist emails; a message no longer true is never sent | The code knows only that Hostinger **accepted** a message, not that it was delivered. Bounces and spam-foldering are invisible here: check the mailbox's bounce reports after the rehearsal |
+| **Supabase RLS and privileged functions** | Every new or changed function in release 5 is executable by `service_role` only (`tests/workshops-migration.test.ts`); tables keep RLS with the admin read policy | Run the query below on production. It must return no rows |
+| **Migrations and dispatcher** | Release 5 is up, re-applied and rolled back exactly in tests; its races run on a real PostgreSQL server in CI | The state table at the top is from one inspection. Re-run its queries; follow "Dispatcher" below for the schedule (every minute, secret in Vault), not the comment in release 1 |
+
+```sql
+-- Privileged workshop functions anyone but service_role can call. Expected: no rows.
+select p.proname, pg_get_function_identity_arguments(p.oid) args
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+ where n.nspname = 'public' and p.proname like 'workshop%' and p.prosecdef
+   and (has_function_privilege('anon', p.oid, 'execute') or has_function_privilege('authenticated', p.oid, 'execute'));
+-- Workshop tables without row level security. Expected: no rows.
+select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
+ where n.nspname = 'public' and c.relkind = 'r' and c.relname like 'workshop%' and not c.relrowsecurity;
+```
+
+**Unresolved checkouts (human review).** The dispatcher keeps asking Paystack about every unresolved
+checkout, in rotation, with no age limit (Codex audit 2, B), so a payment is never dropped for being
+old. Anything still unresolved a day after it started has almost certainly been abandoned, but check
+it in the Paystack dashboard before treating it so:
+
+```sql
+select a.reference, a.status, a.created_at, a.last_verify_at, r.email_normalized, r.status as registration
+  from public.workshop_payment_attempts a join public.workshop_registrations r on r.id = a.registration_id
+ where a.status in ('initialized', 'init_failed') and a.created_at < now() - interval '24 hours'
+ order by a.created_at;
+```
+
+**Dispatcher health.** Each run answers `{"ok": …, "report": {…, "health": [...]}}`, stored by pg_net in
+`net._http_response`. `health` is empty when nothing needs a person; otherwise it lists:
+`emails_need_retry` (use "Retry email" on the row), `waitlist_email` or `waitlist_not_run`,
+`calendar_sync`, `calendar_not_configured` (an upcoming invitation-only session and no Google
+connection) and `health_check_failed`.
+
+```sql
+select created, status_code, content::jsonb->'report'->'health' as health
+  from net._http_response order by created desc limit 10;
+```
 
 ## Test and live never mix (release 2, part 3)
 
@@ -242,6 +310,127 @@ and snapshot discipline as steps 1 to 4 below:
 Both are tested up, re-applied and rolled back in `tests/workshops-migration.test.ts`. Neither touches a
 payment, enrollment, cohort or credential object.
 
+3. `20261112120000_workshop_audit_corrections.sql`: the corrections from the Codex audit of 9 November
+   (duplicate and early refunds, checkout holds, waitlist email and Calendar overlap, status-token
+   disclosure, email retry). Apply after release 4, the same way. Rollback:
+   `rollback/20261112120000_workshop_audit_corrections_down.sql`, which restores every function it
+   replaces verbatim and drops its four columns (settle in-flight work first: see "Rollback of the whole
+   feature", step 4). Tested up, re-applied and rolled back in
+   `tests/workshops-migration.test.ts`, and its races on a real PostgreSQL server in
+   `tests/workshops-concurrency.test.ts`. It touches no payment, enrollment, cohort or credential object.
+
+## Launch integration for workshop 01 (prepared 10 November 2026)
+
+The order for getting from today's state (top of this file) to open registration. **Every gate
+below changes production and needs the owner's explicit approval. Nothing here has been run.** The
+pricing, certificate and referral paths were rehearsed before and are covered by CI, and the
+Test 1 confirmation email was received in Gmail: none of that is repeated.
+
+### Gate 1. Apply releases 3, 4 and 5 (database)
+
+`main` has no webinar code, so this cannot change the live site. Run these from the repository root,
+in the CLI linked to `ikkldbhgjleelviwttir`. For **each** release, in order 3, 4, 5:
+
+1. **Snapshot** (read-only). Keep the file privately; it holds registrants' emails:
+   `supabase db query --linked -f supabase/checks/workshop_snapshot.sql --output-format json > snapshot-before-<n>.json`
+2. **Check** (read-only), and save it:
+   `supabase db query --linked -f supabase/checks/20261112120000_releases_3_5_check.sql --output-format json`
+   Before release 3 it must show `release_3/4/5` false and every `ok_` true. **Stop if any `ok_` is false.**
+3. **Apply** in the SQL editor, one transaction recorded once (never `supabase db push`, see release 2):
+   ```sql
+   begin;
+   -- … the whole of the release file …
+   insert into supabase_migrations.schema_migrations (version, name) values ('<version>', '<name>');
+   commit;
+   ```
+   | Release | File | version | name |
+   |---|---|---|---|
+   | 3 | `20261110120000_workshop_calendar_sync.sql` | `20261110120000` | `workshop_calendar_sync` |
+   | 4 | `20261111120000_workshop_waitlist.sql` | `20261111120000` | `workshop_waitlist` |
+   | 5 | `20261112120000_workshop_audit_corrections.sql` | `20261112120000` | `workshop_audit_corrections` |
+4. **Check again.** That release's flag is true, every `ok_` is true, and `snapshot` **equals** step 2's.
+
+**Rollback** of one release, newest first: its file in `supabase/migrations/rollback/`, then
+`delete from supabase_migrations.schema_migrations where version = '<version>';`, then the check
+(the flag false, `snapshot` equal). Before rolling back release 5 with anything in flight, see
+"Rollback of the whole feature", step 4.
+
+### Gate 2. Redeploy the webinar webhook (fix A)
+
+After release 5, from the PR #65 branch:
+`supabase functions deploy workshop-paystack-webhook --project-ref ikkldbhgjleelviwttir --no-verify-jwt`.
+Confirm `supabase functions list` shows version 3. Its secrets are unchanged (test key only).
+**Rollback:** redeploy the previous source, which is byte-identical to `78a707b`'s
+`supabase/functions/workshop-paystack-webhook/index.ts`.
+
+### Gate 3. Connect Google Calendar and set guest privacy (owner)
+
+"Connecting Google Calendar (owner, once)" above, setting the three variables on **Preview** first
+(the rehearsal) and **Production** before launch, then redeploying. On **every** workshop event,
+including the rehearsal event:
+
+- Event details → Guest permissions: **untick** "Modify event", "Invite others" and "See guest list".
+- Google Meet → Host controls (the gear on the event's Meet link) → Meeting access: **Restricted**
+  (only invited guests join without asking), Host management **on**.
+- The event belongs to the Google account whose refresh token is stored (or to `GOOGLE_CALENDAR_ID`).
+
+Then the "Access test before taking money" above, on the rehearsal event.
+
+### Gate 4. Rehearsal preview and dispatcher
+
+1. Push the prepared branch `webinar-e2e-test-r3`. It is PR #65's code plus the rehearsal page,
+   dated **28 November 2026, 11:30 GMT**, so its seven-day cutoff is **21 November, 11:30 GMT**: the
+   rehearsal must be finished by then. Never merge it. Preview:
+   `https://webinar-e2e-test-r3.bulletproofautomations-training.pages.dev`.
+2. Move the rehearsal session to that date, with one free place (one confirmed test registration
+   already holds the other):
+   ```sql
+   update public.workshop_sessions set starts_at = '2026-11-28 11:30:00+00', capacity = 2
+    where slug = 'rehearsal-what-to-charge' and is_test;
+   ```
+3. Point the dispatcher at the rehearsal preview, raise its timeout to 30 seconds, and assert:
+   ```sql
+   select cron.alter_job((select jobid from cron.job where jobname = 'workshop-dispatch'),
+     command := regexp_replace(replace((select command from cron.job where jobname = 'workshop-dispatch'),
+       'https://webinar-e2e-test-r2.bulletproofautomations-training.pages.dev', 'https://webinar-e2e-test-r3.bulletproofautomations-training.pages.dev'),
+       'timeout_milliseconds\s*:=\s*\d+', 'timeout_milliseconds := 30000'));
+   do $$
+   declare c text := (select command from cron.job where jobname = 'workshop-dispatch');
+   begin
+     if c not like '%https://webinar-e2e-test-r3.bulletproofautomations-training.pages.dev/api/workshops/dispatch%'
+        or c not like '%timeout_milliseconds := 30000%' then
+       raise exception 'dispatcher not pointed at r3: %', substring(c from 'https://[^/'']+');
+     end if;
+   end $$;
+   ```
+   Within two minutes `net._http_response` shows `200`, and its body has `"health":[]`.
+   Once the Calendar connection is set, the existing confirmed rehearsal registration is invited
+   automatically on the first run: that is expected.
+
+### Gate 5. The focused rehearsal (test mode, about 30 minutes)
+
+Two people with separate inboxes and Google accounts, **A** and **B**, on
+`/workshops/rehearsal-what-to-charge/?paystack=test`. Paystack test mobile money for one, test card
+for the other. Record each result (time and screenshot) in PR #65.
+
+| # | Action | Pass when |
+|---|---|---|
+| 1 | A registers with Google account A, pays GHS 350 | Confirmation page says confirmed. **Confirmation email** in A's inbox within 2 minutes. Within 2 minutes A appears on the rehearsal event and Google sends A the **invitation**. A's invitation shows no other guests |
+| 2 | B opens the page and sends the form (no certificate) | The banner says the open places are taken (graduate places are still reserved on this session), and sending the form joins the waitlist. **Waitlist email** to B within 2 minutes: number 1 in the queue, nothing charged |
+| 3 | Refund A in full in the Paystack **test** dashboard | Within minutes of Paystack's `refund.processed`: A shows Refunded in `/admin/workshops/`; A is **removed** from the event and Google sends A a cancellation; B receives the **offer email** (held 24 hours) |
+| 4 | B opens the offer link and pays | Details filled in; confirmed; **confirmation email** to B; B **added** to the event with an invitation |
+| 5 | Checks | Event guests are the host, the earlier rehearsal registration and B only. `net._http_response` bodies show `"health":[]`. `/admin/workshops/` shows no "Email not delivered" |
+
+If Paystack's test environment does not send `refund.processed` within 15 minutes, record it: the
+refund path is then proved by tests only, and the first live refund must be watched.
+
+### Gate 6. To open registration (each its own approval)
+
+Runbook steps 6 to 12, in order: configure workshop 01's row and event (step 6, plus Gate 3's
+privacy settings on its event), Meet checks (7), merge (9), repoint the dispatcher to production
+(10, which asserts), live keys (11), open (12). Registration for 12 December closes **Saturday
+5 December, 11:30 GMT**.
+
 ## Release 2 deployment checklist
 
 One pass, in this order. **Each numbered step needs the owner's approval.** Steps 1 to 4 change
@@ -375,11 +564,32 @@ This publishes `/workshops` with registration still closed.
 
 ### 10. Repoint the dispatcher to production
 
+The job's target is read from the job, not from this document. An earlier version of this step replaced
+a fixed preview host, while the job actually called a different preview (`webinar-e2e-test-r2`), so it
+would have changed nothing and left live work running against the rehearsal (Codex audit 2, G).
+
 ```sql
+-- 10a. Read-only: what does the job call now?
+select jobid, schedule, active, substring(command from 'https://[^/'']+') as target
+  from cron.job where jobname = 'workshop-dispatch';
+
+-- 10b. Point it at production, whichever preview it calls now.
 select cron.alter_job((select jobid from cron.job where jobname = 'workshop-dispatch'),
-  command := replace((select command from cron.job where jobname = 'workshop-dispatch'),
-    'webinar-e2e-test.bulletproofautomations-training.pages.dev', 'training.bulletproofautomations.com'));
+  command := regexp_replace((select command from cron.job where jobname = 'workshop-dispatch'),
+    'https://[a-z0-9-]+\.bulletproofautomations-training\.pages\.dev', 'https://training.bulletproofautomations.com', 'g'));
+
+-- 10c. Assert. Raises an error, rather than passing quietly, unless the job now calls production only.
+do $$
+declare c text := (select command from cron.job where jobname = 'workshop-dispatch');
+begin
+  if c is null then raise exception 'no workshop-dispatch job'; end if;
+  if c like '%pages.dev%' or c not like '%https://training.bulletproofautomations.com/api/workshops/dispatch%' then
+    raise exception 'workshop-dispatch does not call production: %', substring(c from 'https://[^/'']+');
+  end if;
+end $$;
 ```
+
+Then confirm a `200` from production in `net._http_response` within two minutes (Dispatcher, below).
 
 ### 11. Live keys
 
@@ -559,13 +769,43 @@ webhook is unaffected either way.
 | `META_PIXEL_ID`, `META_CAPI_ACCESS_TOKEN`, `META_TEST_EVENT_CODE` | Optional ad measurement |
 | `WORKSHOP_PAYSTACK_API_BASE`, `MAIL_API_BASE`, `WORKSHOP_CONTENT_DIR` | **Local testing only.** Never set them on Cloudflare (the code ignores the first two outside test or localhost, and the last on Cloudflare) |
 
-### Dispatcher (pg_cron + pg_net, scheduled)
+### Dispatcher (pg_cron + pg_net, every minute, secret in Vault)
+
+**Do not use the schedule in the comment at the end of release 1.** It runs every five minutes and
+writes the secret into `cron.job`, where anyone who can read that table can read it. Release 1 is
+applied history and is not edited, so the correct steps are here. Every step needs the owner's approval.
+
+It runs **every minute**: waitlist offers, their expiry and the Calendar sync are timed on that basis.
+Overlapping runs are safe from release 5 on: each one claims the emails, waitlist rows and Calendar
+registrations it works on.
+
+Check `cron.job` first (the query above). If `workshop-dispatch` already exists, change it with
+`cron.alter_job` rather than scheduling a second job.
 
 ```sql
-insert into public.workshop_dispatch_config (secret_hash) values (encode(extensions.digest('<secret>', 'sha256'), 'hex'));
+-- 1. The secret, once, in Vault. Generate a long random value; it is never written anywhere else.
+select vault.create_secret('<secret>', 'workshop_dispatch_token');
+
+-- 2. Its SHA-256, which /api/workshops/dispatch compares against. Read from Vault, not pasted again.
+insert into public.workshop_dispatch_config (secret_hash)
+select encode(extensions.digest(decrypted_secret, 'sha256'), 'hex') from vault.decrypted_secrets where name = 'workshop_dispatch_token'
+on conflict (id) do update set secret_hash = excluded.secret_hash;
+
+-- 3. The schedule. <host> is the preview host during a rehearsal, and
+--    training.bulletproofautomations.com only after the merge (step 10 below).
+select cron.schedule('workshop-dispatch', '* * * * *', $cron$
+  select net.http_post(
+    url := 'https://<host>/api/workshops/dispatch',
+    headers := jsonb_build_object('Content-Type', 'application/json',
+      'x-workshop-dispatch', (select decrypted_secret from vault.decrypted_secrets where name = 'workshop_dispatch_token')),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 30000)
+$cron$);
 ```
 
-Then create the schedule shown at the end of the migration (check `cron.job` first).
+Verify: `select status_code, timed_out from net._http_response order by created desc limit 5` shows
+`200` within a minute or two. `403` means the hash and the Vault secret differ. pg_net's default
+timeout is 5 seconds, which a run that reconciles several checkouts can exceed; hence the 30 seconds.
 
 ## Publish a later session (workshops 02 to 10)
 
@@ -592,8 +832,26 @@ does.
 2. Set sessions to `draft` (or delete their files) and merge. The pages disappear.
 3. Keep `workshop-paystack-webhook` deployed while any webinar payment or refund may still arrive.
    The training side never needs rolling back.
-4. Export first, then run the rollback SQL only if the data is no longer needed:
-   `20261109120000_workshop_admission_benefits_down.sql` first, then `20261103120000_workshops_down.sql`.
+4. **Settle before any destructive step.** Rolling back release 5 drops `hold_until`,
+   `mail_claimed_at`, `calendar_claimed_at` and `calendar_managed_emails`: in-flight checkout
+   deadlines, claims and the record of which Google accounts this system added. Before it:
+   - pause the dispatcher: `select cron.alter_job((select jobid from cron.job where jobname = 'workshop-dispatch'), active := false);`
+   - wait until no checkout is open:
+     `select count(*) from public.workshop_payment_attempts where status in ('initialized', 'init_failed') and coalesce(hold_until, created_at + interval '30 minutes') > now();`
+     is `0`, and resolve every row of the "Unresolved checkouts" query (Operational checks);
+   - remove from each Calendar event every account in `calendar_managed_emails` that should not be
+     there, or export that column, because after the rollback nothing records it.
+5. Export the `workshop_*` tables, then run the rollback SQL only if the data is no longer needed,
+   **newest first, one release at a time, skipping any release that was never applied**
+   (check `supabase_migrations.schema_migrations`):
+   1. `20261112120000_workshop_audit_corrections_down.sql` (release 5)
+   2. `20261111120000_workshop_waitlist_down.sql` (release 4)
+   3. `20261110120000_workshop_calendar_sync_down.sql` (release 3)
+   4. `20261109120000_workshop_admission_benefits_down.sql` (release 2)
+   5. `20261103120000_workshops_down.sql` (release 1, the whole feature)
+
+   To undo only the latest release, stop after its step. Unpause the dispatcher only if release 1 is
+   still in place.
 
 ## Meta ads: URL parameters
 

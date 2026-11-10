@@ -108,15 +108,16 @@ export async function handle(req: Request): Promise<Response> {
   const stored = isRefund && reference ? `${reference}:refund${refundId ? ':' + refundId : ''}` : reference
 
   // Log first, always, including events that fail verification.
+  const logged = {
+    email: data.customer?.email ?? null,
+    amount_minor: typeof data.amount === 'number' ? Math.round(data.amount) : null,
+    currency: data.currency ?? null, status: data.status ?? null, domain: data.domain ?? null,
+    paid_at: data.paid_at ?? data.paidAt ?? null, signature_valid: valid, raw: body,
+  }
   const ins = await db('workshop_payment_events?on_conflict=event,reference', {
     method: 'POST',
     headers: { Prefer: 'resolution=ignore-duplicates,return=representation' },
-    body: JSON.stringify({
-      event: body.event ?? null, reference: stored, email: data.customer?.email ?? null,
-      amount_minor: typeof data.amount === 'number' ? Math.round(data.amount) : null,
-      currency: data.currency ?? null, status: data.status ?? null, domain: data.domain ?? null,
-      paid_at: data.paid_at ?? data.paidAt ?? null, signature_valid: valid, raw: body,
-    }),
+    body: JSON.stringify({ event: body.event ?? null, reference: stored, ...logged }),
   })
   if (!ins.ok) return json({ ok: false, error: 'log-write-failed' }, 503)
   const inserted = await ins.json().catch(() => null)
@@ -124,12 +125,21 @@ export async function handle(req: Request): Promise<Response> {
   let eventRow = inserted[0]
   if (!eventRow) {
     // Seen before: a replay of an applied event stops; a retry of one never applied continues.
-    const prior = await db(`workshop_payment_events?select=id,matched&event=eq.${encodeURIComponent(String(body.event ?? ''))}` +
+    const prior = await db(`workshop_payment_events?select=id,matched,signature_valid&event=eq.${encodeURIComponent(String(body.event ?? ''))}` +
       `&reference=eq.${encodeURIComponent(String(stored ?? ''))}&limit=1`)
     const rows = prior.ok ? await prior.json().catch(() => null) : null
     if (!Array.isArray(rows)) return json({ ok: false, error: 'log-read-failed' }, 503)
     if (!rows.length || rows[0].matched === true) return json({ ok: true, duplicate: true })
     eventRow = rows[0]
+    // An unsigned request may have logged this identity first (Codex audit 2, A). Its
+    // contents were never trusted, and a held refund is later applied from the stored
+    // row, so a verified delivery replaces them before anything is applied.
+    if (valid && rows[0].signature_valid !== true) {
+      const fix = await db(`workshop_payment_events?id=eq.${rows[0].id}&signature_valid=eq.false`, {
+        method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(logged),
+      })
+      if (!fix.ok) return json({ ok: false, error: 'log-write-failed' }, 503)
+    }
   }
 
   if (!valid || (!isCharge && !isRefund)) return json({ ok: true, applied: false, signature_valid: valid })

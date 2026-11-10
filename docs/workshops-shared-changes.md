@@ -51,6 +51,7 @@ The **Baseline regression** CI job checks these:
 | 6 | `_headers` | One appended rule matching `/workshops*` only | CSP for the Meta Pixel on webinar pages only | None (additions-only check) | Delete the rule |
 | 7 | `scripts/build.js`, header and footer markers | Page generator; optional build values | Reusable pages | Output identical while nothing is published; optional values never fail a Cloudflare build | Revert the commit |
 | 8 | `functions/api/_installments.js` | `sendInstallment` sends through the shared Hostinger sender `functions/api/_mail.js` instead of its own copy of the same two API calls | One email sender for the site instead of two copies | None observable: same mailbox, same requests and display name, same result codes and row updates (baseline tests run on main's code and this branch's). Only difference: a network exception now returns `mail_unreachable` (502) instead of throwing | Revert the commit |
+| 9 | `assets/js/admin.js` (cohort admin) | The enrollments, payment-events and credentials CSV exports prefix `'` to a cell starting with `=` `+` `-` `@`, tab or CR | Codex audit, 9 November 2026: names, cities and notes are typed by the public, and a spreadsheet runs such a cell as a formula | Ordinary cells export exactly as before (`tests/admin-csv.test.js`). `compare-site.sh` strips exactly these lines and requires the rest of the file to match `main` | Revert the commit |
 
 ## How isolation is enforced, not just assumed
 

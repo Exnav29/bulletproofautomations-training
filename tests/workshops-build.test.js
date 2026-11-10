@@ -110,9 +110,38 @@ test("a published file with a placeholder, TBC or missing field fails the build"
   }
 });
 
-test("a past or offset-less start time is refused for a published session", () => {
-  assert.throws(() => ws.validate(Object.assign(sample(), { starts_at: "2020-01-01T10:00:00Z" }), file("sample-webinar")), /already started/);
+test("an offset-less start time is refused for a published session", () => {
   assert.throws(() => ws.validate(Object.assign(sample(), { starts_at: "2099-01-01T10:00:00" }), file("sample-webinar")), /time zone offset/);
+});
+
+/* Codex audit, 9 November 2026: a published session whose date had passed failed
+   the whole build, so the day after workshop 01 runs nothing on the site could
+   deploy. A started session is now left out of the pages instead. */
+test("the real content still builds the day after workshop 01 has run", () => {
+  const after = Date.parse("2026-12-13T09:00:00Z");
+  const sessions = ws.loadSessions(contentDir, after);
+  const series = ws.loadSeries(contentDir, sessions);
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), "ws-past-"));
+  assert.deepEqual(ws.render(sessions, out, series), [], "nothing bookable is left, so nothing is published");
+});
+
+test("a started session is not rendered; its series entry stays, as plain text", () => {
+  const past = Object.assign(sample(), { slug: "sample-webinar", starts_at: "2020-01-01T10:00:00Z" });
+  const next = Object.assign(sample(), { slug: "sample-next", starts_at: "2099-01-01T10:00:00Z" });
+  const sessions = [ws.validate(past, file("sample-webinar")), ws.validate(next, file("sample-next"))];
+  assert.equal(sessions[0].past, true);
+  // The real series, with its first two entries pointed at the two sessions.
+  const real = JSON.parse(fs.readFileSync(path.join(contentDir, "series", "get-paid-for-automation.json"), "utf8"));
+  real.entries[0] = { number: 1, session: "sample-webinar" };
+  real.entries[1] = { number: 2, session: "sample-next" };
+  const series = [ws.validateSeries(real, "/x/content/workshops/series/get-paid-for-automation.json", sessions)];
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), "ws-past-"));
+  const paths = ws.render(sessions, out, series);
+  assert.ok(paths.includes("/workshops/sample-next"), "the upcoming session is published");
+  assert.ok(!paths.includes("/workshops/sample-webinar"), "the session that has run has no page");
+  const directory = fs.readFileSync(path.join(out, "workshops", "index.html"), "utf8");
+  assert.ok(!directory.includes('href="/workshops/sample-webinar"'), "no link to a page that does not exist");
+  assert.ok(directory.includes(sessions[0].title), "the series still names it");
 });
 
 test("file name must match slug, and content is escaped", () => {
