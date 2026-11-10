@@ -45,6 +45,12 @@ async function health(env, report) {
   const stuckRows = stuck.ok ? await stuck.json().catch(function () { return null; }) : null;
   if (!Array.isArray(stuckRows)) problems.push("health_check_failed");
   else if (stuckRows.length) problems.push("emails_need_retry");
+  // Invitations the dispatcher has given up on (5 failures, or a permanent error): they
+  // leave the plan, so this run's counts cannot show them. The admin's "Retry now".
+  const cal = await rest(env, "workshop_registrations?select=id&calendar_sync_failures=gte.5&limit=1");
+  const calRows = cal.ok ? await cal.json().catch(function () { return null; }) : null;
+  if (!Array.isArray(calRows)) problems.push("health_check_failed");
+  else if (calRows.length) problems.push("calendar_needs_retry");
   // An invitation-only session is coming up but Google Calendar is not connected.
   if (c && c.skipped === "not_configured") {
     const s = await rest(env, "workshop_sessions?select=id&admission=eq.invite&status=eq.published&starts_at=gt." +

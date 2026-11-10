@@ -46,7 +46,12 @@ async function accessToken(env) {
     }).toString()
   });
   const body = await res.json().catch(function () { return null; });
-  return res.ok && body && body.access_token ? body.access_token : null;
+  if (res.ok && body && body.access_token) return { token: body.access_token };
+  // Google's own reason (e.g. invalid_grant, invalid_client), never a credential, so
+  // the stored error says whether to reauthorise or simply retry.
+  const why = body && typeof body.error === "string"
+    ? body.error + (typeof body.error_description === "string" ? ": " + body.error_description : "") : "no reason given";
+  return { token: null, error: "Google refused the stored authorisation (token " + res.status + ", " + why.slice(0, 160) + ")" };
 }
 
 /* Errors that will not fix themselves: the event is gone, or Google refuses
@@ -96,8 +101,12 @@ export async function syncInvitations(env, test, limit) {
   const items = plan.ok && Array.isArray(plan.data) ? plan.data : [];
   if (!items.length) return report;
 
-  let token = null;
-  try { token = await accessToken(env); } catch (err) { token = null; }
+  let token = null, signInError = "Could not sign in to Google Calendar: Google was unreachable";
+  try {
+    const got = await accessToken(env);
+    token = got.token;
+    if (!token) signInError = "Could not sign in to Google Calendar: " + got.error;
+  } catch (err) { token = null; }
 
   for (const item of items) {
     let out;
@@ -105,7 +114,7 @@ export async function syncInvitations(env, test, limit) {
       out = { ok: false, permanent: true, error: "Not invited: this complimentary graduate place no longer matches an active entitlement" };
       report.blocked += 1;
     } else if (!token) {
-      out = { ok: false, permanent: false, error: "Could not sign in to Google Calendar: the stored authorisation was refused or Google was unreachable" };
+      out = { ok: false, permanent: false, error: signInError };
     } else {
       try { out = await syncOne(env, token, item); }
       catch (err) { out = { ok: false, permanent: false, error: "Google Calendar was unreachable" }; }

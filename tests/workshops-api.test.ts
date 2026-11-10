@@ -1087,14 +1087,19 @@ Deno.test('calendar: temporary Google errors retry on the next run; a missing ev
   let row = await regRow('ama@example.com')
   assertEquals(row.calendar_sync_failures, 5)
   assert(/event was not found/.test(row.calendar_sync_error))
-  await dispatchNow()
+  const stuck = await dispatchNow()
   assertEquals((await regRow('ama@example.com')).calendar_sync_at, row.calendar_sync_at, 'not retried by itself')
+  // Out of the plan, so this run counts no failure: health must still say a person is needed.
+  assertEquals(stuck.json.report.calendar.failed, 0)
+  assertEquals(stuck.json.ok, false)
+  assert(stuck.json.report.health.includes('calendar_needs_retry'), JSON.stringify(stuck.json.report.health))
   // The admin fixes the event and retries from the exception queue.
   gcal.events.set(EVENT, { etag: '"7"', attendees: [HOST] })
   assertEquals((await admit(row.id, 'retry_calendar')).json.ok, true)
   row = await regRow('ama@example.com')
   assertEquals([row.invited_email, row.calendar_sync_failures, row.calendar_sync_error], ['ama.meet@gmail.com', 0, null], 'retried at once')
   assert(/calendar-sync retry requested/.test(row.admin_notes))
+  assert(!(await dispatchNow()).json.report.health.includes('calendar_needs_retry'), 'cleared once retried')
 })
 
 Deno.test('calendar: a refused Google sign-in is recorded on each waiting registration and changes nothing', opts, async () => {
@@ -1104,6 +1109,9 @@ Deno.test('calendar: a refused Google sign-in is recorded on each waiting regist
   assertEquals((await dispatchNow()).json.report.calendar.failed, 1)
   const row = await regRow('ama@example.com')
   assert(row.invited_email === null && /Could not sign in to Google Calendar/.test(row.calendar_sync_error))
+  // Google's own reason is kept, so the admin knows whether to reauthorise or retry.
+  assert(/token 400, invalid_grant/.test(row.calendar_sync_error), row.calendar_sync_error)
+  assert(!/google-refresh-for-tests|google-access/.test(row.calendar_sync_error), 'never a credential')
   assertEquals(gcal.patches.length, 0)
 })
 
