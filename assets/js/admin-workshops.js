@@ -206,14 +206,15 @@
       if (needsResolution(r)) {
         var acts = [];
         if (r.status === "payment_received_review") acts.push(act("admit", "Admit", r.id, true));
-        if ((r.status === "payment_received_review" || r.status === "confirmed") && ["paid", "needs_review", "partially_refunded"].indexOf(r.payment_status) !== -1) acts.push(act("request_refund", "Request refund", r.id));
+        if ((r.status === "payment_received_review" || r.status === "confirmed") && ["paid", "needs_review", "partially_refunded"].indexOf(r.payment_status) !== -1) acts.push(act("request_refund", "Refund now", r.id));
         if (r.review_reason === "duplicate_payment") acts.push(act("resolve_duplicate", "Note duplicate refund", r.id));
+        if (r.status === "refund_pending") acts.push(act("send_refund", "Send refund to Paystack", r.id));
         acts.push(act("open_person", "Details", r.id));
         items.push({ bad: true, who: who + ", " + s.title, why: (REASON[r.review_reason] || STATUS[r.status] || r.status) +
-          (r.status === "refund_pending" ? ". Refund it in the Paystack dashboard; the place frees itself when Paystack confirms." : ". GHS " + ghsMinor(r.amount_paid_minor) + " held."), acts: acts });
+          (r.status === "refund_pending" ? ". Waiting for Paystack to confirm the refund; the place frees itself then. If it was never sent, use Send refund to Paystack." : ". GHS " + ghsMinor(r.amount_paid_minor) + " held."), acts: acts });
       } else if (s.status === "cancelled" && r.status === "confirmed") {
         items.push({ bad: true, who: who + " has a place on a cancelled workshop", why: s.title + ". Offer a refund or a place on another session.",
-          acts: [act("request_refund", "Request refund", r.id), act("open_person", "Details", r.id)] });
+          acts: [act("request_refund", "Refund now", r.id), act("open_person", "Details", r.id)] });
       }
       if (calendarException(r)) items.push({ who: "Calendar invitation failed: " + who, why: r.calendar_sync_error + (Number(r.calendar_sync_failures) >= 5 ? " Retries stopped." : " Retrying automatically."),
         acts: [act("retry_calendar", "Retry now", r.id, true)] });
@@ -375,8 +376,9 @@
     $("wsp-sub").textContent = (s.title || "") + (isTest(r) ? " (test)" : "");
     var b = function (a, label, primary) { return '<button class="wsd-btn' + (primary ? " wsd-btn--primary" : "") + '" type="button" data-wsd="' + a + '" data-id="' + esc(r.id) + '">' + label + "</button>"; };
     var acts = (r.status === "payment_received_review" ? b("admit", "Admit", true) : "") +
-      ((r.status === "payment_received_review" || r.status === "confirmed") && ["paid", "needs_review", "partially_refunded"].indexOf(r.payment_status) !== -1 ? b("request_refund", "Request refund") : "") +
+      ((r.status === "payment_received_review" || r.status === "confirmed") && ["paid", "needs_review", "partially_refunded"].indexOf(r.payment_status) !== -1 ? b("request_refund", "Refund now") : "") +
       (r.review_reason === "duplicate_payment" ? b("resolve_duplicate", "Note duplicate refund") : "") +
+      (r.status === "refund_pending" ? b("send_refund", "Send refund to Paystack") : "") +
       (r.status === "pending_payment" && r.payment_status === "pending" ? b("cancel", "Cancel registration") : "") +
       (isInvite(r) && r.status === "confirmed" ? b("set_account", "Change Google account") : "") +
       (ws.failedMail[r.id] ? b("retry_email", "Retry email") : "") +
@@ -871,15 +873,16 @@
 
   /* ---------- every button ---------- */
   var REG_CONFIRM = {
-    request_refund: ["Request a refund?", "Their place is marked for refund. Issue the money in the Paystack dashboard; the place frees itself and the Calendar invitation is removed when Paystack confirms.", "Request refund"],
+    request_refund: ["Refund this registration?", "Paystack refunds everything they paid to the card or mobile money account they paid with, starting now. Their place frees itself and the Calendar invitation is removed when Paystack confirms the refund.", "Refund now"],
+    send_refund: ["Send the refund to Paystack?", "Paystack is checked first: anything already refunded or on its way there is not sent again. Only what is still owed goes back, to the card or mobile money account they paid with.", "Send refund"],
     cancel: ["Cancel this unpaid registration?", "Their held place is released.", "Cancel registration"],
     resolve_duplicate: ["Record the duplicate refund?", "This notes that the extra payment will be refunded in Paystack. Their place is kept.", "Record it"],
     mark_invited: ["Added by hand?", "Only if you added this Google account to the event yourself, with guests unable to see the guest list or invite others.", "Yes, I added it"],
     mark_removed: ["Removed by hand?", "Only if you removed this Google account from the event's guests yourself.", "Yes, I removed it"]
   };
   function regAction(action, id, extra) {
-    return apiPost(Object.assign({ registration_id: id, action: action }, extra || {})).then(function () {
-      said(action === "admit" ? "Admitted. Their confirmation and invitation go out within a minute." : action === "retry_calendar" ? "Trying the invitation again now." :
+    return apiPost(Object.assign({ registration_id: id, action: action }, extra || {})).then(function (j) {
+      if (j && j.refund) { if (j.refund.problem) failed(new Error(j.refund.message)); else said(j.refund.message || "Saved."); } else said(action === "admit" ? "Admitted. Their confirmation and invitation go out within a minute." : action === "retry_calendar" ? "Trying the invitation again now." :
         action === "retry_email" ? "Sending the email again now." : action === "note" ? "Note saved." : "Saved.");
       return load().then(function () { if ($("ws-person").open) openPerson(id); });
     });

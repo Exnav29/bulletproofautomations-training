@@ -119,6 +119,8 @@ jobs:
         run: deno test --node-modules-dir=none --allow-net --allow-read --allow-env tests/workshops-studio.test.ts
       - name: Release 7 (series defaults, Duplicate, Schedule with automatic Calendar events and Meet links, AI drafting)
         run: deno test --node-modules-dir=none --allow-net --allow-read --allow-env tests/workshops-streamline.test.ts
+      - name: Admin refunds sent to Paystack (never twice, only what is left, nothing on doubt)
+        run: deno test --node-modules-dir=none --allow-net --allow-read --allow-env tests/workshops-refunds.test.ts
       # The deployed snapshot must stay byte-identical to what production runs.
       - name: Production snapshot checksum
         run: |

@@ -887,9 +887,10 @@ registrations, refunds, the waitlist, invitations and cohort code are unchanged.
    defaults, marks Workshop 01's existing event as the owner's own, and changes no other row.
    Rollback: `rollback/20261114120000_workshop_admin_streamline_down.sql`; Calendar events and
    their IDs stay.
-2. **OpenRouter (owner).** Create a free account at openrouter.ai, create an API key, and add it to
-   the Cloudflare Pages project as `OPENROUTER_API_KEY`, for Production and Preview separately, then
-   redeploy. If drafting reports that every model refused, check that OpenRouter's privacy
+2. **OpenRouter.** Done on 11 November 2026: the account's existing key (the one the Product Studio
+   VPS apps use) is set on the Cloudflare Pages project as `OPENROUTER_API_KEY`, for Production and
+   Preview, and production was redeployed. If it ever has to be replaced, set the new key for both
+   environments separately, then redeploy. If drafting reports that every model refused, check that OpenRouter's privacy
    settings allow free models for your account. Free models cost
    nothing and have a daily request limit; they may log prompts, which is fine here because only
    public page copy is sent. Without the key everything else works and the button says what to set.
@@ -952,3 +953,26 @@ utm_source=meta&utm_medium=paid_social&utm_campaign={{campaign.id}}&utm_content=
 - **References the webinar webhook doesn't recognise** (any non-`BPA-WEB-`/`BPA-WTEST-`
   reference): recorded only.
 - **Confirmation page:** says the email was sent only when it has been sent.
+
+## Refunds from the admin (November 2026)
+
+**Refund now** (on a paid registration) and **Send refund to Paystack** (on a place already marked
+for refund) send the refund to Paystack themselves, through the webinar business's key, on the
+registration's own transaction, to the card or mobile money account that paid. Nothing else about
+refunds changed:
+
+- The place, the Calendar invitation and the waitlist offer still change only when Paystack's
+  `refund.processed` webhook arrives. A refund Paystack accepts and later fails leaves the place and
+  the money exactly as recorded, and **Send refund to Paystack** can be pressed again.
+- **Never twice.** Before sending, the site reads Paystack's list of refunds and counts every refund
+  on that transaction that has not failed, including ones made by hand in the dashboard. Only what
+  is still owed is sent, usually the full amount, or the remainder after a partial refund. If the
+  list can't be read, nothing is sent. A second **Refund now** is refused.
+- **What the admin is told** is one sentence: what Paystack is refunding, or why nothing was sent
+  (Paystack refused, with its reason; no answer; the payment was made under the other mode's keys;
+  Paystack not configured). The same line is kept in the registration's notes.
+- **"Needs attention."** If Paystack says it needs the customer's account details (it can, for some
+  mobile money refunds), the admin says so: finish it in the Paystack dashboard under Refunds.
+- A duplicate payment ("Note duplicate refund") is still refunded by hand in the Paystack dashboard;
+  Refund now refunds everything held on the registration, which is not what a duplicate needs.
+- Tests: `tests/workshops-refunds.test.ts`, against a stand-in for Paystack's refund API.
