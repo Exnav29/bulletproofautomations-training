@@ -286,7 +286,9 @@
         // payment that failed or was abandoned can be retried. The server decides
         // whether that place is still theirs (Codex audit: sold-out pages blocked
         // legitimate payment retries by switching the form to the waitlist).
-        if (loadAccess(slug) && d.status !== "registration_closed" && d.status !== "started") {
+        // Only when the session really is full: on an open session a returning
+        // browser just gets the normal form, with no notice.
+        if ((d.full || d.general_full) && loadAccess(slug) && d.status !== "registration_closed" && d.status !== "started") {
           heroNotice.hidden = false;
           heroNotice.textContent = "Session full. You have an existing registration in this browser. You can continue that registration, or join the free waitlist using different attendee details.";
           if (jump && !document.querySelector('[data-ws-switch-waitlist]')) {
