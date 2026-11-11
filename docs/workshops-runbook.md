@@ -215,20 +215,22 @@ the figure it showed, so a changed price is refused rather than charged.
 | Eligible Intermediate graduate | Free, reserved place | 0 | 0 |
 
 - **Discounts never stack.** The customer gets the larger one. A valid referral is still recorded, and still earns its commission, when the Foundations discount wins.
-- **Certificate benefits need a one-time code**, emailed only to the address on the certificate, or to an address the admin authorised. The steps:
+- **Certificate benefits (release 6):** registering with the email on the certificate (or one the admin authorised) applies the price at once. Any other email gets a one-time code sent to **the address on the certificate**, never to the one typed, so a copied certificate ID is useless to anyone else. The steps for the code:
   1. The code expires in 10 minutes and allows 5 tries.
-  2. A correct code gives a 30-minute, single-use token bound to that email and session.
+  2. A correct code gives a 30-minute, single-use token bound to the registering email and session.
   3. Registration spends the token in the same transaction.
 
-  The page gives the same answer whether or not anything matched, and allows 3 codes an hour per certificate and per address. Each certificate can be redeemed once per session (cancelled and refunded registrations release it).
+  Both routes count towards 3 requests an hour per certificate and per address. Each certificate can be redeemed once per session (cancelled and refunded registrations release it). The instant route does confirm that an email matches a certificate; the throttle bounds anyone trying to find a holder's email that way.
 - **Eligibility** is read from the certificate register and PR #54's entitlement view, and re-checked when the token is spent and again when a graduate is invited:
   - **Foundations:** a valid, issued certificate.
   - **Graduate:** an active entitlement, a valid issued certificate, and training fees and every installment paid.
 - **Recovery for a changed email:** "Authorise another email for a certificate" in `/admin/workshops/`. Verify the person yourself first. The authorisation covers one certificate, one session and 7 days, with the reason recorded. The holder then asks for their code at the new address.
-- **Referral codes and links:** one per eligible graduate, issued from `/admin/workshops/`. You choose the code (4–16 letters and digits) or one is generated. A code is refused if it contains the certificate number.
-  - A code is issued **prepared**: it works only on test sessions, so the link and typed entry can be rehearsed before registration opens. "Activate for live workshops" makes it valid on workshop 01; do that only when you give it to the graduate. "Suspend" makes it valid nowhere.
-  - The link is `/workshops/<slug>?ref=CODE`, which fills in the code; a customer can also type it.
-  - Unknown, suspended or expired codes are refused, as is a code whose graduate is no longer eligible. So is the referrer's own email, which reads as "invalid" so the owner of a code can't be looked up.
+- **Referral codes and links (release 6): for anyone.** "Create a code" in `/admin/workshops/` takes a name, an email, how you pay their commission (MoMo, bank, PayPal) and optionally the code (4–16 letters and digits). It works on **every** workshop as soon as it exists; there is no per-workshop step.
+  - **One set of terms** for every workshop, in `workshop_settings` (GHS 50 off, GHS 50 commission). "Change" on the Referral codes tab applies new terms to every draft, open or closed workshop; registrations already made keep theirs.
+  - The link is `/workshops/?ref=CODE` (or any workshop page with `?ref=CODE`); the code is remembered across workshop pages, and a customer can also type it.
+  - Unknown, suspended or expired codes are refused. So is the referrer's own email (and, for a graduate's older code, the certificate's addresses), which reads as "invalid" so the owner of a code can't be looked up. A code no longer depends on a certificate staying valid: suspend it to stop it.
+  - Codes issued before release 6 stay "prepared" until you choose "Make live".
+  - "Record payment" on a code records one reference against every commission it is owed.
 - **Places:** `capacity` is the 25 general places; graduates count only against `reserved_graduate_seats` (5). Both are checked while the session row is locked. When the general places are gone, the page stays open for a confirmed graduate only. The API reports yes/no, never a count. Reserved places are never released.
 - **Commission** is derived, not stored as owed (`workshop_commission_payable`). It is payable only on a confirmed registration paid once, in full, with no refund, duplicate or mismatch, a valid referral, not voided and not complimentary.
   - Pay by MoMo yourself, then record the reference: once per registration.
@@ -606,9 +608,39 @@ update public.workshop_sessions set status = 'published' where slug = 'what-to-c
 
 From then on, work the invitation panel daily.
 
-### 13. Referral codes: activate when you share them
+### 13. Referral codes
 
-Codes are issued **prepared** and work only on test sessions. When you are ready to give a graduate their code, click "Activate for live workshops" in `/admin/workshops/`. Until then, nothing about the code is public and it cannot be used on workshop 01.
+Superseded by release 6: a code works everywhere as soon as it is created. The one code issued
+before it (`Q8QHF350`) stays "prepared" until you choose "Make live".
+
+## Release 6: the workshop desk (deployment)
+
+Workshops, the series text and referral codes are managed in `/admin/workshops/`; public pages
+render from the database (`functions/workshops/[[path]].js`); referral codes are for anyone under
+one set of terms; the certificate's own email applies its price at once.
+
+Order matters: **database first, then merge.** The migration is backward compatible with the
+code already deployed (the old certificate endpoint still calls `workshop_benefit_request` with
+four arguments, which the new five-argument function accepts), and the new pages need the
+content the seed puts on the rows.
+
+1. **Snapshot** `workshop_sessions`, `workshop_referrers` and `workshop_benefit_verifications`
+   (counts and a hash), as for releases 3 to 5.
+2. **Apply** `supabase/migrations/20261113120000_workshop_admin_studio.sql`, then
+   `20261113120100_workshop_content_seed.sql`. The seed fills only empty content and inserts only
+   missing rows, so it is safe to run again. Postflight: workshop 01 keeps its status, price,
+   places and dates; 9 announced drafts exist; `workshop_settings` holds 50 and 50; every new
+   function is closed to `anon` and `authenticated`.
+3. **Merge.** The build stops writing workshop pages and writes `dist/workshops/_shell.html`.
+   Check straight after deploy: `/workshops`, workshop 01 and one coming-soon page answer 200 with
+   the `/workshops*` security headers; `/workshops/_shell` answers 404; `/sitemap.xml` lists the
+   workshop pages; the session API and checkout are unchanged.
+
+**Rollback.** Revert the merge first: the build-time pages come back from git exactly as before.
+Then, only if the database must go back too, run
+`rollback/20261113120000_workshop_admin_studio_down.sql`. It refuses while a draft has no date or
+a code has no certificate: those exist only under release 6, so date or delete them, and record
+any commissions owed to non-graduate codes, before running it.
 
 ## Release 2 rehearsal (test mode, on the existing project)
 
@@ -807,18 +839,22 @@ Verify: `select status_code, timed_out from net._http_response order by created 
 `200` within a minute or two. `403` means the hash and the Vault secret differ. pg_net's default
 timeout is 5 seconds, which a run that reconciles several checkouts can exceed; hence the 30 seconds.
 
-## Publish a later session (workshops 02 to 10)
+## Publish a later session (workshops 02 to 10): from the admin (release 6)
 
-1. Add `content/workshops/<slug>.json` with real values only. The build refuses placeholders,
-   TBC and past dates.
-2. Add the matching `workshop_sessions` row with the same `slug`, `starts_at` and `price_ghs`,
-   as `draft` until registration should open.
-3. Merge. This publishes the page, the nav link and the sitemap entries. While the row is `draft`
-   the page says registration isn't open yet and the API refuses bookings.
+Everything is done in `/admin/workshops/`. Nothing goes through GitHub or Supabase by hand.
 
-Workshops 02 to 10 have no database row and no form. Scheduling one later means a session file with
-real values, a matching row, and pointing its series entry at the session
-(`content/workshops/README.md`).
+1. Workshops 02 to 10 are already there as drafts listed "coming soon" (seeded from the old
+   series file). Choose **Add a date** on one, or **New workshop** for something new.
+2. Fill in the date, price, places and page content. For a workshop joined by invitation, create
+   its Google Calendar event first (guests can't see the guest list or invite others) and paste
+   the event ID.
+3. **Save and open registration.** The page, the directory entry and the sitemap entry are live at
+   once. If something is missing, the editor says exactly what, and nothing opens.
+
+Afterwards: **Close registration** stops new bookings and keeps every place; **Cancel workshop**
+(needs a reason) stops it and lists every paid person under "Needs you" for a refund or a move;
+**Delete** exists only while nobody has registered or queued. A workshop that has taken place
+shows under "Needs you" until it is marked completed.
 
 Their dates are held in the owner's Google Calendar, which is the schedule of record. They are
 deliberately **not** in this repository or on the coming-soon pages: each opens only when its fee,

@@ -87,3 +87,19 @@ The **Baseline regression** CI job checks these:
 `enrollments (cohort, email)` / `(cohort, whatsapp)` that `supabase-enrollments.sql` documents.
 The baseline adds them in its own setup. Confirm against the live catalog when the fixture is
 re-exported.
+
+## Release 6 (13 November 2026): the workshop desk
+
+Reviewed changes to existing built files, listed in `tests/baseline/compare-site.sh`:
+
+| File | Change |
+|---|---|
+| `admin/*/index.html` | The workshops workspace markup is replaced and `admin-workshops.css` is linked. Every other workspace is byte-identical inside the shared template |
+| `assets/js/admin-workshops.js` | Rewritten: create, edit, open, close, cancel and delete workshops; referral codes for anyone; one "Needs you" queue |
+| `assets/js/workshops.js` | The certificate box applies the price at once when the server verifies the email; a cancelled session explains itself |
+| `workshops/what-to-charge-for-automation/index.html` | Wording only: "with a referral code", "From someone's referral link or code", and the certificate hint and button |
+| `sitemap.xml` | Workshop entries are added on request by `functions/sitemap.xml.js` instead of at build time |
+
+Every other workshop page renders byte-identical to `main`'s build, from the seeded database rows
+(`tests/render-workshop-pages.mjs`, run by the baseline job). The training payment code, the
+training webhook, `_middleware.js` and the cohort tables are untouched.

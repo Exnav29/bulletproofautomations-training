@@ -21,16 +21,20 @@ jobs:
         run: npm run build
       - name: Validate HTML
         run: npx --yes html-validate "dist/**/*.html"
-      # Webinar pages render only from published content. The fixtures cover the
-      # states the real content does not (a free session, several sessions); the
-      # real build must publish Get Paid for Automation with exactly one bookable
-      # workshop and nine coming-soon pages that carry no registration form.
-      - name: Validate generated webinar pages (test fixtures and the real series)
+      # Since release 6 webinar pages are rendered on request from the database
+      # (functions/workshops/[[path]].js). These render the same pages from
+      # database-shaped rows (tests/fixtures/workshop-rows.json) into the built
+      # shell and validate them. The samples cover states the real content does
+      # not (a free session, several sessions); the real rows must give Get Paid
+      # for Automation one bookable workshop and nine coming-soon pages without a form.
+      - name: Validate rendered webinar pages (test fixtures and the real series)
         run: |
-          WORKSHOP_CONTENT_DIR=tests/fixtures/workshops npm run build
+          node tests/render-workshop-pages.mjs samples
           test -f dist/workshops/sample-webinar/index.html
           npx --yes html-validate "dist/workshops/**/*.html"
           npm run build
+          node tests/render-workshop-pages.mjs real
+          npx --yes html-validate "dist/workshops/**/*.html"
           test -f dist/workshops/index.html
           test "$(grep -l 'data-ws-form' dist/workshops/*/index.html | wc -l)" -eq 1
           grep -q 'data-ws-form' dist/workshops/what-to-charge-for-automation/index.html
@@ -50,6 +54,8 @@ jobs:
           node --check assets/js/workshop-tracking.js
           node --check assets/js/workshops.js
           node --check scripts/workshops.js
+          node --check functions/sitemap.xml.js
+          node --check "functions/workshops/[[path]].js"
           for f in functions/api/*.js functions/api/workshops/*.js functions/api/admin/*.js; do node --check "$f"; done
           node --test tests/*.test.js
 
@@ -74,8 +80,8 @@ jobs:
           npm run build
           node tests/admin-console.test.mjs
           node tests/workshop-tracking.test.mjs
-          # The workshop page script on a generated fixture page (sold-out retry, token resume).
-          WORKSHOP_CONTENT_DIR=tests/fixtures/workshops npm run build
+          # The workshop page script on a rendered fixture page (sold-out retry, token resume).
+          node tests/render-workshop-pages.mjs samples
           node tests/workshops-page.test.mjs
       - name: Render real PDFs and reject invalid inputs
         run: deno test --node-modules-dir=none --allow-net --allow-read --allow-env tests/certificate-renderer.test.ts
@@ -105,6 +111,8 @@ jobs:
         run: deno test --node-modules-dir=none --allow-read tests/workshops-migration.test.ts
       - name: Workshop API end to end (registration, payment states, privacy, outbox)
         run: deno test --node-modules-dir=none --allow-net --allow-read --allow-env tests/workshops-api.test.ts
+      - name: Workshop studio (admin create, edit, cancel, delete; pages from the database; referrals; certificates)
+        run: deno test --node-modules-dir=none --allow-net --allow-read --allow-env tests/workshops-studio.test.ts
       # The deployed snapshot must stay byte-identical to what production runs.
       - name: Production snapshot checksum
         run: |

@@ -1,0 +1,595 @@
+{
+ "series": [
+  {
+   "slug": "get-paid-for-automation",
+   "name": "Get Paid for Automation",
+   "presenter": "Bulletproof Automations",
+   "positioning": "You know how to automate. Now learn how to turn those skills into paying work.",
+   "intro": [
+    "Plenty of people can build a workflow. Far fewer can find a business that needs one, price the work, win the contract and deliver it well enough to be hired again. Tutorials and certifications cover the first part. This series covers the rest.",
+    "It is for people who already build automations, in n8n, Make, Zapier, Microsoft Power Automate and Power Apps, custom integrations or AI-powered tools. The platform does not matter here. What matters is turning the skill into work someone will pay for.",
+    "The first workshop is about pricing: what to charge, and how to explain it. The nine that follow cover the rest of the process, from choosing who to sell to and finding clients to writing proposals, closing deals, delivering and winning work abroad."
+   ],
+   "standalone": "Each workshop stands alone. You do not need to take the whole series, or take the workshops in order.",
+   "disclaimer": "Get Paid for Automation is organized and presented solely by Bulletproof Automations, an independent training provider. n8n, Make, Zapier, Microsoft Power Automate and Power Apps are named only to describe the tools participants use; none of their owners sponsors, endorses or is affiliated with this series. The workshops teach business skills and do not guarantee clients, contracts or income."
+  }
+ ],
+ "real": [
+  {
+   "id": "what-to-charge-for-automation",
+   "slug": "what-to-charge-for-automation",
+   "status": "published",
+   "kind": "workshop",
+   "title": "You know automation. Do you know what to charge?",
+   "starts_at": "2026-12-12T11:30:00Z",
+   "duration_minutes": 180,
+   "time_zone": "Africa/Accra",
+   "format": "live online",
+   "price_ghs": 350,
+   "capacity": 25,
+   "admission": "invite",
+   "reserved_graduate_seats": 5,
+   "foundations_discount_pct": 20,
+   "graduate_free": true,
+   "referral_discount_ghs": 50,
+   "is_test": false,
+   "series_slug": "get-paid-for-automation",
+   "series_number": 1,
+   "announce": false,
+   "content": {
+    "summary": "Stop guessing what your automation work is worth. In three hours you learn to cost a project, choose a pricing approach and write a quotation you can explain to a client, then price a realistic project yourself.",
+    "directory_line": "Cost a project, choose a pricing approach and write a quotation you can explain to a client.",
+    "description": "A live 3-hour workshop for automation practitioners: cost a project, choose a pricing approach and write a quote you can defend. Saturday 12 December, GHS 350.",
+    "audience": "Automation practitioners who want to price paid work with confidence",
+    "why": [
+     "You can build automations and deliver projects. Then a client asks how much the work will cost, and the number you give is a guess.",
+     "Guess low and you work for less than it costs you to deliver, especially once discovery, testing, revisions and support are counted. Guess high without a reason, and the client compares you with someone cheaper and stops replying.",
+     "This workshop replaces the guess with a method. You work out what a project costs you to deliver, what the problem is worth to the client and which pricing approach fits, so the price you quote is one you can explain and defend."
+    ],
+    "outcomes": [
+     "Identify the business problem an automation project solves.",
+     "Estimate your actual costs of delivering the work.",
+     "Compare hourly, fixed-project and value-informed pricing.",
+     "Recognize common underpricing and overpricing mistakes.",
+     "Account for discovery, testing, revisions, support and project risk.",
+     "Develop a defensible quotation for an automation project.",
+     "Explain your proposed price to a prospective client."
+    ],
+    "leave_with": [
+     "A pricing worksheet for Excel or Google Sheets that works out your real cost of delivery, a cost-based price, a fixed-project price with risk included, and a check against the value to the client.",
+     "A project quotation template with the problem, deliverables, exclusions, assumptions, fees, payment terms and change requests already laid out.",
+     "One realistic automation project, priced by you in the clinic, with the reasoning to back the number.",
+     "The pricing mistakes that cost automation practitioners the most, and how to avoid each one."
+    ],
+    "run_of_show": [
+     {
+      "at": "0:00",
+      "title": "Why automation work is hard to price",
+      "detail": "Introduction, and the pricing problems participants bring with them"
+     },
+     {
+      "at": "0:15",
+      "title": "What a project costs you, and what it is worth to the client",
+      "detail": "Your real hourly cost, delivery effort, tools, and the cost of the client's problem"
+     },
+     {
+      "at": "1:00",
+      "title": "Choosing an approach and building the quote",
+      "detail": "Hourly, fixed-project and value-informed pricing; discovery, testing, revisions, support and risk; protecting your margin"
+     },
+     {
+      "at": "1:45",
+      "title": "Break",
+      "detail": "15 minutes"
+     },
+     {
+      "at": "2:00",
+      "title": "Project pricing clinic",
+      "detail": "Price a realistic automation project yourself, explain your number, then questions"
+     }
+    ],
+    "good_fit": "You can already build and deliver automations, in n8n, Make, Zapier, Microsoft Power Automate or Power Apps, or with code. You have quoted a project and felt unsure of the number, or put off quoting because you did not know where to start. Freelancers, independent consultants, small automation service providers and technical professionals looking for paying clients all fit.",
+    "not_fit": "You have not built a working automation yet. This is not an introductory building class, so start there first. It is also not a certification: the workshop is training only. And if you want a promise of clients or income, no honest workshop can make one.",
+    "bring": "a laptop with Excel or Google Sheets and, if you have one, a project you have recently quoted or are about to quote.",
+    "faq": [
+     {
+      "q": "Am I technically ready for this?",
+      "a": "If you have built and delivered at least one working automation, on any platform, yes. The workshop does not teach building. It assumes you can already do the work and teaches you to price it."
+     },
+     {
+      "q": "Does it matter which automation platform I use?",
+      "a": "No. The examples draw on n8n, Make, Zapier, Microsoft Power Automate and Power Apps, custom integrations and AI automation, but pricing works the same way whichever tool does the work."
+     },
+     {
+      "q": "Are the examples relevant to Ghana?",
+      "a": "Yes. The worked examples and the clinic project come from the kind of work Ghanaian small businesses and service providers commission, priced in cedis, alongside an international freelance example priced in US dollars."
+     },
+     {
+      "q": "Is this a certification?",
+      "a": "No. It is a training workshop. It does not award, and does not count towards, any Bulletproof Automations certification."
+     },
+     {
+      "q": "Do I have to take the whole series?",
+      "a": "No. Each workshop in Get Paid for Automation stands alone. Take the ones you need, in any order."
+     },
+     {
+      "q": "How do I pay?",
+      "a": "Register on this page, then pay GHS 350 on Paystack's secure checkout by mobile money or card. Your place is confirmed when Paystack confirms the payment, and your confirmation email follows."
+     },
+     {
+      "q": "Is there a lower price?",
+      "a": "Three ways, and they never combine. With an Intermediate graduate's referral code or link you pay GHS 300. Holders of a valid Bulletproof Automation Foundations Certificate pay GHS 280. Intermediate graduates with a valid issued certificate, whose training fees are fully paid, attend free in one of five places reserved for them. If more than one applies, you get the lowest price. A certificate price needs a one-time code, which we email to the address on your certificate, and it is yours alone: it cannot be passed to someone else."
+     },
+     {
+      "q": "How do I join?",
+      "a": "Live on Google Meet, by invitation. When you register, give us the Google account you will join with. Once Paystack confirms your payment, we add that account to the workshop's Google Calendar invitation, and Google emails it the Meet link. Only invited accounts can get in, so join signed in to that account, from a laptop if you can."
+     },
+     {
+      "q": "Will this make me money?",
+      "a": "It will help you price work accurately and explain your price with confidence. It cannot guarantee clients, contracts or income. Those depend on your market, your skills and your effort."
+     }
+    ],
+    "instructor": "johnathan"
+   }
+  },
+  {
+   "id": "who-should-you-sell-to",
+   "slug": "who-should-you-sell-to",
+   "status": "draft",
+   "kind": "workshop",
+   "title": "Who should you sell to?",
+   "starts_at": null,
+   "duration_minutes": 180,
+   "time_zone": "Africa/Accra",
+   "format": "live online",
+   "price_ghs": 350,
+   "capacity": 25,
+   "admission": "invite",
+   "reserved_graduate_seats": 5,
+   "foundations_discount_pct": 20,
+   "graduate_free": true,
+   "referral_discount_ghs": 50,
+   "is_test": false,
+   "series_slug": "get-paid-for-automation",
+   "series_number": 2,
+   "announce": true,
+   "content": {
+    "summary": "Find the businesses that need your skills and can pay for them.",
+    "problem": "Many automation freelancers try to sell to everyone. They end up pitching businesses with no budget, no clear problem, or a problem nobody can automate well. A clear ideal client profile tells you where to spend your time, and where not to.",
+    "audience": "Practitioners who can deliver automation work but are unsure which businesses to approach first.",
+    "outcomes": [
+     "Describe your ideal client by industry, size, processes and budget.",
+     "Spot the signs that a business has a costly, repetitive problem worth automating.",
+     "Judge whether a prospect can realistically pay for the work.",
+     "Match prospects to the problems you can already solve well.",
+     "Write a short statement of who you serve and what you fix."
+    ],
+    "series_fit": "Workshop 01 helps you price the work. This one decides whose work to price. A clear client profile makes every later step, from finding clients to writing proposals, more focused."
+   }
+  },
+  {
+   "id": "where-are-the-clients",
+   "slug": "where-are-the-clients",
+   "status": "draft",
+   "kind": "workshop",
+   "title": "Where are the clients?",
+   "starts_at": null,
+   "duration_minutes": 180,
+   "time_zone": "Africa/Accra",
+   "format": "live online",
+   "price_ghs": 350,
+   "capacity": 25,
+   "admission": "invite",
+   "reserved_graduate_seats": 5,
+   "foundations_discount_pct": 20,
+   "graduate_free": true,
+   "referral_discount_ghs": 50,
+   "is_test": false,
+   "series_slug": "get-paid-for-automation",
+   "series_number": 3,
+   "announce": true,
+   "content": {
+    "summary": "Practical ways to find and approach businesses that need automation.",
+    "problem": "Knowing who you want to serve is not the same as meeting them. Most practitioners rely on luck and the occasional referral. A repeatable way to find prospects and open a conversation is what turns a skill into a steady flow of work.",
+    "audience": "Practitioners who know what they offer but have few prospective clients.",
+    "outcomes": [
+     "Find prospects among local businesses, professional networks and industry associations.",
+     "Ask for, and earn, referrals without awkwardness.",
+     "Use online communities and freelance platforms without competing on price alone.",
+     "Write a first message that gets a reply rather than being ignored.",
+     "Keep a simple record of who you have contacted and what happens next."
+    ],
+    "series_fit": "Builds on the client profile from Workshop 02 and leads into Workshop 04, where the first conversation becomes a discovery session."
+   }
+  },
+  {
+   "id": "discover-what-clients-need",
+   "slug": "discover-what-clients-need",
+   "status": "draft",
+   "kind": "workshop",
+   "title": "Discover what clients need",
+   "starts_at": null,
+   "duration_minutes": 180,
+   "time_zone": "Africa/Accra",
+   "format": "live online",
+   "price_ghs": 350,
+   "capacity": 25,
+   "admission": "invite",
+   "reserved_graduate_seats": 5,
+   "foundations_discount_pct": 20,
+   "graduate_free": true,
+   "referral_discount_ghs": 50,
+   "is_test": false,
+   "series_slug": "get-paid-for-automation",
+   "series_number": 4,
+   "announce": true,
+   "content": {
+    "summary": "Ask the questions that reveal problems worth paying to solve.",
+    "problem": "Clients rarely ask for an automation. They describe a frustration: invoices chased by hand, orders typed in twice, a report that takes a day. Discovery turns that frustration into a defined problem with a cost attached, and that is what makes a project worth paying for.",
+    "audience": "Practitioners who get to the first meeting but leave without a clear project.",
+    "outcomes": [
+     "Run a structured discovery conversation.",
+     "Map how a business process works today, including the workarounds.",
+     "Estimate what the current problem costs in time, errors and missed revenue.",
+     "Separate real automation opportunities from problems that need a different fix.",
+     "Summarize your findings so the client agrees on what needs solving."
+    ],
+    "series_fit": "Discovery supplies the facts that the scope in Workshop 05 and the price in Workshop 01 depend on."
+   }
+  },
+  {
+   "id": "scope-it-before-you-quote-it",
+   "slug": "scope-it-before-you-quote-it",
+   "status": "draft",
+   "kind": "workshop",
+   "title": "Scope it before you quote it",
+   "starts_at": null,
+   "duration_minutes": 180,
+   "time_zone": "Africa/Accra",
+   "format": "live online",
+   "price_ghs": 350,
+   "capacity": 25,
+   "admission": "invite",
+   "reserved_graduate_seats": 5,
+   "foundations_discount_pct": 20,
+   "graduate_free": true,
+   "referral_discount_ghs": 50,
+   "is_test": false,
+   "series_slug": "get-paid-for-automation",
+   "series_number": 5,
+   "announce": true,
+   "content": {
+    "summary": "Agree what you are building before you agree what it costs.",
+    "problem": "Most project disputes start with a vague scope. The client expected one thing, the builder delivered another, and the extra work went unpaid. A clear scope protects both sides before any money changes hands.",
+    "audience": "Practitioners who have had projects grow beyond what they quoted.",
+    "outcomes": [
+     "Define deliverables and requirements in plain language.",
+     "Write assumptions and exclusions so the limits are agreed in advance.",
+     "Set acceptance criteria that say when the work is finished.",
+     "Handle change requests with a simple, fair process.",
+     "Turn a scope into the basis for an accurate quote."
+    ],
+    "series_fit": "Connects discovery in Workshop 04 to pricing in Workshop 01 and to the proposal in Workshop 06."
+   }
+  },
+  {
+   "id": "write-proposals-that-win",
+   "slug": "write-proposals-that-win",
+   "status": "draft",
+   "kind": "workshop",
+   "title": "Write proposals that win",
+   "starts_at": null,
+   "duration_minutes": 180,
+   "time_zone": "Africa/Accra",
+   "format": "live online",
+   "price_ghs": 350,
+   "capacity": 25,
+   "admission": "invite",
+   "reserved_graduate_seats": 5,
+   "foundations_discount_pct": 20,
+   "graduate_free": true,
+   "referral_discount_ghs": 50,
+   "is_test": false,
+   "series_slug": "get-paid-for-automation",
+   "series_number": 6,
+   "announce": true,
+   "content": {
+    "summary": "Turn a client's problem into a proposal they can say yes to.",
+    "problem": "A good proposal is not a price list. It shows the client you understood their problem, explains what they will get and what it will cost, and makes the next step easy. Many practitioners send a number in a chat message and wonder why the client goes quiet.",
+    "audience": "Practitioners who are asked for proposals or quotes and want them to read professionally.",
+    "outcomes": [
+     "Structure a proposal around the client's problem and the outcome they want.",
+     "Present deliverables, fees, timeline and responsibilities clearly.",
+     "Offer options without confusing the client.",
+     "Write terms covering payment, revisions and support.",
+     "Make the next step obvious."
+    ],
+    "series_fit": "Brings discovery, scope and pricing from Workshops 01, 04 and 05 together into one document the client can approve."
+   }
+  },
+  {
+   "id": "close-the-deal",
+   "slug": "close-the-deal",
+   "status": "draft",
+   "kind": "workshop",
+   "title": "Close the deal",
+   "starts_at": null,
+   "duration_minutes": 180,
+   "time_zone": "Africa/Accra",
+   "format": "live online",
+   "price_ghs": 350,
+   "capacity": 25,
+   "admission": "invite",
+   "reserved_graduate_seats": 5,
+   "foundations_discount_pct": 20,
+   "graduate_free": true,
+   "referral_discount_ghs": 50,
+   "is_test": false,
+   "series_slug": "get-paid-for-automation",
+   "series_number": 7,
+   "announce": true,
+   "content": {
+    "summary": "Move from an interested client to a signed agreement.",
+    "problem": "Plenty of proposals stall. The client asks for a discount, compares you with someone cheaper, or simply stops replying. Knowing how to discuss fees, answer objections and follow up is often the difference between a busy month and an empty one.",
+    "audience": "Practitioners whose proposals get interest but not agreement.",
+    "outcomes": [
+     "Discuss your fee calmly and explain what it covers.",
+     "Respond to common objections about price, timing and trust.",
+     "Negotiate reasonable terms without cutting your price by reflex.",
+     "Follow up on a proposal without pestering.",
+     "Confirm the agreement in writing before any work starts."
+    ],
+    "series_fit": "Follows Workshop 06. Once the proposal is sent, this is how it becomes a contract."
+   }
+  },
+  {
+   "id": "deliver-like-a-professional",
+   "slug": "deliver-like-a-professional",
+   "status": "draft",
+   "kind": "workshop",
+   "title": "Deliver like a professional",
+   "starts_at": null,
+   "duration_minutes": 180,
+   "time_zone": "Africa/Accra",
+   "format": "live online",
+   "price_ghs": 350,
+   "capacity": 25,
+   "admission": "invite",
+   "reserved_graduate_seats": 5,
+   "foundations_discount_pct": 20,
+   "graduate_free": true,
+   "referral_discount_ghs": 50,
+   "is_test": false,
+   "series_slug": "get-paid-for-automation",
+   "series_number": 8,
+   "announce": true,
+   "content": {
+    "summary": "Run projects so clients come back and refer you.",
+    "problem": "Winning the project is half the job. Missed updates, untested workflows and handovers nobody understands cost practitioners their reputation, and reputation is where referrals come from.",
+    "audience": "Practitioners who are starting to deliver paid projects and want them to run smoothly.",
+    "outcomes": [
+     "Set expectations at the start about communication, timing and the client's responsibilities.",
+     "Report progress so the client is never surprised.",
+     "Test deliverables against the agreed acceptance criteria.",
+     "Hand over with documentation the client can actually use.",
+     "Ask for feedback, testimonials and referrals at the right moment."
+    ],
+    "series_fit": "Delivers on the scope and proposal from Workshops 05 and 06, and sets up the ongoing relationship covered in Workshop 09."
+   }
+  },
+  {
+   "id": "turn-projects-into-recurring-income",
+   "slug": "turn-projects-into-recurring-income",
+   "status": "draft",
+   "kind": "workshop",
+   "title": "Turn projects into recurring income",
+   "starts_at": null,
+   "duration_minutes": 180,
+   "time_zone": "Africa/Accra",
+   "format": "live online",
+   "price_ghs": 350,
+   "capacity": 25,
+   "admission": "invite",
+   "reserved_graduate_seats": 5,
+   "foundations_discount_pct": 20,
+   "graduate_free": true,
+   "referral_discount_ghs": 50,
+   "is_test": false,
+   "series_slug": "get-paid-for-automation",
+   "series_number": 9,
+   "announce": true,
+   "content": {
+    "summary": "Build legitimate ongoing work from the automations you deliver.",
+    "problem": "Automations need care after launch. Connected services change, volumes grow and businesses want improvements. Practitioners who stop at handover leave that work, and the income that comes with it, to someone else.",
+    "audience": "Practitioners with delivered projects who want more predictable income.",
+    "outcomes": [
+     "Identify the ongoing support a client's automations genuinely need.",
+     "Design support, monitoring and maintenance offers clients understand.",
+     "Price recurring services fairly for both sides.",
+     "Write a simple service agreement covering response times and limits.",
+     "Recognize recurring arrangements that would be unfair or unsustainable."
+    ],
+    "series_fit": "Extends Workshops 01 and 08: pricing applied to ongoing services, built on a delivery the client already trusts."
+   }
+  },
+  {
+   "id": "win-international-clients",
+   "slug": "win-international-clients",
+   "status": "draft",
+   "kind": "workshop",
+   "title": "Win international clients",
+   "starts_at": null,
+   "duration_minutes": 180,
+   "time_zone": "Africa/Accra",
+   "format": "live online",
+   "price_ghs": 350,
+   "capacity": 25,
+   "admission": "invite",
+   "reserved_graduate_seats": 5,
+   "foundations_discount_pct": 20,
+   "graduate_free": true,
+   "referral_discount_ghs": 50,
+   "is_test": false,
+   "series_slug": "get-paid-for-automation",
+   "series_number": 10,
+   "announce": true,
+   "content": {
+    "summary": "Offer your automation services to clients outside Ghana.",
+    "problem": "Automation work can be delivered from anywhere, and many overseas businesses hire remote specialists. Competing for that work means presenting your services for a different market, quoting in another currency, and handling contracts, payments and time zones across borders.",
+    "audience": "Practitioners ready to take on clients outside Ghana, or already doing so informally.",
+    "outcomes": [
+     "Position your services for overseas buyers.",
+     "Communicate professionally across cultures and time zones.",
+     "Prepare international quotations, including currency and payment terms.",
+     "Understand the practical points of cross-border contracts and getting paid.",
+     "Decide which international opportunities fit your capacity."
+    ],
+    "series_fit": "Applies the whole series, from pricing to delivery, to clients in other markets."
+   }
+  }
+ ],
+ "samples": [
+  {
+   "id": "sample-webinar",
+   "slug": "sample-webinar",
+   "status": "published",
+   "kind": "webinar",
+   "title": "Stop chasing unpaid invoices by hand",
+   "starts_at": "2099-11-21T11:30:00Z",
+   "duration_minutes": 90,
+   "time_zone": "Africa/Accra",
+   "format": "live on Zoom",
+   "price_ghs": 150,
+   "capacity": 40,
+   "admission": "link",
+   "reserved_graduate_seats": 0,
+   "foundations_discount_pct": 0,
+   "graduate_free": false,
+   "referral_discount_ghs": 0,
+   "is_test": false,
+   "series_slug": null,
+   "series_number": null,
+   "announce": false,
+   "content": {
+    "summary": "In 90 minutes you build an n8n workflow that emails polite reminders about overdue invoices and stops the moment the client pays.",
+    "directory_line": "Build reminders that go out on schedule and stop the moment a client pays.",
+    "description": "Sample webinar used by the test suite.",
+    "audience": "Freelancers and small business owners who invoice clients",
+    "leave_with": [
+     "A reminder workflow running in your own n8n account, not a copy of someone else's screen.",
+     "A schedule you can change: reminders at 3, 7 and 14 days overdue.",
+     "A check that stops reminders once an invoice is marked paid, so nobody who has paid gets chased.",
+     "The exported workflow file, ready to reuse for your next client."
+    ],
+    "run_of_show": [
+     {
+      "at": "0:00",
+      "title": "The finished workflow, running",
+      "detail": "What it does and what it will not do"
+     },
+     {
+      "at": "0:10",
+      "title": "Read overdue invoices from a sheet",
+      "detail": "Dates, amounts and missing fields"
+     },
+     {
+      "at": "0:30",
+      "title": "Write and send the reminder",
+      "detail": "Email first; the wording stays polite"
+     },
+     {
+      "at": "0:55",
+      "title": "Stop when paid, then test it twice",
+      "detail": "What happens if it runs again tomorrow"
+     },
+     {
+      "at": "1:15",
+      "title": "Your questions",
+      "detail": "Bring your own invoicing setup"
+     }
+    ],
+    "good_fit": "You send invoices, you lose hours following up, and you have used n8n at least once or are willing to set up a free account before the session.",
+    "not_fit": "Your accounting software already sends reminders you are happy with, or you want a certification. Webinars are training; certification is assessed separately.",
+    "bring": "a laptop rather than a phone, an n8n account (the free trial works), and a Google account.",
+    "faq": [
+     {
+      "q": "Is it recorded?",
+      "a": "Sample answer for the test fixture."
+     }
+    ],
+    "instructor": "johnathan"
+   }
+  },
+  {
+   "id": "sample-free",
+   "slug": "sample-free",
+   "status": "published",
+   "kind": "webinar",
+   "title": "Your first n8n workflow, built live",
+   "starts_at": "2099-11-28T11:30:00Z",
+   "duration_minutes": 60,
+   "time_zone": "Africa/Accra",
+   "format": "live on Zoom",
+   "price_ghs": 0,
+   "capacity": 40,
+   "admission": "link",
+   "reserved_graduate_seats": 0,
+   "foundations_discount_pct": 0,
+   "graduate_free": false,
+   "referral_discount_ghs": 0,
+   "is_test": false,
+   "series_slug": null,
+   "series_number": null,
+   "announce": false,
+   "content": {
+    "summary": "In 90 minutes you build an n8n workflow that emails polite reminders about overdue invoices and stops the moment the client pays.",
+    "directory_line": "Build reminders that go out on schedule and stop the moment a client pays.",
+    "description": "Sample webinar used by the test suite.",
+    "audience": "Freelancers and small business owners who invoice clients",
+    "leave_with": [
+     "A reminder workflow running in your own n8n account, not a copy of someone else's screen.",
+     "A schedule you can change: reminders at 3, 7 and 14 days overdue.",
+     "A check that stops reminders once an invoice is marked paid, so nobody who has paid gets chased.",
+     "The exported workflow file, ready to reuse for your next client."
+    ],
+    "run_of_show": [
+     {
+      "at": "0:00",
+      "title": "The finished workflow, running",
+      "detail": "What it does and what it will not do"
+     },
+     {
+      "at": "0:10",
+      "title": "Read overdue invoices from a sheet",
+      "detail": "Dates, amounts and missing fields"
+     },
+     {
+      "at": "0:30",
+      "title": "Write and send the reminder",
+      "detail": "Email first; the wording stays polite"
+     },
+     {
+      "at": "0:55",
+      "title": "Stop when paid, then test it twice",
+      "detail": "What happens if it runs again tomorrow"
+     },
+     {
+      "at": "1:15",
+      "title": "Your questions",
+      "detail": "Bring your own invoicing setup"
+     }
+    ],
+    "good_fit": "You send invoices, you lose hours following up, and you have used n8n at least once or are willing to set up a free account before the session.",
+    "not_fit": "Your accounting software already sends reminders you are happy with, or you want a certification. Webinars are training; certification is assessed separately.",
+    "bring": "a laptop rather than a phone, an n8n account (the free trial works), and a Google account.",
+    "faq": [
+     {
+      "q": "Is it recorded?",
+      "a": "Sample answer for the test fixture."
+     }
+    ],
+    "instructor": "johnathan"
+   }
+  }
+ ]
+}

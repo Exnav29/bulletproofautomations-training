@@ -1,572 +1,777 @@
-/* Webinars & workshops workspace for /admin/workshops/.
+/* The workshop desk: /admin/workshops/ (release 6).
  *
- * Reads through the signed-in admin's Supabase session (RLS: the same email
- * allowlist as the cohort roll; read-only). Every change goes through
- * /api/admin/workshops, which re-checks the admin and calls the audited RPC.
- * Uses the shared session(), authFetch(), refresh() and esc() from admin.js,
- * the same way admin-payments.js does. Nothing here moves money. */
+ * Create, edit, publish, close, cancel and delete workshops; see who is booked
+ * and what needs a person; manage referral codes for anyone. Reads through the
+ * signed-in admin's Supabase session (RLS: the admin's email only; read-only).
+ * Every change goes through /api/admin/workshops, which re-checks the admin and
+ * calls an audited database function that enforces the rules. Nothing here
+ * moves money: refunds are issued in Paystack, commissions paid by hand.
+ *
+ * Uses the shared session(), authFetch(), refresh() and esc() from admin.js. */
 (function () {
   "use strict";
   if (document.documentElement.getAttribute("data-admin-view") !== "workshops") return;
 
-  var STATUS = {
-    pending_payment: "Awaiting payment",
-    confirmed: "Confirmed",
-    payment_received_review: "Payment held for review",
-    refund_pending: "Refund requested",
-    cancelled: "Cancelled",
-    refunded: "Refunded"
-  };
-  var PAYMENT = {
-    not_required: "Free",
-    pending: "Not paid",
-    paid: "Paid",
-    needs_review: "Needs review",
-    partially_refunded: "Partly refunded",
-    refunded: "Refunded"
-  };
-  var REASON = {
-    capacity: "Paid after the seat hold expired, session full",
-    session_unavailable: "Paid for a session that was cancelled, closed or had started",
-    registration_cancelled: "Paid after the registration was cancelled",
-    duplicate_payment: "Paid more than once; access kept",
-    payment_mismatch: "Amount, currency or mode did not match the checkout",
-    partial_refund: "Partly refunded"
-  };
+  var STATUS = { pending_payment: "Awaiting payment", confirmed: "Confirmed", payment_received_review: "Payment held for review",
+    refund_pending: "Refund requested", cancelled: "Cancelled", refunded: "Refunded" };
+  var PAYMENT = { not_required: "Free", pending: "Not paid", paid: "Paid", needs_review: "Needs review",
+    partially_refunded: "Partly refunded", refunded: "Refunded" };
+  var REASON = { capacity: "Paid after the 30-minute hold ran out, and the workshop was full",
+    session_unavailable: "Paid for a workshop that was cancelled, closed or had started",
+    registration_cancelled: "Paid after the registration was cancelled", duplicate_payment: "Paid more than once; their place is kept",
+    payment_mismatch: "The amount, currency or mode did not match the checkout", partial_refund: "Partly refunded" };
   var ATTENDANCE = { unknown: "Not recorded", attended: "Attended", no_show: "No-show" };
+  var TIER = { standard: "Standard price", foundations: "Foundations certificate price", graduate: "Intermediate graduate, free" };
+  var HOLDING = ["confirmed", "payment_received_review", "refund_pending"];
 
-  var ws = { sessions: {}, rows: [], attempts: {}, referrers: [], payouts: {}, waitlist: [] };
-  var TIER = { standard: "", foundations: "Foundations price", graduate: "Graduate, complimentary" };
+  var ws = { sessions: {}, list: [], rows: [], attempts: {}, referrers: [], payouts: {}, waitlist: [], failedMail: {},
+    series: [], settings: { referral_discount_ghs: 50, referral_commission_ghs: 50 } };
   var $ = function (id) { return document.getElementById(id); };
+  var origin = location.origin;
 
+  /* ---------- small helpers ---------- */
   function fill(select, labels) {
-    Object.keys(labels).forEach(function (k) {
-      var o = document.createElement("option");
-      o.value = k; o.textContent = labels[k];
-      select.appendChild(o);
-    });
+    Object.keys(labels).forEach(function (k) { var o = document.createElement("option"); o.value = k; o.textContent = labels[k]; select.appendChild(o); });
   }
-  fill($("ws-status"), STATUS);
-  fill($("ws-payment"), PAYMENT);
-  fill($("ws-attendance"), ATTENDANCE);
-
-  function ghs(minor) {
-    return (Number(minor || 0) / 100).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-  }
-  function when(v) {
+  fill($("ws-status"), STATUS); fill($("ws-payment"), PAYMENT); fill($("ws-attendance"), ATTENDANCE);
+  function cedis(n) { return Number(n || 0).toLocaleString("en-GB", { maximumFractionDigits: 2 }); }
+  function ghsMinor(minor) { return cedis(Number(minor || 0) / 100); }
+  // Ghana time is GMT, so UTC is the clock people see.
+  function when(v, opts) {
     var d = new Date(v);
-    return isNaN(d.getTime()) ? "" : d.toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    return isNaN(d.getTime()) ? "" : d.toLocaleString("en-GB", Object.assign({ timeZone: "UTC" }, opts || { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }));
   }
-  function show(id, text) { var el = $(id); el.textContent = text || ""; el.hidden = !text; }
+  function daysUntil(t) { return Math.ceil((t - Date.now()) / 864e5); }
+  function show(id, text) { var el = $(id); el.textContent = text || ""; el.hidden = !text; if (text && id === "ws-message") setTimeout(function () { if (el.textContent === text) el.hidden = true; }, 6000); }
+  function said(text) { show("ws-error", ""); show("ws-message", text); }
+  function failed(err) { show("ws-message", ""); show("ws-error", err && err.message ? err.message : String(err)); }
+  function rowsOf(id) { return ws.rows.filter(function (r) { return r.session_id === id; }); }
+  function sessionOf(r) { return ws.sessions[r.session_id] || {}; }
 
   function apiPost(body) {
     var current = session();
-    if (!current) return Promise.reject(new Error("Not signed in"));
+    if (!current) return Promise.reject(new Error("You are signed out. Sign in again."));
     var send = function (token) {
-      return fetch("/api/admin/workshops", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
-        body: JSON.stringify(body)
-      });
+      return fetch("/api/admin/workshops", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify(body) });
     };
-    var go = current.expires_at && Date.now() > current.expires_at
-      ? refresh().then(function (fresh) { return send(fresh.access_token); })
-      : send(current.access_token);
-    return go.then(function (r) { return r.json().then(function (j) { if (!r.ok || !j.ok) throw new Error(j.error || "Refused."); return j; }); });
+    var go = current.expires_at && Date.now() > current.expires_at ? refresh().then(function (fresh) { return send(fresh.access_token); }) : send(current.access_token);
+    return go.then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { if (!r.ok || !j.ok) throw new Error(j.error || "The change was refused."); return j; }); });
   }
-
   function getJson(path) {
     return authFetch(path).then(function (r) {
       if (r.status === 401 || r.status === 403) throw new Error("Workshop records are not available to this admin account.");
-      if (r.status === 404) throw new Error("The workshop tables are not in this database yet (migration not applied).");
       if (!r.ok) return r.text().then(function (t) { throw new Error(t || "Could not load workshop records."); });
       return r.json();
     });
   }
 
+  /* ---------- load ---------- */
   function load() {
     show("ws-error", "");
     return Promise.all([
-      // admission and calendar_event_id arrive with migration 20261109120000; without it the page still loads.
-      getJson("/rest/v1/workshop_sessions?select=id,slug,kind,title,starts_at,status,price_ghs,capacity,admission,calendar_event_id,reserved_graduate_seats,is_test&order=starts_at.desc")
-        .catch(function () { return getJson("/rest/v1/workshop_sessions?select=id,slug,kind,title,starts_at,status,price_ghs,capacity&order=starts_at.desc"); }),
+      getJson("/rest/v1/workshop_sessions?select=*"),
       getJson("/rest/v1/workshop_registrations?select=*&order=created_at.desc"),
       getJson("/rest/v1/workshop_payment_attempts?select=registration_id,reference,status,amount_minor,received_minor,refunded_minor,mode,verified_via,created_at&order=created_at.asc"),
-      // Referral tables arrive with migration 20261109120000; without them the page still loads.
       getJson("/rest/v1/workshop_referrers?select=*&order=created_at.asc").catch(function () { return []; }),
       getJson("/rest/v1/workshop_referral_payouts?select=*").catch(function () { return []; }),
-      getJson("/rest/v1/workshop_sessions?select=id,referral_commission_ghs").catch(function () { return []; }),
-      // The waitlist arrives with migration 20261111120000; without it the page still loads.
       getJson("/rest/v1/workshop_waitlist?select=*&order=created_at.asc,id.asc").catch(function () { return []; }),
-      // Emails the dispatcher gave up on after 5 attempts: each can be retried from its row.
-      // Failed, or stranded "sending" with no attempts left (its last result was never recorded).
-      getJson("/rest/v1/workshop_notifications?select=registration_id,kind,error,status&status=in.(failed,sending)&attempts=gte.5").catch(function () { return []; })
+      getJson("/rest/v1/workshop_notifications?select=registration_id,kind,error,status&status=in.(failed,sending)&attempts=gte.5").catch(function () { return []; }),
+      getJson("/rest/v1/workshop_series?select=*&order=slug.asc").catch(function () { return []; }),
+      getJson("/rest/v1/workshop_settings?select=*").catch(function () { return []; })
     ]).then(function (out) {
-      ws.failedMail = {};
-      (out[7] || []).forEach(function (n) { (ws.failedMail[n.registration_id] = ws.failedMail[n.registration_id] || []).push(n); });
-      ws.referrers = out[3];
-      ws.waitlist = out[6] || [];
-      ws.payouts = {};
-      out[4].forEach(function (p) { ws.payouts[p.registration_id] = p; });
-      ws.commission = {};
-      out[5].forEach(function (s) { ws.commission[s.id] = Number(s.referral_commission_ghs || 0); });
-      ws.sessions = {};
-      out[0].forEach(function (s) { ws.sessions[s.id] = s; });
+      ws.sessions = {}; out[0].forEach(function (s) { ws.sessions[s.id] = s; });
+      ws.list = out[0];
       ws.rows = out[1];
-      ws.attempts = {};
-      out[2].forEach(function (a) { (ws.attempts[a.registration_id] = ws.attempts[a.registration_id] || []).push(a); });
+      ws.attempts = {}; out[2].forEach(function (a) { (ws.attempts[a.registration_id] = ws.attempts[a.registration_id] || []).push(a); });
+      ws.referrers = out[3];
+      ws.payouts = {}; out[4].forEach(function (p) { ws.payouts[p.registration_id] = p; });
+      ws.waitlist = out[5] || [];
+      ws.failedMail = {}; (out[6] || []).forEach(function (n) { (ws.failedMail[n.registration_id] = ws.failedMail[n.registration_id] || []).push(n); });
+      ws.series = out[7] || [];
+      if (out[8] && out[8][0]) ws.settings = out[8][0];
       var sel = $("ws-session"), keep = sel.value;
       sel.length = 1;
-      out[0].forEach(function (s) {
-        var o = document.createElement("option");
-        o.value = s.id; o.textContent = s.title + " — " + when(s.starts_at);
-        sel.appendChild(o);
-      });
+      ordered(ws.list).forEach(function (s) { var o = document.createElement("option"); o.value = s.id; o.textContent = (s.is_test ? "TEST: " : "") + s.title; sel.appendChild(o); });
       sel.value = keep;
       render();
-    }).catch(function (err) { show("ws-error", err.message); });
+    }).catch(failed);
   }
 
-  function filtered() {
-    var f = { s: $("ws-session").value, st: $("ws-status").value, p: $("ws-payment").value, a: $("ws-attendance").value,
-      q: $("ws-q").value.trim().toLowerCase() };
-    return ws.rows.filter(function (r) {
-      if (f.s && r.session_id !== f.s) return false;
-      if (f.st && r.status !== f.st) return false;
-      if (f.p && r.payment_status !== f.p) return false;
-      if (f.a && r.attendance !== f.a) return false;
-      if (f.q) {
-        var hay = [r.full_name, r.email_normalized, r.utm_campaign, r.utm_content, r.utm_source].join(" ").toLowerCase();
-        if (hay.indexOf(f.q) === -1) return false;
-      }
-      return true;
-    });
-  }
-
-  function needsResolution(r) {
-    return r.status === "payment_received_review" || r.status === "refund_pending" || r.payment_status === "needs_review";
-  }
-
-  function actions(r) {
-    var b = [];
-    if (r.status === "payment_received_review") b.push('<button class="mini" type="button" data-ws="admit" data-id="' + esc(r.id) + '">Admit</button>');
-    if ((r.status === "payment_received_review" || r.status === "confirmed") &&
-        ["paid", "needs_review", "partially_refunded"].indexOf(r.payment_status) !== -1) {
-      b.push('<button class="mini" type="button" data-ws="request_refund" data-id="' + esc(r.id) + '">Request refund</button>');
-    }
-    if (r.review_reason === "duplicate_payment") b.push('<button class="mini" type="button" data-ws="resolve_duplicate" data-id="' + esc(r.id) + '">Note duplicate refund</button>');
-    if (r.status === "pending_payment" && r.payment_status === "pending") b.push('<button class="mini" type="button" data-ws="cancel" data-id="' + esc(r.id) + '">Cancel</button>');
-    if (isInvite(r) && r.status === "confirmed") b.push('<button class="mini" type="button" data-ws-account="' + esc(r.id) + '">Google account</button>');
-    var undelivered = (ws.failedMail || {})[r.id];
-    if (undelivered) {
-      b.push('<span class="msg msg--bad">Email not delivered: ' + esc(undelivered.map(function (n) { return n.kind.replace(/_/g, " ") + " (" + (n.error || (n.status === "sending" ? "result never recorded" : "failed")) + ")"; }).join(", ")) + '</span>' +
-        ' <button class="mini" type="button" data-ws="retry_email" data-id="' + esc(r.id) + '">Retry email</button>');
-    }
-    return b.join(" ");
-  }
-
-  /* Admission by Google Calendar invitation. Nothing is stored about what to
-   * do next; it is derived here from the registration and what is on the event:
-   *   add     confirmed, with a Google account that is not on the event yet
-   *   remove  an account on the event whose registration is no longer
-   *           confirmed (refund, cancellation) or that was replaced
-   * Removals are listed first: a changed account is removed, then added. */
-  /* Test, as the database decides it (workshop_is_test_registration): a test
-   * session, or any test-mode checkout. Test rows never count towards revenue,
-   * places, campaigns or commission. */
-  function isTest(r) {
-    var s = ws.sessions[r.session_id];
-    return !!(s && s.is_test === true) || (ws.attempts[r.id] || []).some(function (a) { return a.mode === "test"; });
-  }
-  function isInvite(r) { var s = ws.sessions[r.session_id]; return !!(s && s.admission === "invite"); }
+  /* ---------- the rules shared with the database ---------- */
+  function isTest(r) { var s = sessionOf(r); return s.is_test === true || (ws.attempts[r.id] || []).some(function (a) { return a.mode === "test"; }); }
+  function isInvite(r) { return sessionOf(r).admission === "invite"; }
   function toAdd(r) { return isInvite(r) && r.status === "confirmed" && !!r.attend_email && r.attend_email !== r.invited_email; }
   function toRemove(r) { return isInvite(r) && !!r.invited_email && (r.status !== "confirmed" || r.attend_email !== r.invited_email); }
   function noAccount(r) { return isInvite(r) && r.status === "confirmed" && !r.attend_email; }
-
-  /* Invitations are sent automatically by the dispatcher (functions/api/_calendar.js).
-   * The exception queue lists what it could not do: an error recorded and the
-   * change still outstanding. "Retry" clears the error and tries again at once. */
-  function calendarException(r) {
-    return !!r.calendar_sync_error && (toAdd(r) || toRemove(r) || Number(r.calendar_sync_failures) >= 5);
-  }
-  /* Places and waitlists: capacity, places left, reserved graduate places, the
-   * queue in order, live offers, outcomes, and the exceptions that need a person.
-   * Offers are made by the dispatcher; the admin never moves the queue by hand. */
-  function waitlists() {
-    var WL = { waiting: "Waiting", offered: "Offer open", converted: "Registered from an offer", expired: "Offer expired",
-      declined: "Declined", skipped: "Skipped", closed: "Closed at the cutoff", removed: "Removed by the admin" };
-    var counted = ["confirmed", "payment_received_review", "refund_pending"];
-    var waitingTotal = 0;
-    var html = Object.keys(ws.sessions).map(function (id) {
-      var s = ws.sessions[id];
-      var list = ws.waitlist.filter(function (w) { return w.session_id === id; });
-      var regs = ws.rows.filter(function (r) { return r.session_id === id && counted.indexOf(r.status) !== -1; });
-      if (!s.capacity && !list.length) return "";
-      var grad = regs.filter(function (r) { return r.price_tier === "graduate"; }).length;
-      var general = regs.length - grad;
-      var live = list.filter(function (w) { return w.status === "offered" && Date.parse(w.offer_expires_at) > Date.now(); });
-      var liveGeneral = live.filter(function (w) { return w.seat_kind === "general"; }).length;
-      var liveGrad = live.length - liveGeneral;
-      var waiting = list.filter(function (w) { return w.status === "waiting"; });
-      waitingTotal += waiting.length;
-      var tally = {};
-      list.forEach(function (w) { tally[w.status] = (tally[w.status] || 0) + 1; });
-      var errors = list.filter(function (w) { return w.email_error; });
-      var queue = ["general", "graduate"].map(function (k) {
-        var q = waiting.filter(function (w) { return w.seat_kind === k; });
-        return q.length ? "<p><strong>" + (k === "general" ? "Open places" : "Reserved graduate places") + ": " + q.length + " waiting, in order</strong></p><ol>" +
-          q.map(function (w) {
-            return "<li>" + esc(w.full_name) + " " + esc(w.email_normalized) + " <small>joined " + esc(when(w.created_at)) + "</small> " +
-              '<button class="mini" type="button" data-wl="waitlist_remove" data-id="' + esc(w.id) + '">Remove</button></li>';
-          }).join("") + "</ol>" : "";
-      }).join("");
-      return '<div class="ws-inv"><h4>' + esc(s.title) + " &mdash; " + esc(when(s.starts_at)) + (s.is_test ? ' <span class="tag tag--bad">TEST SESSION</span>' : "") + "</h4>" +
-        "<p>Open places: " + general + " confirmed and " + liveGeneral + " held by offers, of " + (s.capacity || 0) +
-        " (" + Math.max(0, (s.capacity || 0) - general - liveGeneral) + " left before pending checkouts). " +
-        (s.reserved_graduate_seats ? "Reserved graduate places: " + grad + " confirmed and " + liveGrad + " held, of " + s.reserved_graduate_seats + ". " : "") +
-        "Total " + ((s.capacity || 0) + (s.reserved_graduate_seats || 0)) + ".</p>" +
-        (live.length ? "<p><strong>Offers open</strong></p><ul>" + live.map(function (w) {
-          return "<li>" + esc(w.full_name) + " " + esc(w.email_normalized) + " (" + esc(w.seat_kind) + ") until " + esc(when(w.offer_expires_at)) +
-            (w.registration_id ? " <small>registered, payment pending</small>" : "") + "</li>";
-        }).join("") + "</ul>" : "") + queue +
-        "<p><small>" + Object.keys(WL).filter(function (k) { return tally[k]; }).map(function (k) { return WL[k] + ": " + tally[k]; }).join(" &middot; ") + "</small></p>" +
-        (errors.length ? '<p class="msg msg--bad">Emails that failed:</p><ul>' + errors.map(function (w) {
-          return "<li>" + esc(w.full_name) + " " + esc(w.email_normalized) + ": " + esc(w.email_error) + " (" + esc(w.email_failures) + " tries) " +
-            '<button class="mini" type="button" data-wl="waitlist_retry_email" data-id="' + esc(w.id) + '">Retry email</button></li>';
-        }).join("") + "</ul>" : "") + "</div>";
-    }).join("");
-    $("ws-wl-count").textContent = waitingTotal;
-    $("ws-waitlist").innerHTML = html || '<p class="msg msg--empty">No session has places to show.</p>';
-  }
-  document.addEventListener("click", function (e) {
-    var b = e.target.closest && e.target.closest("[data-wl]");
-    if (!b) return;
-    var action = b.getAttribute("data-wl");
-    var reason = null;
-    if (action === "waitlist_remove") {
-      reason = window.prompt("Why remove this person from the waitlist? This is recorded, and the queue order is otherwise unchanged.");
-      if (!reason) return;
-    }
-    b.disabled = true;
-    apiPost({ waitlist_id: b.getAttribute("data-id"), action: action, value: reason })
-      .then(function () { show("ws-message", "Saved."); return load(); })
-      .catch(function (err) { show("ws-error", err.message); b.disabled = false; });
-  });
-
-  function invites() {
-    var ids = Object.keys(ws.sessions).filter(function (id) { return ws.sessions[id].admission === "invite"; });
-    var total = 0;
-    var failed = ws.rows.filter(function (r) { return isInvite(r) && calendarException(r); });
-    var queue = failed.length ? '<div class="ws-inv"><h4>Needs attention: automatic invitation failed</h4><ul>' + failed.map(function (r) {
-      var s = ws.sessions[r.session_id] || {};
-      return "<li><strong>" + esc(r.full_name) + "</strong> " + esc(r.attend_email || r.invited_email || r.email_normalized) +
-        (isTest(r) ? ' <span class="tag tag--bad">TEST</span>' : "") + " <small>(" + esc(s.title || "") + ")</small><br>" +
-        '<span class="msg msg--bad">' + esc(r.calendar_sync_error) + (Number(r.calendar_sync_failures) >= 5 ? " Retries stopped." : " Retrying automatically.") + "</span> " +
-        '<button class="mini" type="button" data-ws="retry_calendar" data-id="' + esc(r.id) + '">Retry now</button></li>';
-    }).join("") + "</ul></div>" : "";
-    total += failed.length;
-    var html = ids.map(function (id) {
-      var s = ws.sessions[id];
-      var mine = ws.rows.filter(function (r) { return r.session_id === id; });
-      var add = mine.filter(toAdd), remove = mine.filter(toRemove), missing = mine.filter(noAccount);
-      var onEvent = mine.filter(function (r) { return r.invited_email && !toRemove(r); }).length;
-      var seen = {}, dupes = [];
-      mine.filter(function (r) { return r.status === "confirmed" && r.attend_email; }).forEach(function (r) {
-        if (seen[r.attend_email]) dupes.push(r.attend_email);
-        seen[r.attend_email] = true;
-      });
-      total += add.length + remove.length + missing.length;
-      var who = function (r, email) {
-        var test = isTest(r);
-        return "<strong>" + esc(r.full_name) + "</strong> " + esc(email) + (test ? ' <span class="tag tag--bad">TEST</span>' : "") +
-          (r.price_tier === "graduate" ? ' <span class="tag">Graduate, complimentary</span>' : "") +
-          " <small>(" + esc(STATUS[r.status] || r.status) + ")</small>";
-      };
-      return '<div class="ws-inv"><h4>' + esc(s.title) + " &mdash; " + esc(when(s.starts_at)) + (s.is_test ? ' <span class="tag tag--bad">TEST SESSION</span>' : "") + "</h4>" +
-        (s.is_test ? '<p class="msg msg--bad">Rehearsal only. Add these addresses to the rehearsal Calendar event, never to a workshop&rsquo;s real event.</p>' : "") +
-        "<p><small>Google Calendar event ID: " + esc(s.calendar_event_id || "not recorded") + ". On the event now: " + onEvent + ".</small></p>" +
-        (dupes.length ? '<p class="msg msg--bad">The same Google account is on more than one confirmed registration: ' + esc(dupes.join(", ")) + ". Invite it once.</p>" : "") +
-        (remove.length ? "<p><strong>Remove from the event</strong></p><ul>" + remove.map(function (r) {
-          return "<li>" + who(r, r.invited_email) + ' <button class="mini" type="button" data-ws="mark_removed" data-id="' + esc(r.id) + '">Removed in Calendar</button></li>';
-        }).join("") + "</ul>" : "") +
-        (add.length ? "<p><strong>Add to the event</strong> " +
-          '<button class="mini" type="button" data-ws-copy="' + esc(add.map(function (r) { return r.attend_email; }).join(", ")) + '">Copy ' + add.length + " address" + (add.length === 1 ? "" : "es") + "</button></p><ul>" +
-          add.map(function (r) {
-            return "<li>" + who(r, r.attend_email) + ' <button class="mini" type="button" data-ws="mark_invited" data-id="' + esc(r.id) + '">Added in Calendar</button></li>';
-          }).join("") + "</ul>" : "") +
-        (missing.length ? "<p><strong>Paid, no Google account yet</strong></p><ul>" + missing.map(function (r) {
-          return "<li>" + who(r, r.email_normalized) + ' <button class="mini" type="button" data-ws-account="' + esc(r.id) + '">Set Google account</button></li>';
-        }).join("") + "</ul>" : "") +
-        (!add.length && !remove.length && !missing.length ? '<p class="msg msg--empty">Nothing to do for this session.</p>' : "") +
-        "</div>";
-    }).join("");
-    $("ws-inv-count").textContent = total;
-    $("ws-invites").innerHTML = queue + (html || '<p class="msg msg--empty">No session is set to join by invitation.</p>');
-  }
-
-  function render() {
-    var rows = filtered();
-    $("ws-count").textContent = rows.length;
-    $("ws-rows").innerHTML = rows.map(function (r) {
-      var s = ws.sessions[r.session_id] || {};
-      var test = isTest(r);
-      return "<tr>" +
-        "<td><strong>" + esc(r.full_name) + "</strong><br><small>" + esc(r.email_normalized) + "</small>" +
-          (r.whatsapp ? "<br><small>" + esc(r.whatsapp) + (r.whatsapp_consent ? " (consented)" : "") + "</small>" : "") + "</td>" +
-        "<td>" + esc(s.title || "—") + (TIER[r.price_tier] ? "<br><small>" + esc(TIER[r.price_tier]) + (r.benefit_credential_id ? " · " + esc(r.benefit_credential_id) : "") + "</small>" : "") +
-          (r.referral_code ? "<br><small>Referral " + esc(r.referral_code) + "</small>" : "") + "</td>" +
-        "<td>" + esc(STATUS[r.status] || r.status) + (r.review_reason ? "<br><small>" + esc(REASON[r.review_reason] || r.review_reason) + "</small>" : "") +
-          (test ? ' <span class="tag tag--bad">TEST</span>' : "") + "</td>" +
-        "<td>" + esc(PAYMENT[r.payment_status] || r.payment_status) + "</td>" +
-        '<td class="num">' + ghs(r.amount_paid_minor) + "</td>" +
-        '<td><label class="vh" for="att-' + esc(r.id) + '">Attendance for ' + esc(r.full_name) + "</label>" +
-          '<select class="mini" id="att-' + esc(r.id) + '" data-ws-att="' + esc(r.id) + '">' +
-          Object.keys(ATTENDANCE).map(function (k) { return '<option value="' + k + '"' + (r.attendance === k ? " selected" : "") + ">" + ATTENDANCE[k] + "</option>"; }).join("") +
-          "</select></td>" +
-        "<td>" + esc(r.utm_campaign || "—") + (r.utm_content ? "<br><small>" + esc(r.utm_content) + "</small>" : "") + "</td>" +
-        "<td>" + esc(when(r.created_at)) + "</td>" +
-        "<td>" + actions(r) + "</td></tr>";
-    }).join("") || '<tr><td colspan="9">No registrations match.</td></tr>';
-
-    var attention = ws.rows.filter(needsResolution);
-    $("ws-attn-count").textContent = attention.length;
-    $("ws-attention").innerHTML = attention.length ? "<ul>" + attention.map(function (r) {
-      var s = ws.sessions[r.session_id] || {};
-      return "<li><strong>" + esc(r.full_name) + "</strong>, " + esc(s.title || "") + ": " +
-        esc(REASON[r.review_reason] || STATUS[r.status] || r.status) + ". GHS " + ghs(r.amount_paid_minor) + " held. " + actions(r) + "</li>";
-    }).join("") + "</ul>" : '<p class="msg msg--empty">Nothing waiting.</p>';
-
-    campaigns(rows);
-    invites();
-    waitlists();
-    referrals();
-  }
-
-  /* Commission is derived, never stored as owed. Mirrors
-   * workshop_commission_payable: confirmed, paid once in full (no refund,
-   * duplicate or mismatch), valid referral, not voided, not complimentary.
-   * Test checkouts never earn one.
-   *   due     payable, not yet paid out
-   *   paid    payable and paid out
-   *   review  paid out, but no longer payable (refunded, cancelled, voided): manual review, no automatic clawback */
-  function payable(r) {
-    var atts = ws.attempts[r.id] || [];
-    if (isTest(r)) return false;
-    return Number(r.commission_ghs) > 0 && !!r.referrer_id && r.price_tier !== "graduate" && !r.commission_voided_at &&
-      r.status === "confirmed" && r.payment_status === "paid" && Number(r.amount_paid_minor) === Math.round(Number(r.amount_ghs) * 100) &&
-      atts.some(function (a) { return a.status === "succeeded"; }) &&
-      !atts.some(function (a) { return a.status === "duplicate_payment" || a.status === "mismatch"; });
-  }
-  function commissionState(r) {
-    var ok = payable(r);
-    if (ws.payouts[r.id]) return ok ? "paid" : "review";
-    return ok ? "due" : "none";
-  }
-  var cedis = function (n) { return "GHS " + Number(n || 0).toLocaleString("en-GB", { maximumFractionDigits: 2 }); };
-  var DISCOUNT = { referral: "Referral", foundations: "Foundations", graduate: "Complimentary" };
-
-  function referrals() {
-    var due = 0, totals = { list: 0, discount: 0, paid: 0, commission: 0 };
-    var rows = ws.rows.filter(function (r) { return r.referral_code; });
-    var table = rows.map(function (r) {
-      var st = commissionState(r), s = ws.sessions[r.session_id] || {};
-      var paid = Number(r.amount_paid_minor || 0) / 100;
-      var commission = st === "due" || st === "paid" ? Number(r.commission_ghs) : 0;
-      if (st === "due") due += 1;
-      if (st !== "none") {
-        totals.list += Number(r.list_price_ghs || 0); totals.discount += Number(r.discount_ghs || 0);
-        totals.paid += paid; totals.commission += commission;
-      }
-      var label = { due: "Due", paid: "Paid (" + esc(ws.payouts[r.id] ? ws.payouts[r.id].payout_reference : "") + ")",
-        review: "Paid out, but no longer payable: review",
-        none: isTest(r) ? "Test registration: never payable" : r.commission_voided_at ? "Voided: " + esc(r.commission_void_reason || "") : "Not earned (" + esc(STATUS[r.status] || r.status) + ")" }[st];
-      return "<tr><td>" + esc(r.full_name) + "<br><small>" + esc(s.title || "") + "</small></td><td>" + esc(r.referral_code) + "</td>" +
-        '<td class="num">' + cedis(r.list_price_ghs) + '</td><td>' + esc(DISCOUNT[r.discount_kind] || "None") + " " + cedis(r.discount_ghs) +
-        '</td><td class="num">' + cedis(paid) + '</td><td class="num">' + cedis(commission) + '</td><td class="num">' + cedis(paid - commission) +
-        "</td><td>" + label +
-        (st === "due" ? ' <button class="mini" type="button" data-ws-payout="' + esc(r.id) + '">Record payout</button>' : "") +
-        (st === "due" || st === "paid" ? ' <button class="mini" type="button" data-ws-void="' + esc(r.id) + '">Void</button>' : "") + "</td></tr>";
-    }).join("");
-    /* A code is created "prepared": it works on test sessions only, so it can
-     * be rehearsed (link and typed) before registration opens. Activate it only
-     * when you are ready to give it to the graduate. */
-    var REF_STATE = { prepared: "Prepared: rehearsal only, not valid on live workshops", active: "Active: valid on live workshops", suspended: "Suspended: valid nowhere" };
-    var linkable = Object.keys(ws.sessions).map(function (id) { return ws.sessions[id]; })
-      .filter(function (s) { return s.status !== "cancelled" && s.status !== "completed" && ws.commission[s.id] > 0; });
-    var codes = ws.referrers.map(function (x) {
-      var links = linkable.map(function (s) {
-        return "<br><small>" + (s.is_test ? "Rehearsal link (test-mode deployment only): " : "Link for " + esc(s.title) + ": ") +
-          esc(location.origin) + "/workshops/" + esc(s.slug) + "/?ref=" + esc(x.code) + "</small>";
-      }).join("");
-      var to = x.status === "active" ? "suspend_referrer" : "activate_referrer";
-      var label = x.status === "active" ? "Suspend" : x.status === "prepared" ? "Activate for live workshops" : "Reactivate";
-      return "<li><strong>" + esc(x.code) + "</strong> &mdash; " + esc(x.credential_id) + " (" + esc(REF_STATE[x.status] || x.status) +
-        (x.expires_at ? ", expires " + esc(when(x.expires_at)) : "") + ")" + links + " " +
-        '<button class="mini" type="button" data-ws-ref-toggle="' + esc(x.credential_id) + '" data-to="' + to + '" data-from="' + esc(x.status) + '">' +
-        label + "</button></li>";
-    }).join("");
-    $("ws-referrals").innerHTML = (codes ? "<ul>" + codes + "</ul>" : '<p class="msg msg--empty">No referral codes issued.</p>') +
-      (table ? '<div class="roll-wrap"><table class="roll"><caption class="vh">Referred registrations</caption><thead><tr>' +
-        '<th scope="col">Registration</th><th scope="col">Code</th><th scope="col" class="num">Advertised</th><th scope="col">Discount</th>' +
-        '<th scope="col" class="num">Customer paid</th><th scope="col" class="num">Commission</th><th scope="col" class="num">Net retained</th><th scope="col">Commission state</th>' +
-        "</tr></thead><tbody>" + table + "</tbody><tfoot><tr><th scope=\"row\" colspan=\"2\">Payable and paid (live payments)</th>" +
-        '<td class="num">' + cedis(totals.list) + "</td><td>" + cedis(totals.discount) + '</td><td class="num">' + cedis(totals.paid) +
-        '</td><td class="num">' + cedis(totals.commission) + '</td><td class="num">' + cedis(totals.paid - totals.commission) + "</td><td>Before Paystack fees</td></tr></tfoot></table></div>" : "");
-    $("ws-ref-due").textContent = due;
-
-    // Places, the same split the database enforces: general and reserved graduate.
-    $("ws-places").innerHTML = Object.keys(ws.sessions).map(function (id) {
-      var s = ws.sessions[id];
-      if (!s.capacity) return "";
-      var mine = ws.rows.filter(function (r) { return r.session_id === id && ["confirmed", "payment_received_review", "refund_pending"].indexOf(r.status) !== -1; });
-      var grad = mine.filter(function (r) { return r.price_tier === "graduate"; }).length;
-      return "<li>" + esc(s.title) + (s.is_test ? " (TEST SESSION, separate places)" : "") + ": general " + (mine.length - grad) + " of " + s.capacity +
-        (s.reserved_graduate_seats ? ", reserved graduate " + grad + " of " + s.reserved_graduate_seats : "") + "</li>";
-    }).join("");
-  }
-
-  document.addEventListener("click", function (e) {
-    var pay = e.target.closest && e.target.closest("[data-ws-payout]");
-    var toggle = e.target.closest && e.target.closest("[data-ws-ref-toggle]");
-    var voided = e.target.closest && e.target.closest("[data-ws-void]");
-    var done = function (msg) { return function (j) { show("ws-message", j && j.already ? "Already recorded." : msg); return load(); }; };
-    var fail = function (err) { show("ws-error", err.message); };
-    if (pay) {
-      var reference = window.prompt("Paid the commission by hand? Enter the MoMo or bank reference to record it. A registration can be paid once.");
-      if (reference) apiPost({ registration_id: pay.getAttribute("data-ws-payout"), action: "record_payout", value: reference.trim() }).then(done("Payout recorded.")).catch(fail);
-    } else if (voided) {
-      var reason = window.prompt("Why is this commission void (for example, a fraudulent or mistaken sale)? This is recorded.");
-      if (reason) apiPost({ registration_id: voided.getAttribute("data-ws-void"), action: "void_commission", value: reason.trim() }).then(done("Commission voided.")).catch(fail);
-    } else if (toggle) {
-      if (toggle.getAttribute("data-from") === "prepared" &&
-          !window.confirm("Activate this code for live workshops? Do this only when you are ready to give it to the graduate: anyone holding it can then use it.")) return;
-      apiPost({ action: toggle.getAttribute("data-to"), credential_id: toggle.getAttribute("data-ws-ref-toggle") }).then(done("Saved.")).catch(fail);
-    }
-  });
-  // Recovery for a holder whose recorded email changed: verify them yourself first.
-  $("ws-grant-new").addEventListener("click", function () {
-    var credential = window.prompt("Certificate ID of the holder you have verified yourself:");
-    if (!credential) return;
-    var email = window.prompt("The holder's new email. It can claim this certificate once, for one session, for 7 days:");
-    if (!email) return;
-    var session = window.prompt("Workshop slug (for example what-to-charge-for-automation):");
-    if (!session) return;
-    var reason = window.prompt("How did you verify them? This is recorded.");
-    if (!reason) return;
-    apiPost({ action: "grant_email", credential_id: credential.trim(), email: email.trim(), session: session.trim(), value: reason.trim() })
-      .then(function () { show("ws-message", "Authorised for 7 days. They now request their code at that email."); return load(); })
-      .catch(function (err) { show("ws-error", err.message); });
-  });
-  $("ws-ref-new").addEventListener("click", function () {
-    var credential = window.prompt("Intermediate certificate ID of the graduate (the code is issued only if the certificate is valid, the entitlement is active and training fees are paid):");
-    if (!credential) return;
-    apiPost({ action: "create_referrer", credential_id: credential.trim(),
-      value: (window.prompt("Code to issue (4 to 16 letters and digits, never the certificate number). Leave blank to generate one:") || "").trim() })
-      .then(function (j) { show("ws-message", (j.already ? "Already issued: " : "Issued: ") + j.code + ". Not shared with anyone yet."); return load(); })
-      .catch(function (err) { show("ws-error", err.message); });
-  });
-
-  /* ONE definition of a paid webinar enrollment, shared with Meta:
-   * a CONFIRMED registration with a payment Paystack verified (the attempt in
-   * status "succeeded"). Its value is that attempt, net of refunds; duplicate
-   * payments never add to it. Money held for review is shown separately and
-   * is not counted until an admin admits it — the moment the Conversions API
-   * Purchase is sent. Mirrors workshop_apply_charge / workshop_admin_action
-   * and /api/workshops/status. */
+  function calendarException(r) { return !!r.calendar_sync_error && (toAdd(r) || toRemove(r) || Number(r.calendar_sync_failures) >= 5); }
+  function needsResolution(r) { return r.status === "payment_received_review" || r.status === "refund_pending" || r.payment_status === "needs_review"; }
   function verifiedMinor(r) {
     var primary = (ws.attempts[r.id] || []).filter(function (a) { return a.status === "succeeded"; })[0];
     return primary ? Math.max(0, Number(primary.received_minor || 0) - Number(primary.refunded_minor || 0)) : 0;
   }
   function isConfirmedPaid(r) { return r.status === "confirmed" && verifiedMinor(r) > 0; }
   function isHeldForReview(r) { return r.status === "payment_received_review" && verifiedMinor(r) > 0; }
+  // Mirrors workshop_commission_payable.
+  function payable(r) {
+    var atts = ws.attempts[r.id] || [];
+    if (isTest(r)) return false;
+    return Number(r.commission_ghs) > 0 && !!r.referrer_id && r.price_tier !== "graduate" && !r.commission_voided_at &&
+      r.status === "confirmed" && r.payment_status === "paid" && Number(r.amount_paid_minor) === Math.round(Number(r.amount_ghs) * 100) &&
+      atts.some(function (a) { return a.status === "succeeded"; }) && !atts.some(function (a) { return a.status === "duplicate_payment" || a.status === "mismatch"; });
+  }
+  function commissionState(r) { var ok = payable(r); if (ws.payouts[r.id]) return ok ? "paid" : "review"; return ok ? "due" : "none"; }
+  function startsAt(s) { return s.starts_at ? Date.parse(s.starts_at) : null; }
+  function hasStarted(s) { var t = startsAt(s); return t !== null && t <= Date.now(); }
+  function ended(s) { return s.status === "cancelled" || s.status === "completed" || (s.status !== "draft" && hasStarted(s) && Date.now() - startsAt(s) > 86400000); }
+  function ordered(list) {
+    return list.slice().sort(function (a, b) {
+      var ta = startsAt(a), tb = startsAt(b);
+      if (ta === null && tb === null) return (a.series_number || 99) - (b.series_number || 99) || String(a.title).localeCompare(b.title);
+      if (ta === null) return 1; if (tb === null) return -1;
+      return ta - tb;
+    });
+  }
+  function state(s) {
+    if (s.status === "draft") return s.announce ? ["Coming soon (draft)", "gold"] : ["Draft", ""];
+    if (s.status === "cancelled") return ["Cancelled", "bad"];
+    if (s.status === "completed") return ["Completed", ""];
+    if (hasStarted(s)) return ["Taken place", "warn"];
+    if (s.status === "closed") return ["Registration closed", "warn"];
+    if (startsAt(s) - 168 * 3600000 <= Date.now()) return ["Registration closed (7-day cutoff)", "warn"];
+    return ["Open for registration", "open"];
+  }
+  function seats(s) {
+    var mine = rowsOf(s.id);
+    var holding = mine.filter(function (r) { return HOLDING.indexOf(r.status) !== -1; });
+    var grad = holding.filter(function (r) { return r.price_tier === "graduate"; }).length;
+    var live = ws.waitlist.filter(function (w) { return w.session_id === s.id && w.status === "offered" && Date.parse(w.offer_expires_at) > Date.now(); });
+    var paying = mine.filter(function (r) { return r.status === "pending_payment" && r.price_tier !== "graduate"; }).length;
+    return { general: holding.length - grad, grad: grad, heldGeneral: paying + live.filter(function (w) { return w.seat_kind === "general"; }).length,
+      heldGrad: live.filter(function (w) { return w.seat_kind !== "general"; }).length, offers: live };
+  }
 
+  /* ---------- render ---------- */
+  function render() {
+    var real = ws.list.filter(function (s) { return !s.is_test; });
+    var open = real.filter(function (s) { return s.status === "published" && !hasStarted(s); }).length;
+    var drafts = real.filter(function (s) { return s.status === "draft"; }).length;
+    var attention = needs();
+    var line = open + (open === 1 ? " workshop open" : " workshops open") + " for registration, " + drafts + " in draft. " +
+      (attention.length ? attention.length + (attention.length === 1 ? " thing needs you." : " things need you.") : "Nothing needs you.");
+    // One line, under the page title; the workspace's own copy stays for screen readers only.
+    $("ws-summary").textContent = line;
+    var sum = $("ops-page-summary"); if (sum) { sum.textContent = line; $("ws-summary").classList.add("vh"); }
+    renderAttention(attention);
+    renderTickets();
+    renderRegs();
+    renderReferrals();
+    campaigns(filtered());
+  }
+
+  function needs() {
+    var items = [];
+    var act = function (a, label, id, primary) { return { a: a, label: label, id: id, primary: !!primary }; };
+    ws.rows.forEach(function (r) {
+      var s = sessionOf(r), who = r.full_name + (isTest(r) ? " (test)" : "");
+      if (needsResolution(r)) {
+        var acts = [];
+        if (r.status === "payment_received_review") acts.push(act("admit", "Admit", r.id, true));
+        if ((r.status === "payment_received_review" || r.status === "confirmed") && ["paid", "needs_review", "partially_refunded"].indexOf(r.payment_status) !== -1) acts.push(act("request_refund", "Request refund", r.id));
+        if (r.review_reason === "duplicate_payment") acts.push(act("resolve_duplicate", "Note duplicate refund", r.id));
+        acts.push(act("open_person", "Details", r.id));
+        items.push({ bad: true, who: who + ", " + s.title, why: (REASON[r.review_reason] || STATUS[r.status] || r.status) +
+          (r.status === "refund_pending" ? ". Refund it in the Paystack dashboard; the place frees itself when Paystack confirms." : ". GHS " + ghsMinor(r.amount_paid_minor) + " held."), acts: acts });
+      } else if (s.status === "cancelled" && r.status === "confirmed") {
+        items.push({ bad: true, who: who + " has a place on a cancelled workshop", why: s.title + ". Offer a refund or a place on another session.",
+          acts: [act("request_refund", "Request refund", r.id), act("open_person", "Details", r.id)] });
+      }
+      if (calendarException(r)) items.push({ who: "Calendar invitation failed: " + who, why: r.calendar_sync_error + (Number(r.calendar_sync_failures) >= 5 ? " Retries stopped." : " Retrying automatically."),
+        acts: [act("retry_calendar", "Retry now", r.id, true)] });
+      else if (noAccount(r) && s.status !== "cancelled") items.push({ who: who + " has paid but gave no Google account", why: s.title + ". They can't be invited until you set one, on their request.",
+        acts: [act("set_account", "Set Google account", r.id, true)] });
+      var undelivered = ws.failedMail[r.id];
+      if (undelivered) items.push({ who: "Email not delivered to " + who, why: undelivered.map(function (n) { return n.kind.replace(/_/g, " ") + " (" + (n.error || (n.status === "sending" ? "result never recorded" : "failed")) + ")"; }).join(", "),
+        acts: [act("retry_email", "Retry email", r.id, true)] });
+    });
+    ws.waitlist.filter(function (w) { return w.email_error; }).forEach(function (w) {
+      items.push({ who: "Waitlist email failed: " + w.full_name, why: w.email_error + " (" + w.email_failures + " tries)", acts: [act("waitlist_retry_email", "Retry email", w.id, true)] });
+    });
+    ws.list.filter(function (s) { return !s.is_test && (s.status === "published" || s.status === "closed") && hasStarted(s) && Date.now() - startsAt(s) > 3 * 3600000; }).forEach(function (s) {
+      items.push({ who: s.title + " has taken place", why: "Record attendance on the Registrations tab, then mark it completed so it leaves the current list.", acts: [act("session_complete", "Mark completed", s.id, true)] });
+    });
+    ws.referrers.forEach(function (x) {
+      var owed = owedTo(x);
+      if (owed.amount > 0) items.push({ who: "Commission due: GHS " + cedis(owed.amount) + " to " + referrerName(x), why: "Code " + x.code + ", " + owed.count + " paid place" + (owed.count === 1 ? "" : "s") +
+        (x.payout_method ? ". Pay by " + x.payout_method : "") + ", then record it.", acts: [act("referrer_payouts", "Record payment", x.id, true)] });
+    });
+    return items;
+  }
+  function renderAttention(items) {
+    $("ws-attn-count").textContent = items.length;
+    $("ws-attn-count").className = "wsd-count" + (items.length ? "" : " wsd-count--zero");
+    $("ws-attention").innerHTML = items.length ? "<ul>" + items.map(function (it) {
+      return '<li><span class="wsd-dot' + (it.bad ? " wsd-dot--bad" : "") + '" aria-hidden="true"></span><div class="wsd-attn__what"><strong>' + esc(it.who) + "</strong><span>" + esc(it.why) + '</span></div><div class="wsd-acts">' +
+        it.acts.map(function (a) { return '<button class="wsd-btn wsd-btn--sm' + (a.primary ? " wsd-btn--primary" : "") + '" type="button" data-wsd="' + a.a + '" data-id="' + esc(a.id) + '">' + esc(a.label) + "</button>"; }).join("") + "</div></li>";
+    }).join("") + "</ul>" : '<p class="wsd-clear">Nothing needs you. Payments, invitations and the waitlist are running on their own.</p>';
+  }
+
+  /* ---------- workshops ---------- */
+  function renderTickets() {
+    var real = ordered(ws.list.filter(function (s) { return !s.is_test; }));
+    var current = real.filter(function (s) { return !ended(s); }), past = real.filter(ended);
+    var tests = ordered(ws.list.filter(function (s) { return s.is_test; }));
+    $("ws-tickets").innerHTML = (current.length ? current.map(ticket).join("") : '<p class="wsd-clear">No workshops yet. Use “New workshop” to add the first one.</p>') +
+      (past.length ? '<details class="wsd-fold"><summary>Past and cancelled (' + past.length + ")</summary><div class=\"wsd-tickets\">" + past.map(ticket).join("") + "</div></details>" : "");
+    $("ws-test-tickets").innerHTML = tests.map(ticket).join("");
+    $("ws-test-summary").textContent = "Test sessions (" + tests.length + ")";
+    $("ws-test-fold").hidden = !tests.length;
+    $("ws-n-ws").textContent = current.length;
+    $("ws-series").innerHTML = ws.series.map(function (x) {
+      var n = ws.list.filter(function (s) { return s.series_slug === x.slug && !s.is_test; }).length;
+      return "<span>Series: <strong>" + esc(x.name) + "</strong>, " + n + " workshop" + (n === 1 ? "" : "s") + '.</span><button class="wsd-btn wsd-btn--sm wsd-btn--quiet" type="button" data-wsd="series_edit" data-id="' + esc(x.slug) + '">Edit the series page text</button>';
+    }).join("");
+  }
+  function ticket(s) {
+    var st = state(s), t = startsAt(s), st8 = seats(s), mine = rowsOf(s.id);
+    var revenue = mine.filter(function (r) { return !isTest(r) && isConfirmedPaid(r); }).reduce(function (n, r) { return n + verifiedMinor(r); }, 0);
+    var stub = t !== null
+      ? '<div><div class="wsd-stub__day">' + esc(when(t, { day: "numeric" })) + '</div><div class="wsd-stub__month">' + esc(when(t, { month: "short", year: "numeric" })) + "</div></div>" +
+        '<div class="wsd-stub__time">' + esc(when(t, { weekday: "short" })) + ", " + esc(when(t, { hour: "2-digit", minute: "2-digit" })) + " GMT<br>" + esc(Number(s.duration_minutes) / 60) + " hours</div>"
+      : '<div class="wsd-stub__none">No date yet</div><div class="wsd-stub__time">' + (s.series_number ? "Workshop " + (s.series_number < 10 ? "0" : "") + s.series_number : "Set a date to open it") + "</div>";
+    var cells = [], i, n = 0, cap = Number(s.capacity || 0), grad = Number(s.reserved_graduate_seats || 0);
+    for (i = 0; i < cap; i++) cells.push('<span class="wsd-seat' + (i < st8.general ? " wsd-seat--taken" : i < st8.general + st8.heldGeneral ? " wsd-seat--held" : "") + '" style="--i:' + (n++) + '"></span>');
+    for (i = 0; i < grad; i++) cells.push('<span class="wsd-seat wsd-seat--grad' + (i < st8.grad ? " wsd-seat--taken" : "") + '" style="--i:' + (n++) + '"></span>');
+    var undated = s.status === "draft" && t === null;
+    var seatMap = cap && !undated ? '<div><div class="wsd-seats" role="img" aria-label="' + st8.general + " of " + cap + " open places taken" + (st8.heldGeneral ? ", " + st8.heldGeneral + " being paid for or offered" : "") +
+      (grad ? ", " + st8.grad + " of " + grad + " graduate places taken" : "") + '">' + cells.join("") + "</div>" +
+      '<div class="wsd-legend"><span><i style="background:var(--wsd-teal)"></i>Taken</span><span><i style="background:repeating-linear-gradient(135deg,var(--wsd-teal) 0 2px,transparent 2px 4px)"></i>Paying now or offered</span>' +
+      (grad ? '<span><i style="box-shadow:inset 0 0 0 2px var(--wsd-gold)"></i>Kept for graduates</span>' : "") + '<span><i style="background:var(--wsd-seat)"></i>Free</span></div></div>' : "";
+    var waiting = ws.waitlist.filter(function (w) { return w.session_id === s.id && w.status === "waiting"; });
+    var closesIn = t !== null ? daysUntil(t - 168 * 3600000) : null;
+    var onEvent = mine.filter(function (r) { return r.invited_email && !toRemove(r); }).length;
+    var facts = undated ? '<p class="wsd-hint">' + (s.announce ? "Listed on the website as coming soon. " : "Not on the website yet. ") +
+        (cap ? cap + (grad ? " + " + grad + " graduate" : "") + " places, " : "") + (Number(s.price_ghs) ? "GHS " + cedis(s.price_ghs) : "free") + ". Add a date to open registration.</p>"
+      : '<dl class="wsd-facts">' +
+      (cap ? "<div><dt>Open places</dt><dd>" + st8.general + " of " + cap + "</dd></div>" : "") +
+      (grad ? "<div><dt>Graduate places</dt><dd>" + st8.grad + " of " + grad + "</dd></div>" : "") +
+      "<div><dt>Price</dt><dd>" + (Number(s.price_ghs) ? "GHS " + cedis(s.price_ghs) : "Free") + "</dd></div>" +
+      (s.status !== "draft" ? "<div><dt>Taken so far</dt><dd>GHS " + ghsMinor(revenue) + "</dd></div>" : "") +
+      (s.status === "published" && closesIn !== null && closesIn > 0 ? '<div><dt>Registration closes</dt><dd class="is-soon">in ' + closesIn + " day" + (closesIn === 1 ? "" : "s") + "</dd></div>" : "") +
+      (waiting.length ? "<div><dt>Waiting</dt><dd>" + waiting.length + "</dd></div>" : "") +
+      (s.admission === "invite" && s.status !== "draft" ? "<div><dt>On the Calendar invitation</dt><dd>" + onEvent + "</dd></div>" : "") + "</dl>";
+    var viewable = (s.status === "draft" && s.announce) || (s.status !== "draft" && s.status !== "completed" && !hasStarted(s));
+    var holding = mine.some(function (r) { return HOLDING.indexOf(r.status) !== -1 || r.status === "pending_payment"; }) || ws.waitlist.some(function (w) { return w.session_id === s.id; }) || mine.length > 0;
+    var b = function (a, label, cls) { return '<button class="wsd-btn wsd-btn--sm' + (cls ? " " + cls : "") + '" type="button" data-wsd="' + a + '" data-id="' + s.id + '">' + label + "</button>"; };
+    var acts = (undated ? b("session_edit", "Add a date", "wsd-btn--primary") : b("session_edit", "Edit")) +
+      (s.status === "draft" && !undated ? b("session_publish", "Open registration", "wsd-btn--primary") : "") +
+      (s.status === "closed" && !hasStarted(s) ? b("session_publish", "Reopen registration", "wsd-btn--primary") : "") +
+      (s.status === "published" && !hasStarted(s) ? b("session_close", "Close registration") : "") +
+      ((s.status === "published" || s.status === "closed") && hasStarted(s) ? b("session_complete", "Mark completed", "wsd-btn--primary") : "") +
+      (viewable ? '<a class="wsd-btn wsd-btn--sm wsd-btn--quiet" href="/workshops/' + esc(s.slug) + '" target="_blank" rel="noopener">View page</a>' : "") +
+      b("session_copy", "Duplicate", "wsd-btn--quiet") +
+      (s.status === "cancelled" || s.status === "completed" ? "" : holding ? b("session_cancel", "Cancel workshop", "wsd-btn--quiet") : b("session_delete", "Delete", "wsd-btn--quiet"));
+    return '<article class="wsd-ticket' + (s.status === "draft" ? " wsd-ticket--draft" : "") + (s.is_test ? " wsd-ticket--test" : "") + (ended(s) ? " wsd-ticket--ended" : "") + '">' +
+      '<div class="wsd-stub">' + stub + "</div>" +
+      '<div class="wsd-ticket__body"><div class="wsd-ticket__head"><h4>' + esc(s.title) + '</h4><div class="wsd-pills"><span class="wsd-pill' + (st[1] ? " wsd-pill--" + st[1] : "") + '">' + esc(st[0]) + "</span>" +
+      '<span class="wsd-pill">' + (s.kind === "webinar" ? "Webinar" : "Workshop") + "</span>" + (s.is_test ? '<span class="wsd-pill wsd-pill--test">Test</span>' : "") + "</div></div>" +
+      seatMap + facts + waitlistDetail(s, st8, waiting) + inviteDetail(s, mine) + '<div class="wsd-acts">' + acts + "</div></div></article>";
+  }
+  function waitlistDetail(s, st8, waiting) {
+    var errs = ws.waitlist.filter(function (w) { return w.session_id === s.id && w.email_error; });
+    if (!waiting.length && !st8.offers.length && !errs.length) return "";
+    return '<details class="wsd-more"><summary>Waitlist: ' + waiting.length + " waiting" + (st8.offers.length ? ", " + st8.offers.length + " offer" + (st8.offers.length === 1 ? "" : "s") + " open" : "") + "</summary>" +
+      (st8.offers.length ? "<ul>" + st8.offers.map(function (w) { return "<li>Offer open: " + esc(w.full_name) + ", " + esc(w.email_normalized) + " (" + (w.seat_kind === "general" ? "open place" : "graduate place") + ") until " + esc(when(w.offer_expires_at)) + "</li>"; }).join("") + "</ul>" : "") +
+      (waiting.length ? "<ol>" + waiting.map(function (w) {
+        return "<li>" + esc(w.full_name) + ", " + esc(w.email_normalized) + " <small>(" + (w.seat_kind === "general" ? "open place" : "graduate place") + ", joined " + esc(when(w.created_at)) + ")</small> " +
+          '<button class="wsd-btn wsd-btn--sm wsd-btn--quiet" type="button" data-wsd="waitlist_remove" data-id="' + esc(w.id) + '">Remove</button></li>';
+      }).join("") + "</ol>" : "") + "<p class=\"wsd-hint\">Places are offered automatically, first in first out, each held up to 24 hours.</p></details>";
+  }
+  function inviteDetail(s, mine) {
+    if (s.admission !== "invite") return "";
+    var add = mine.filter(toAdd), remove = mine.filter(toRemove);
+    if (!add.length && !remove.length) return "";
+    return '<details class="wsd-more"><summary>Calendar changes in progress: ' + (add.length ? add.length + " to add" : "") + (add.length && remove.length ? ", " : "") + (remove.length ? remove.length + " to remove" : "") + "</summary>" +
+      '<p class="wsd-hint">These happen automatically within a minute. Use the buttons only if you made the change by hand in Google Calendar.</p><ul>' +
+      remove.map(function (r) { return "<li>Remove " + esc(r.invited_email) + " (" + esc(r.full_name) + ') <button class="wsd-btn wsd-btn--sm wsd-btn--quiet" type="button" data-wsd="mark_removed" data-id="' + esc(r.id) + '">Removed by hand</button></li>'; }).join("") +
+      add.map(function (r) { return "<li>Add " + esc(r.attend_email) + " (" + esc(r.full_name) + ') <button class="wsd-btn wsd-btn--sm wsd-btn--quiet" type="button" data-wsd="mark_invited" data-id="' + esc(r.id) + '">Added by hand</button></li>'; }).join("") +
+      "</ul></details>";
+  }
+
+  /* ---------- registrations ---------- */
+  function filtered() {
+    var f = { s: $("ws-session").value, st: $("ws-status").value, p: $("ws-payment").value, a: $("ws-attendance").value, q: $("ws-q").value.trim().toLowerCase() };
+    return ws.rows.filter(function (r) {
+      if (f.s && r.session_id !== f.s) return false;
+      if (f.st && r.status !== f.st) return false;
+      if (f.p && r.payment_status !== f.p) return false;
+      if (f.a && r.attendance !== f.a) return false;
+      if (f.q && [r.full_name, r.email_normalized, r.utm_campaign, r.utm_content, r.utm_source].join(" ").toLowerCase().indexOf(f.q) === -1) return false;
+      return true;
+    });
+  }
+  function statusPill(r) {
+    var cls = r.status === "confirmed" ? "open" : r.status === "payment_received_review" || r.status === "refund_pending" ? "warn" : r.status === "refunded" || r.status === "cancelled" ? "bad" : "";
+    return '<span class="wsd-pill' + (cls ? " wsd-pill--" + cls : "") + '">' + esc(STATUS[r.status] || r.status) + "</span>" + (isTest(r) ? ' <span class="wsd-pill wsd-pill--test">Test</span>' : "");
+  }
+  function renderRegs() {
+    var rows = filtered();
+    $("ws-count").textContent = rows.length;
+    $("ws-n-reg").textContent = ws.rows.filter(function (r) { return !isTest(r); }).length;
+    $("ws-rows").innerHTML = rows.map(function (r) {
+      var s = sessionOf(r);
+      return '<tr class="wsd-row" tabindex="0" data-wsd-person="' + esc(r.id) + '"><td><strong>' + esc(r.full_name) + "</strong><small>" + esc(r.email_normalized) + "</small></td>" +
+        "<td>" + esc(s.title || "") + "<small>" + esc(TIER[r.price_tier] || "") + (r.referral_code ? ", referral " + esc(r.referral_code) : "") + "</small></td>" +
+        "<td>" + statusPill(r) + (r.review_reason ? "<small>" + esc(REASON[r.review_reason] || r.review_reason) + "</small>" : "") + "</td>" +
+        '<td class="num">' + ghsMinor(r.amount_paid_minor) + "</td><td>" + esc(when(r.created_at)) + "</td></tr>";
+    }).join("") || '<tr><td colspan="5">No registrations match these filters.</td></tr>';
+  }
+  function openPerson(id) {
+    var r = ws.rows.filter(function (x) { return x.id === id; })[0];
+    if (!r) return;
+    var s = sessionOf(r), atts = ws.attempts[r.id] || [];
+    $("wsp-name").textContent = r.full_name;
+    $("wsp-sub").textContent = (s.title || "") + (isTest(r) ? " (test)" : "");
+    var b = function (a, label, primary) { return '<button class="wsd-btn' + (primary ? " wsd-btn--primary" : "") + '" type="button" data-wsd="' + a + '" data-id="' + esc(r.id) + '">' + label + "</button>"; };
+    var acts = (r.status === "payment_received_review" ? b("admit", "Admit", true) : "") +
+      ((r.status === "payment_received_review" || r.status === "confirmed") && ["paid", "needs_review", "partially_refunded"].indexOf(r.payment_status) !== -1 ? b("request_refund", "Request refund") : "") +
+      (r.review_reason === "duplicate_payment" ? b("resolve_duplicate", "Note duplicate refund") : "") +
+      (r.status === "pending_payment" && r.payment_status === "pending" ? b("cancel", "Cancel registration") : "") +
+      (isInvite(r) && r.status === "confirmed" ? b("set_account", "Change Google account") : "") +
+      (ws.failedMail[r.id] ? b("retry_email", "Retry email") : "") +
+      (calendarException(r) ? b("retry_calendar", "Retry Calendar") : "");
+    $("wsp-body").innerHTML = '<dl class="wsd-detail">' +
+      "<dt>Email</dt><dd>" + esc(r.email_normalized) + "</dd>" +
+      (r.whatsapp ? "<dt>WhatsApp</dt><dd>" + esc(r.whatsapp) + (r.whatsapp_consent ? " (reminders allowed)" : "") + "</dd>" : "") +
+      "<dt>Status</dt><dd>" + esc(STATUS[r.status] || r.status) + (r.review_reason ? ": " + esc(REASON[r.review_reason] || r.review_reason) : "") + "</dd>" +
+      "<dt>Price</dt><dd>" + esc(TIER[r.price_tier] || "") + (Number(r.discount_ghs) ? ", GHS " + cedis(r.discount_ghs) + " off" : "") + (r.benefit_credential_id ? " (" + esc(r.benefit_credential_id) + ")" : "") + "</dd>" +
+      (r.referral_code ? "<dt>Referral</dt><dd>" + esc(r.referral_code) + "</dd>" : "") +
+      "<dt>Paid</dt><dd>GHS " + ghsMinor(r.amount_paid_minor) + " (" + esc(PAYMENT[r.payment_status] || r.payment_status) + ")</dd>" +
+      (atts.length ? "<dt>Paystack</dt><dd>" + atts.map(function (a) { return esc(a.reference) + ": " + esc(a.status); }).join("<br>") + "</dd>" : "") +
+      (isInvite(r) ? "<dt>Joins with</dt><dd>" + esc(r.attend_email || "No Google account given yet") + "</dd><dt>Calendar</dt><dd>" + (r.invited_email && !toRemove(r) ? "On the invitation" : toAdd(r) ? "Being added" : "Not on the invitation") + "</dd>" : "") +
+      "<dt>Came from</dt><dd>" + esc(r.utm_campaign ? r.utm_campaign + (r.utm_content ? " / " + r.utm_content : "") : "No campaign") + "</dd>" +
+      "<dt>Registered</dt><dd>" + esc(when(r.created_at, { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })) + " GMT</dd></dl>" +
+      '<fieldset><legend>Attendance</legend><div class="wsd-seg" role="radiogroup" aria-label="Attendance">' +
+      Object.keys(ATTENDANCE).map(function (k) { return '<label><input type="radio" name="wsp-att" value="' + k + '" data-wsd-att="' + esc(r.id) + '"' + (r.attendance === k ? " checked" : "") + "><span>" + ATTENDANCE[k] + "</span></label>"; }).join("") + "</div></fieldset>" +
+      (acts ? '<div class="wsd-acts">' + acts + "</div>" : "") +
+      '<div class="wsd-field"><label for="wsp-note">Add a note</label><textarea id="wsp-note" rows="3" maxlength="300"></textarea>' +
+      '<button class="wsd-btn wsd-btn--sm" type="button" data-wsd="note" data-id="' + esc(r.id) + '">Save note</button></div>' +
+      (r.admin_notes ? '<details class="wsd-fold"><summary>History</summary><pre class="wsd-history">' + esc(r.admin_notes) + "</pre></details>" : "");
+    if (!$("ws-person").open) $("ws-person").showModal();
+  }
+
+  /* ---------- referral codes ---------- */
+  function referrerName(x) { return x.name || (x.credential_id ? "Graduate " + x.credential_id : x.code); }
+  function owedTo(x) {
+    var due = ws.rows.filter(function (r) { return r.referrer_id === x.id && commissionState(r) === "due"; });
+    return { count: due.length, amount: due.reduce(function (n, r) { return n + Number(r.commission_ghs || 0); }, 0) };
+  }
+  function renderReferrals() {
+    var t = ws.settings;
+    $("ws-terms-text").textContent = "Every code takes GHS " + cedis(t.referral_discount_ghs) + " off any workshop and earns its holder GHS " + cedis(t.referral_commission_ghs) +
+      " for each paid place. Discounts never combine: a buyer with a certificate price gets whichever is lower, and the referrer still earns. A change applies to registrations from then on.";
+    var sorted = ws.referrers.slice().sort(function (a, b) { return (a.status === "active" ? 0 : 1) - (b.status === "active" ? 0 : 1); });
+    $("ws-referrals").innerHTML = sorted.map(function (x) {
+      var mine = ws.rows.filter(function (r) { return r.referrer_id === x.id && !isTest(r); });
+      var sales = mine.filter(function (r) { var c = commissionState(r); return c === "due" || c === "paid"; });
+      var earned = sales.reduce(function (n, r) { return n + Number(r.commission_ghs || 0); }, 0);
+      var owed = owedTo(x);
+      var pill = x.status === "active" ? '<span class="wsd-pill wsd-pill--open">Works now</span>' : x.status === "prepared" ? '<span class="wsd-pill wsd-pill--gold">Not live yet</span>' : '<span class="wsd-pill wsd-pill--bad">Suspended</span>';
+      var link = origin + "/workshops/?ref=" + x.code;
+      var b = function (a, label, primary) { return '<button class="wsd-btn wsd-btn--sm' + (primary ? " wsd-btn--primary" : "") + '" type="button" data-wsd="' + a + '" data-id="' + esc(x.id) + '">' + label + "</button>"; };
+      return '<article class="wsd-code"><div class="wsd-code__top"><span class="wsd-code__id">' + esc(x.code) + "</span>" + pill + "</div>" +
+        "<p><strong>" + esc(referrerName(x)) + "</strong>" + (x.email ? ", " + esc(x.email) : "") + (x.payout_method ? "<br>Paid by " + esc(x.payout_method) : "") + "</p>" +
+        '<dl class="wsd-facts"><div><dt>Paid places</dt><dd>' + sales.length + "</dd></div><div><dt>Earned</dt><dd>GHS " + cedis(earned) + "</dd></div><div><dt>Owed now</dt><dd" + (owed.amount ? ' class="is-soon"' : "") + ">GHS " + cedis(owed.amount) + "</dd></div></dl>" +
+        '<div class="wsd-link"><input readonly value="' + esc(link) + '" aria-label="Referral link for ' + esc(x.code) + '"><button class="wsd-btn wsd-btn--sm" type="button" data-wsd-copy="' + esc(link) + '">Copy link</button></div>' +
+        '<div class="wsd-acts">' + (owed.amount ? b("referrer_payouts", "Record payment", true) : "") +
+        (x.status === "active" ? b("referrer_suspend", "Suspend") : b("referrer_activate", x.status === "prepared" ? "Make live" : "Reactivate", true)) +
+        b("referrer_edit", "Edit details") + "</div></article>";
+    }).join("") || '<p class="wsd-clear">No codes yet. Use “Create a code” to make the first one. A code works on every workshop as soon as it exists.</p>';
+    $("ws-n-ref").textContent = ws.referrers.length;
+    var referred = ws.rows.filter(function (r) { return r.referral_code; });
+    $("ws-ref-table-wrap").hidden = !referred.length;
+    $("ws-ref-rows").innerHTML = referred.map(function (r) {
+      var c = commissionState(r), s = sessionOf(r);
+      var label = { due: "Owed", paid: "Paid (" + esc(ws.payouts[r.id] ? ws.payouts[r.id].payout_reference : "") + ")", review: "Paid out, then refunded or cancelled: check it",
+        none: isTest(r) ? "Test: never paid" : r.commission_voided_at ? "Voided: " + esc(r.commission_void_reason || "") : "Not earned (" + esc(STATUS[r.status] || r.status) + ")" }[c];
+      return "<tr><td>" + esc(r.full_name) + "<small>" + esc(s.title || "") + "</small></td><td>" + esc(r.referral_code) + '</td><td class="num">' + ghsMinor(r.amount_paid_minor) +
+        '</td><td class="num">' + (c === "due" || c === "paid" ? cedis(r.commission_ghs) : "0") + "</td><td>" + label + "</td><td>" +
+        (c === "due" || c === "paid" ? '<button class="wsd-btn wsd-btn--sm wsd-btn--quiet" type="button" data-wsd="void_commission" data-id="' + esc(r.id) + '">Void</button>' : "") + "</td></tr>";
+    }).join("");
+  }
+
+  /* ---------- ad results ---------- */
   function campaigns(rows) {
     var groups = {};
     rows.forEach(function (r) {
-      if (isTest(r)) return; // test sessions and test checkouts never count
+      if (isTest(r)) return;
       var key = (r.utm_campaign || "(none)") + "\u0000" + (r.utm_content || "");
       var g = groups[key] = groups[key] || { c: r.utm_campaign || "(no campaign)", a: r.utm_content || "", n: 0, paid: 0, held: 0, rev: 0 };
       g.n += 1;
-      if (isConfirmedPaid(r)) { g.paid += 1; g.rev += verifiedMinor(r); }
-      else if (isHeldForReview(r)) g.held += 1;
+      if (isConfirmedPaid(r)) { g.paid += 1; g.rev += verifiedMinor(r); } else if (isHeldForReview(r)) g.held += 1;
     });
     var list = Object.keys(groups).map(function (k) { return groups[k]; }).sort(function (x, y) { return y.paid - x.paid || y.n - x.n; });
     $("ws-camp-rows").innerHTML = list.map(function (g) {
-      return "<tr><td>" + esc(g.c) + "</td><td>" + esc(g.a || "—") + '</td><td class="num">' + g.n + '</td><td class="num">' + g.paid +
-        '</td><td class="num">' + g.held + '</td><td class="num">' + ghs(g.rev) + "</td></tr>";
+      return "<tr><td>" + esc(g.c) + "</td><td>" + esc(g.a || "—") + '</td><td class="num">' + g.n + '</td><td class="num">' + g.paid + '</td><td class="num">' + g.held + '</td><td class="num">' + ghsMinor(g.rev) + "</td></tr>";
     }).join("") || '<tr><td colspan="6">No live registrations yet.</td></tr>';
-    var paid = list.reduce(function (t, g) { return t + g.paid; }, 0);
-    var spend = Number($("ws-spend").value);
+    var paid = list.reduce(function (t, g) { return t + g.paid; }, 0), spend = Number($("ws-spend").value);
     $("ws-cac").textContent = spend > 0 && paid > 0 ? "GHS " + (spend / paid).toLocaleString("en-GB", { maximumFractionDigits: 2 }) : "—";
   }
-
   function csv() {
-    var cols = ["registered_at", "session", "full_name", "email", "whatsapp", "whatsapp_consent", "status", "payment_status",
-      "review_reason", "confirmed_paid", "verified_paid_ghs", "attendance", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "references"];
-    // A value starting with = + - @ or a tab/CR is a formula to Excel and Sheets even
-    // when quoted; prefixing ' makes it text (Codex audit: CSV formula injection).
-    var cell = function (v) { var s = String(v == null ? "" : v); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    var cols = ["registered_at", "session", "full_name", "email", "whatsapp", "whatsapp_consent", "status", "payment_status", "review_reason", "confirmed_paid",
+      "verified_paid_ghs", "attendance", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "references"];
+    // A value starting with = + - @ or a tab/CR is a formula to Excel and Sheets even when quoted.
+    var cell = function (v) { var x = String(v == null ? "" : v); if (/^[=+\-@\t\r]/.test(x)) x = "'" + x; return /[",\r\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; };
     var lines = [cols.join(",")].concat(filtered().map(function (r) {
-      var s = ws.sessions[r.session_id] || {};
-      return [r.created_at, s.slug, r.full_name, r.email_normalized, r.whatsapp, r.whatsapp_consent, r.status, r.payment_status,
-        r.review_reason, isConfirmedPaid(r) ? "yes" : "no", verifiedMinor(r) / 100, r.attendance, r.utm_source, r.utm_medium, r.utm_campaign,
-        r.utm_content, r.utm_term, (ws.attempts[r.id] || []).map(function (a) { return a.reference + ":" + a.status; }).join(" ")].map(cell).join(",");
+      var s = sessionOf(r);
+      return [r.created_at, s.slug, r.full_name, r.email_normalized, r.whatsapp, r.whatsapp_consent, r.status, r.payment_status, r.review_reason,
+        isConfirmedPaid(r) ? "yes" : "no", verifiedMinor(r) / 100, r.attendance, r.utm_source, r.utm_medium, r.utm_campaign, r.utm_content, r.utm_term,
+        (ws.attempts[r.id] || []).map(function (a) { return a.reference + ":" + a.status; }).join(" ")].map(cell).join(",");
     }));
-    var blob = new Blob([lines.join("\n")], { type: "text/csv" });
     var a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
+    a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" }));
     a.download = "workshop-registrations-" + new Date().toISOString().slice(0, 10) + ".csv";
     a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
   }
 
-  var CONFIRM = {
-    request_refund: "Mark this registration for a refund? Issue the refund in the Paystack dashboard; the seat is released when Paystack reports it processed.",
-    cancel: "Cancel this unpaid registration?",
-    resolve_duplicate: "Record that the duplicate payment will be refunded in Paystack?",
-    mark_invited: "Have you added this Google account as a guest on the event in Google Calendar, with guests unable to see the guest list or invite others?",
-    mark_removed: "Have you removed this Google account from the event's guests in Google Calendar?"
-  };
+  /* ---------- the confirmation dialog ---------- */
+  var asking = null;
+  function ask(o) {
+    $("wsa-title").textContent = o.title;
+    $("wsa-text").textContent = o.text || "";
+    $("wsa-yes").textContent = o.yes || "Confirm";
+    $("wsa-yes").className = "wsd-btn " + (o.danger ? "wsd-btn--danger" : "wsd-btn--primary");
+    $("wsa-error").hidden = true;
+    $("wsa-fields").innerHTML = (o.fields || []).map(function (f, i) {
+      var id = "wsa-f" + i;
+      var input = f.type === "textarea" ? '<textarea id="' + id + '" rows="' + (f.rows || 3) + '">' + esc(f.value || "") + "</textarea>"
+        : f.type === "select" ? '<select id="' + id + '">' + f.options.map(function (op) { return '<option value="' + esc(op[0]) + '"' + (op[0] === f.value ? " selected" : "") + ">" + esc(op[1]) + "</option>"; }).join("") + "</select>"
+        : '<input id="' + id + '" type="' + (f.type || "text") + '" value="' + esc(f.value || "") + '"' + (f.placeholder ? ' placeholder="' + esc(f.placeholder) + '"' : "") + ">";
+      return '<div class="wsd-field"><label for="' + id + '">' + esc(f.label) + "</label>" + input + (f.hint ? '<span class="wsd-hint">' + esc(f.hint) + "</span>" : "") + "</div>";
+    }).join("");
+    asking = o;
+    $("ws-ask").showModal();
+    var first = $("wsa-f0");
+    (first || $("wsa-yes")).focus();
+  }
+  $("wsa-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (!asking) return;
+    var o = asking, values = (o.fields || []).map(function (f, i) { return $("wsa-f" + i).value.trim(); });
+    var missing = (o.fields || []).map(function (f, i) { return f.min && values[i].length < f.min ? f.label : null; }).filter(Boolean);
+    if (missing.length) { $("wsa-error").textContent = "Fill in: " + missing.join(", ") + "."; $("wsa-error").hidden = false; return; }
+    $("wsa-yes").disabled = true;
+    Promise.resolve(o.run.apply(null, values)).then(function () { asking = null; $("ws-ask").close(); })
+      .catch(function (err) { $("wsa-error").textContent = err.message; $("wsa-error").hidden = false; })
+      .then(function () { $("wsa-yes").disabled = false; });
+  });
 
+  /* ---------- the workshop editor ---------- */
+  var editing = null;
+  var LISTS = { why: "wse-l-why", outcomes: "wse-l-outcomes", leave: "wse-l-leave", run: "wse-l-run", faq: "wse-l-faq" };
+  function listRow(kind, v) {
+    var cells = kind === "run"
+      ? '<input class="wsd-narrow" aria-label="Time into the session" placeholder="0:00" value="' + esc(v && v.at) + '"><div><input aria-label="Segment" placeholder="What happens" value="' + esc(v && v.title) + '"><input aria-label="Detail (optional)" placeholder="Detail (optional)" value="' + esc(v && v.detail) + '"></div>'
+      : kind === "faq"
+        ? '<div><input aria-label="Question" placeholder="Question" value="' + esc(v && v.q) + '"><textarea aria-label="Answer" rows="2" placeholder="Answer">' + esc(v && v.a) + "</textarea></div>"
+        : kind === "why" ? '<textarea aria-label="Paragraph" rows="3">' + esc(v || "") + "</textarea>" : '<input aria-label="Item" value="' + esc(v || "") + '">';
+    return '<div class="wsd-list__row">' + cells + '<button class="wsd-btn wsd-btn--sm wsd-btn--quiet" type="button" data-wsd-del>Remove</button></div>';
+  }
+  function readList(kind) {
+    return Array.prototype.map.call($(LISTS[kind]).querySelectorAll(".wsd-list__row"), function (row) {
+      var f = row.querySelectorAll("input, textarea");
+      if (kind === "run") return { at: f[0].value.trim(), title: f[1].value.trim(), detail: f[2].value.trim() };
+      if (kind === "faq") return { q: f[0].value.trim(), a: f[1].value.trim() };
+      return f[0].value.trim();
+    }).filter(function (v) { return typeof v === "string" ? v : (v.at && v.title) || (v.q && v.a); });
+  }
+  function slugify(t) { return String(t || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80); }
+  function priceLine() {
+    var p = Number($("wse-f-price").value) || 0, f = Number($("wse-f-fnd").value) || 0, rd = Number(ws.settings.referral_discount_ghs) || 0;
+    var cap = Number($("wse-f-cap").value) || 0, gr = Number($("wse-f-grad").value) || 0;
+    var bits = [p ? "GHS " + cedis(p) + " standard" : "Free"];
+    if (p && f) bits.push("GHS " + cedis(Math.round(p * (100 - f)) / 100) + " with a Foundations certificate");
+    if (p && rd) bits.push("GHS " + cedis(Math.max(0, p - rd)) + " with a referral code");
+    if (p && $("wse-f-free").checked && gr) bits.push("free for Intermediate graduates");
+    $("wse-priceline").textContent = bits.join(", ") + ". " + (cap + gr) + " people in total" + (gr ? " (" + cap + " open, " + gr + " kept for graduates)." : ".");
+    var d = $("wse-f-date").value, t = $("wse-f-time").value || "00:00";
+    $("wse-cutoff").textContent = d ? "Registration closes automatically 7 days before: " + when(Date.parse(d + "T" + t + ":00Z") - 168 * 3600000, { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) + " GMT." : "Registration closes automatically 7 days before the start.";
+    $("wse-cal-wrap").hidden = !$("wse-a-invite").checked;
+  }
+  function openEditor(s, copy) {
+    editing = copy ? null : s;
+    var c = (s && s.content) || {};
+    var v = s || { kind: "workshop", price_ghs: 350, capacity: 25, reserved_graduate_seats: 5, foundations_discount_pct: 20, graduate_free: true,
+      admission: "invite", duration_minutes: 180, series_slug: ws.series[0] ? ws.series[0].slug : "", announce: false };
+    $("wse-title").textContent = copy ? "Copy of " + s.title : s ? "Edit workshop" : "New workshop";
+    $("wse-error").hidden = true;
+    $("wse-f-title").value = copy ? s.title + " (copy)" : v.title || "";
+    $("wse-f-slug").value = copy ? "" : v.slug || "";
+    var locked = !!(editing && (editing.status !== "draft" || rowsOf(editing.id).length));
+    $("wse-f-slug").readOnly = locked;
+    $("wse-slug-hint").textContent = locked ? "Fixed: registration has opened on this address, so links already shared keep working." : "Filled in from the title. It can't change once registration has opened.";
+    $("wse-k-" + (v.kind === "webinar" ? "webinar" : "workshop")).checked = true;
+    var ser = $("wse-f-series");
+    ser.innerHTML = '<option value="">Not part of a series</option>' + ws.series.map(function (x) { return '<option value="' + esc(x.slug) + '">' + esc(x.name) + "</option>"; }).join("");
+    ser.value = v.series_slug || "";
+    var used = ws.list.filter(function (x) { return x.series_slug && !x.is_test && x.series_number; }).map(function (x) { return x.series_number; });
+    $("wse-f-number").value = copy || !s ? (used.length ? Math.max.apply(null, used) + 1 : 1) : v.series_number || "";
+    $("wse-f-summary").value = c.summary || ""; $("wse-f-audience").value = c.audience || "";
+    $("wse-announce-wrap").hidden = !!(editing && editing.status !== "draft");
+    $("wse-f-announce").checked = !copy && !!v.announce;
+    $("wse-test-wrap").hidden = !!editing;
+    $("wse-f-test").checked = !!(copy && s.is_test);
+    var t = !copy && v.starts_at ? new Date(v.starts_at) : null;
+    $("wse-f-date").value = t ? t.toISOString().slice(0, 10) : "";
+    $("wse-f-time").value = t ? t.toISOString().slice(11, 16) : "11:30";
+    $("wse-f-dur").value = String(v.duration_minutes || 180);
+    if ($("wse-f-dur").value !== String(v.duration_minutes || 180)) { var o = document.createElement("option"); o.value = String(v.duration_minutes); o.textContent = v.duration_minutes + " minutes"; $("wse-f-dur").appendChild(o); $("wse-f-dur").value = String(v.duration_minutes); }
+    $("wse-f-price").value = Number(v.price_ghs || 0); $("wse-f-cap").value = v.capacity || ""; $("wse-f-grad").value = Number(v.reserved_graduate_seats || 0);
+    $("wse-f-fnd").value = Number(v.foundations_discount_pct || 0); $("wse-f-free").checked = !!v.graduate_free;
+    $("wse-a-" + (v.admission === "invite" ? "invite" : "link")).checked = true;
+    $("wse-f-cal").value = copy ? "" : v.calendar_event_id || "";
+    $("wse-f-join").value = v.join_instructions || "";
+    $("wse-f-fit").value = c.good_fit || ""; $("wse-f-notfit").value = c.not_fit || ""; $("wse-f-bring").value = c.bring || "";
+    $("wse-f-problem").value = c.problem || ""; $("wse-f-fitline").value = c.series_fit || "";
+    $(LISTS.why).innerHTML = (c.why || []).map(function (x) { return listRow("why", x); }).join("");
+    $(LISTS.outcomes).innerHTML = (c.outcomes && c.outcomes.length ? c.outcomes : [""]).map(function (x) { return listRow("outcomes", x); }).join("");
+    $(LISTS.leave).innerHTML = (c.leave_with || []).map(function (x) { return listRow("leave", x); }).join("");
+    $(LISTS.run).innerHTML = (c.run_of_show || []).map(function (x) { return listRow("run", x); }).join("");
+    $(LISTS.faq).innerHTML = (c.faq || []).map(function (x) { return listRow("faq", x); }).join("");
+    var held = editing ? rowsOf(editing.id).filter(function (r) { return HOLDING.indexOf(r.status) !== -1; }) : [];
+    $("wse-held").hidden = !held.length;
+    $("wse-held").textContent = held.length ? held.length + (held.length === 1 ? " person has" : " people have") + " a place. A new price applies only to people who register from now on, and places can't go below the ones already taken. If you change the date, change it on the Google Calendar event too, and tell the people booked." : "";
+    $("wse-history-wrap").hidden = !(editing && editing.admin_notes);
+    $("wse-history").textContent = editing && editing.admin_notes ? editing.admin_notes : "";
+    var st = editing ? editing.status : "draft";
+    $("wse-draft").hidden = st !== "draft";
+    $("wse-save").textContent = st === "draft" ? "Save and open registration" : "Save changes";
+    var anyone = editing && (rowsOf(editing.id).length || ws.waitlist.some(function (w) { return w.session_id === editing.id; }));
+    $("wse-remove").hidden = !editing || st === "cancelled" || st === "completed";
+    $("wse-remove").textContent = anyone ? "Cancel workshop" : "Delete";
+    priceLine();
+    $("ws-editor").showModal();
+    $("wse-f-title").focus();
+  }
+  function editorPayload() {
+    var d = $("wse-f-date").value, t = $("wse-f-time").value || "00:00";
+    var out = {
+      title: $("wse-f-title").value.trim(), kind: $("wse-k-webinar").checked ? "webinar" : "workshop",
+      series_slug: $("wse-f-series").value, series_number: $("wse-f-series").value ? Number($("wse-f-number").value) || 0 : 0,
+      starts_at: d ? d + "T" + t + ":00Z" : "", duration_minutes: Number($("wse-f-dur").value), format: "live online",
+      price_ghs: Number($("wse-f-price").value) || 0, capacity: Number($("wse-f-cap").value) || 0, reserved_graduate_seats: Number($("wse-f-grad").value) || 0,
+      foundations_discount_pct: Number($("wse-f-fnd").value) || 0, graduate_free: $("wse-f-free").checked,
+      admission: $("wse-a-invite").checked ? "invite" : "link", calendar_event_id: $("wse-a-invite").checked ? $("wse-f-cal").value.trim() : "",
+      join_instructions: $("wse-f-join").value,
+      content: { summary: $("wse-f-summary").value, audience: $("wse-f-audience").value, why: readList("why"), outcomes: readList("outcomes"),
+        leave_with: readList("leave"), run_of_show: readList("run"), faq: readList("faq"), good_fit: $("wse-f-fit").value,
+        not_fit: $("wse-f-notfit").value, bring: $("wse-f-bring").value, problem: $("wse-f-problem").value, series_fit: $("wse-f-fitline").value }
+    };
+    // Keep the existing extra content (description, directory line) the form does not show.
+    if (editing && editing.content) { out.content.description = editing.content.description || ""; out.content.directory_line = editing.content.directory_line || ""; }
+    if (!$("wse-f-slug").readOnly) out.slug = $("wse-f-slug").value.trim() || slugify(out.title);
+    if (!editing || editing.status === "draft") out.announce = $("wse-f-announce").checked;
+    if (!editing) out.is_test = $("wse-f-test").checked;
+    return out;
+  }
+  function saveEditor(open) {
+    var payload = editorPayload();
+    $("wse-error").hidden = true;
+    if (payload.title.length < 3) { $("wse-error").textContent = "Give the workshop a title."; $("wse-error").hidden = false; $("wse-f-title").focus(); return; }
+    var buttons = [$("wse-save"), $("wse-draft")];
+    buttons.forEach(function (b) { b.disabled = true; });
+    var wasDraft = !editing || editing.status === "draft";
+    apiPost({ action: "session_save", session_id: editing ? editing.id : undefined, session: payload })
+      .then(function (j) { return open && wasDraft ? apiPost({ action: "session_publish", session_id: j.id }).then(function () { return "Saved. Registration is open and the page is live."; }, function (err) {
+        // Saved as a draft, but not yet publishable: say exactly what is missing.
+        editing = editing || { id: j.id, status: "draft" };
+        throw err;
+      }) : (wasDraft ? "Saved as a draft. Nothing is public until you open registration." : "Saved. The page shows the change now."); })
+      .then(function (msg) { $("ws-editor").close(); said(msg); return load(); })
+      .catch(function (err) { $("wse-error").textContent = err.message; $("wse-error").hidden = false; $("wse-error").scrollIntoView({ block: "nearest" }); load(); })
+      .then(function () { buttons.forEach(function (b) { b.disabled = false; }); });
+  }
+  $("wse-form").addEventListener("submit", function (e) { e.preventDefault(); saveEditor(true); });
+  $("wse-draft").addEventListener("click", function () { saveEditor(false); });
+  $("wse-remove").addEventListener("click", function () { if (editing) removeSession(editing); });
+  $("wse-f-title").addEventListener("input", function () { if (!$("wse-f-slug").readOnly && !(editing && editing.slug)) $("wse-f-slug").value = slugify($("wse-f-title").value); });
+  ["wse-f-price", "wse-f-fnd", "wse-f-cap", "wse-f-grad", "wse-f-free", "wse-f-date", "wse-f-time", "wse-a-invite", "wse-a-link"].forEach(function (id) {
+    $(id).addEventListener("input", priceLine); $(id).addEventListener("change", priceLine);
+  });
+  $("ws-new").addEventListener("click", function () { openEditor(null); });
+
+  function removeSession(s) {
+    var anyone = rowsOf(s.id).length || ws.waitlist.some(function (w) { return w.session_id === s.id; });
+    if (anyone) {
+      var paid = rowsOf(s.id).filter(function (r) { return HOLDING.indexOf(r.status) !== -1; }).length;
+      ask({ title: "Cancel “" + s.title + "”?", danger: true, yes: "Cancel workshop",
+        text: "People have registered or are waiting, so the workshop is kept on record rather than deleted. Registration stops at once and the page says it is cancelled." +
+          (paid ? " The " + paid + (paid === 1 ? " person" : " people") + " with a place appear under “Needs you” so you can refund them or move them. Nobody is refunded or emailed automatically, and the Calendar invitation stays until you act." : ""),
+        fields: [{ label: "Reason (kept with the workshop's record)", type: "textarea", min: 5, rows: 2 }],
+        run: function (reason) { return apiPost({ action: "session_cancel", session_id: s.id, reason: reason }).then(function () { if ($("ws-editor").open) $("ws-editor").close(); said("Workshop cancelled."); return load(); }); } });
+    } else {
+      ask({ title: "Delete “" + s.title + "”?", danger: true, yes: "Delete workshop",
+        text: "Nobody has registered, so it is removed completely: its page and booking form disappear. This can't be undone.",
+        run: function () { return apiPost({ action: "session_delete", session_id: s.id }).then(function () { if ($("ws-editor").open) $("ws-editor").close(); said("Deleted."); return load(); }); } });
+    }
+  }
+
+  /* ---------- every button ---------- */
+  var REG_CONFIRM = {
+    request_refund: ["Request a refund?", "Their place is marked for refund. Issue the money in the Paystack dashboard; the place frees itself and the Calendar invitation is removed when Paystack confirms.", "Request refund"],
+    cancel: ["Cancel this unpaid registration?", "Their held place is released.", "Cancel registration"],
+    resolve_duplicate: ["Record the duplicate refund?", "This notes that the extra payment will be refunded in Paystack. Their place is kept.", "Record it"],
+    mark_invited: ["Added by hand?", "Only if you added this Google account to the event yourself, with guests unable to see the guest list or invite others.", "Yes, I added it"],
+    mark_removed: ["Removed by hand?", "Only if you removed this Google account from the event's guests yourself.", "Yes, I removed it"]
+  };
+  function regAction(action, id, extra) {
+    return apiPost(Object.assign({ registration_id: id, action: action }, extra || {})).then(function () {
+      said(action === "admit" ? "Admitted. Their confirmation and invitation go out within a minute." : action === "retry_calendar" ? "Trying the invitation again now." :
+        action === "retry_email" ? "Sending the email again now." : action === "note" ? "Note saved." : "Saved.");
+      return load().then(function () { if ($("ws-person").open) openPerson(id); });
+    });
+  }
   document.addEventListener("click", function (e) {
-    var copy = e.target.closest && e.target.closest("[data-ws-copy]");
+    var t = e.target;
+    if (!t.closest || !t.closest(".wsd")) return;
+    var close = t.closest("[data-wsd-close]");
+    if (close) { close.closest("dialog").close(); return; }
+    var copy = t.closest("[data-wsd-copy]");
     if (copy) {
-      var text = copy.getAttribute("data-ws-copy");
-      (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject(new Error("no clipboard")))
-        .then(function () { show("ws-message", "Copied. Paste into the event's guest field in Google Calendar."); })
-        .catch(function () { window.prompt("Copy these addresses:", text); });
+      var text = copy.getAttribute("data-wsd-copy"), input = copy.previousElementSibling;
+      Promise.resolve().then(function () { return navigator.clipboard.writeText(text); }).then(function () { said("Link copied."); })
+        .catch(function () { if (input) { input.focus(); input.select(); } said("Selected. Press Ctrl+C to copy."); });
       return;
     }
-    var acct = e.target.closest && e.target.closest("[data-ws-account]");
-    if (!acct) return;
-    var id = acct.getAttribute("data-ws-account");
-    var r = ws.rows.filter(function (x) { return x.id === id; })[0] || {};
-    var email = window.prompt("Google account this participant will join with. Change it only on a request from their registered email (" + (r.email_normalized || "") + ").", r.attend_email || "");
-    if (!email) return;
-    apiPost({ registration_id: id, action: "set_attend_email", email: email.trim() })
-      .then(function () { show("ws-message", "Google account saved. Check the invitation lists."); return load(); })
-      .catch(function (err) { show("ws-error", err.message); });
-  });
+    var add = t.closest("[data-wsd-add]");
+    if (add) { var k = add.getAttribute("data-wsd-add"); $(LISTS[k]).insertAdjacentHTML("beforeend", listRow(k, null)); var f = $(LISTS[k]).lastElementChild.querySelector("input, textarea"); if (f) f.focus(); return; }
+    var del = t.closest("[data-wsd-del]");
+    if (del) { del.parentElement.remove(); return; }
+    var row = t.closest("[data-wsd-person]");
+    if (row) { openPerson(row.getAttribute("data-wsd-person")); return; }
+    var b = t.closest("[data-wsd]");
+    if (!b) return;
+    var a = b.getAttribute("data-wsd"), id = b.getAttribute("data-id");
+    var s = ws.sessions[id], r = ws.rows.filter(function (x) { return x.id === id; })[0], x = ws.referrers.filter(function (y) { return y.id === id; })[0];
+    var run = function (p, msg) { b.disabled = true; return p.then(function () { if (msg) said(msg); return load(); }).catch(failed).then(function () { b.disabled = false; }); };
 
-  document.addEventListener("click", function (e) {
-    var btn = e.target.closest && e.target.closest("[data-ws]");
-    if (!btn) return;
-    var action = btn.getAttribute("data-ws");
-    if (CONFIRM[action] && !window.confirm(CONFIRM[action])) return;
-    btn.disabled = true;
-    apiPost({ registration_id: btn.getAttribute("data-id"), action: action })
-      .then(function () { show("ws-message", "Saved."); return load(); })
-      .catch(function (err) { show("ws-error", err.message); btn.disabled = false; });
+    if (a === "session_edit") openEditor(s);
+    else if (a === "session_copy") openEditor(s, true);
+    else if (a === "session_delete" || a === "session_cancel") removeSession(s);
+    else if (a === "session_publish") {
+      ask({ title: (s.status === "closed" ? "Reopen" : "Open") + " registration for “" + s.title + "”?", yes: "Open registration",
+        text: "It goes live on the website and people can book and pay straight away. Registration still closes by itself 7 days before the start.",
+        run: function () { return apiPost({ action: "session_publish", session_id: s.id }).then(function () { said("Registration is open. The page is live."); return load(); }); } });
+    } else if (a === "session_close") {
+      ask({ title: "Close registration?", yes: "Close registration", text: "The page stays up but nobody new can book. Everyone who has paid keeps their place. You can reopen it later.",
+        run: function () { return apiPost({ action: "session_close", session_id: s.id }).then(function () { said("Registration closed."); return load(); }); } });
+    } else if (a === "session_complete") {
+      ask({ title: "Mark “" + s.title + "” completed?", yes: "Mark completed", text: "It moves to Past and cancelled. Record attendance first if you haven't.",
+        run: function () { return apiPost({ action: "session_complete", session_id: s.id }).then(function () { said("Marked completed."); return load(); }); } });
+    } else if (a === "series_edit") {
+      var ser = ws.series.filter(function (y) { return y.slug === id; })[0];
+      ask({ title: "Series page text", yes: "Save", text: "Shown at the top of the workshops page and on each workshop in the series.",
+        fields: [{ label: "Name", value: ser.name, min: 3 }, { label: "One-line positioning", value: ser.positioning },
+          { label: "Introduction (blank line between paragraphs)", type: "textarea", rows: 6, value: (ser.intro || []).join("\n\n") },
+          { label: "Standalone note", type: "textarea", rows: 2, value: ser.standalone }, { label: "Disclaimer", type: "textarea", rows: 3, value: ser.disclaimer }],
+        run: function (name, pos, intro, alone, disc) {
+          return apiPost({ action: "series_save", series: { slug: ser.slug, name: name, presenter: ser.presenter, positioning: pos,
+            intro: intro.split(/\n\s*\n/).map(function (p) { return p.trim(); }).filter(Boolean), standalone: alone, disclaimer: disc } }).then(function () { said("Series text saved. The page shows it now."); return load(); });
+        } });
+    } else if (a === "open_person") openPerson(id);
+    else if (a === "admit" || a === "retry_email" || a === "retry_calendar") run(regAction(a, id));
+    else if (REG_CONFIRM[a]) {
+      var c = REG_CONFIRM[a];
+      ask({ title: c[0], text: c[1], yes: c[2], danger: a === "cancel", run: function () { return regAction(a, id); } });
+    } else if (a === "note") {
+      var note = $("wsp-note") ? $("wsp-note").value.trim() : "";
+      if (note.length < 2) { failed(new Error("Write the note first.")); return; }
+      run(regAction("note", id, { note: note }));
+    } else if (a === "set_account") {
+      ask({ title: "Google account for " + r.full_name, yes: "Save account",
+        text: "The account they will join with. Change it only on a request from their registered email (" + r.email_normalized + "). The old account is removed from the invitation and the new one added.",
+        fields: [{ label: "Google account email", type: "email", value: r.attend_email || "", min: 5 }],
+        run: function (email) { return regAction("set_attend_email", id, { email: email }); } });
+    } else if (a === "waitlist_remove") {
+      ask({ title: "Remove from the waitlist?", danger: true, yes: "Remove", text: "The rest of the queue keeps its order.",
+        fields: [{ label: "Reason (recorded)", min: 5 }],
+        run: function (reason) { return apiPost({ waitlist_id: id, action: "waitlist_remove", value: reason }).then(function () { said("Removed from the waitlist."); return load(); }); } });
+    } else if (a === "waitlist_retry_email") run(apiPost({ waitlist_id: id, action: "waitlist_retry_email" }), "Sending the email again.");
+    else if (a === "void_commission") {
+      ask({ title: "Void this commission?", danger: true, yes: "Void commission", text: "For a fraudulent or mistaken sale. It is recorded.",
+        fields: [{ label: "Reason", min: 5 }],
+        run: function (reason) { return apiPost({ registration_id: id, action: "void_commission", value: reason }).then(function () { said("Commission voided."); return load(); }); } });
+    } else if (a === "referrer_payouts") {
+      var owed = owedTo(x);
+      ask({ title: "Record GHS " + cedis(owed.amount) + " paid to " + referrerName(x) + "?", yes: "Record payment",
+        text: "Pay them yourself first" + (x.payout_method ? ", by " + x.payout_method : "") + ". Then enter the transaction reference so the payment is on record. It covers all " + owed.count + " paid place" + (owed.count === 1 ? "" : "s") + " owed now.",
+        fields: [{ label: "MoMo or bank reference", min: 3 }],
+        run: function (ref) { return apiPost({ action: "referrer_payouts", referrer_id: x.id, referrer: { reference: ref } }).then(function (j) { said("Recorded GHS " + cedis(j.amount_ghs) + " paid to " + referrerName(x) + "."); return load(); }); } });
+    } else if (a === "referrer_suspend") run(apiPost({ action: "referrer_suspend", referrer_id: x.id }), x.code + " suspended. It works nowhere until reactivated.");
+    else if (a === "referrer_activate") run(apiPost({ action: "referrer_activate", referrer_id: x.id }), x.code + " works on every workshop now.");
+    else if (a === "referrer_edit") {
+      ask({ title: "Details for " + x.code, yes: "Save details",
+        fields: [{ label: "Name", value: x.name || "", min: 2 }, { label: "Email", type: "email", value: x.email || "", min: 5, hint: "They can't use their own code with this address." },
+          { label: "How you pay their commission", value: x.payout_method || "", min: 3 }],
+        run: function (name, email, pay) { return apiPost({ action: "referrer_update", referrer_id: x.id, referrer: { name: name, email: email, payout_method: pay } }).then(function () { said("Saved."); return load(); }); } });
+    }
+  });
+  document.addEventListener("keydown", function (e) {
+    var row = e.target.closest && e.target.closest("[data-wsd-person]");
+    if (row && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openPerson(row.getAttribute("data-wsd-person")); }
   });
   document.addEventListener("change", function (e) {
-    var id = e.target.getAttribute && e.target.getAttribute("data-ws-att");
+    var id = e.target.getAttribute && e.target.getAttribute("data-wsd-att");
     if (!id) return;
-    apiPost({ registration_id: id, action: "attendance", value: e.target.value })
-      .then(function () { show("ws-message", "Attendance saved."); })
-      .catch(function (err) { show("ws-error", err.message); });
+    apiPost({ registration_id: id, action: "attendance", value: e.target.value }).then(function () { said("Attendance saved."); return load(); }).catch(failed);
   });
-  ["ws-session", "ws-status", "ws-payment", "ws-attendance"].forEach(function (id) { $(id).addEventListener("change", render); });
-  $("ws-q").addEventListener("input", render);
+
+  $("ws-ref-new").addEventListener("click", function () {
+    ask({ title: "Create a referral code", yes: "Create code", text: "For anyone, anywhere. It works on every workshop as soon as you create it.",
+      fields: [{ label: "Their name", min: 2 }, { label: "Their email", type: "email", min: 5, hint: "They can't use their own code with this address." },
+        { label: "How you pay their commission", min: 3, placeholder: "MoMo number, or bank or PayPal details" },
+        { label: "Code (optional)", placeholder: "Leave blank to make one", hint: "4 to 16 letters and numbers." }],
+      run: function (name, email, pay, code) {
+        return apiPost({ action: "referrer_create", referrer: { name: name, email: email, payout_method: pay, code: code } }).then(function (j) { said(j.code + " created. It works on every workshop now."); return load(); });
+      } });
+  });
+  $("ws-terms-edit").addEventListener("click", function () {
+    $("ws-t-off").value = Number(ws.settings.referral_discount_ghs); $("ws-t-com").value = Number(ws.settings.referral_commission_ghs);
+    $("ws-terms-form").hidden = false; $("ws-t-off").focus();
+  });
+  $("ws-terms-cancel").addEventListener("click", function () { $("ws-terms-form").hidden = true; });
+  $("ws-terms-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    apiPost({ action: "referral_terms", referrer: { discount_ghs: Number($("ws-t-off").value), commission_ghs: Number($("ws-t-com").value) } })
+      .then(function () { $("ws-terms-form").hidden = true; said("Saved. The new terms apply to every open workshop from now on."); return load(); }).catch(failed);
+  });
+  $("ws-grant-new").addEventListener("click", function () {
+    var open = ordered(ws.list.filter(function (s) { return s.status === "published"; }));
+    if (!open.length) { failed(new Error("No workshop is open for registration.")); return; }
+    ask({ title: "Let a certificate holder use another email", yes: "Allow it",
+      text: "For a holder whose email has changed. Check who they are yourself first. The new email can claim the certificate price once, for one workshop, for 7 days.",
+      fields: [{ label: "Certificate ID", min: 6 }, { label: "Their new email", type: "email", min: 5 },
+        { label: "Workshop", type: "select", options: open.map(function (s) { return [s.slug, s.title]; }), value: open[0].slug },
+        { label: "How you checked it's them (recorded)", min: 5 }],
+      run: function (cred, email, slug, reason) { return apiPost({ action: "grant_email", credential_id: cred, email: email, session: slug, value: reason }).then(function () { said("Allowed for 7 days. They can now apply the certificate with that email."); }); } });
+  });
+
+  /* ---------- tabs and filters ---------- */
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('.wsd-tabs [role="tab"]'));
+  function pick(tab) {
+    tabs.forEach(function (x) { var on = x === tab; x.setAttribute("aria-selected", String(on)); x.tabIndex = on ? 0 : -1; $(x.getAttribute("aria-controls")).hidden = !on; });
+    try { sessionStorage.setItem("wsd-tab", tab.id); } catch (err) { /* private mode */ }
+  }
+  tabs.forEach(function (tab, i) {
+    tab.addEventListener("click", function () { pick(tab); });
+    tab.addEventListener("keydown", function (e) {
+      var n = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+      if (n) { var nx = tabs[(i + n + tabs.length) % tabs.length]; pick(nx); nx.focus(); e.preventDefault(); }
+    });
+  });
+  try { var remembered = $(sessionStorage.getItem("wsd-tab") || ""); if (remembered && tabs.indexOf(remembered) !== -1) pick(remembered); } catch (err) { /* private mode */ }
+  ["ws-session", "ws-status", "ws-payment", "ws-attendance"].forEach(function (id) { $(id).addEventListener("change", function () { renderRegs(); campaigns(filtered()); }); });
+  $("ws-q").addEventListener("input", function () { renderRegs(); campaigns(filtered()); });
   $("ws-spend").addEventListener("input", function () { campaigns(filtered()); });
   $("ws-csv").addEventListener("click", csv);
   $("refresh").addEventListener("click", load);

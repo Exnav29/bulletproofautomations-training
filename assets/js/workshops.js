@@ -206,13 +206,23 @@
       requote();
     });
 
-    // Certificate confirmation: a one-time code sent to the certificate's own email.
+    // Certificate price. Registering with the email on the certificate applies it
+    // at once. Any other email: a one-time code goes to the address on the
+    // certificate, so a copied certificate ID is of no use to anyone else.
     var certBox = $("[data-ws-cert]");
     var certStatusEl = $("[data-ws-cert-status]");
     function certStatus(text) { if (certStatusEl) certStatusEl.textContent = text; }
     if (certBox) {
       var certInput = form.elements.certificate_id;
       var codeBox = $("[data-ws-cert-code]");
+      var applied = function (r) {
+        benefit = { token: r.verification, tier: r.tier };
+        codeBox.hidden = true;
+        certStatus(r.tier !== "graduate" ? "Certificate applied: the Foundations certificate price."
+          : graduateFull && !offerToken ? "Certificate applied. The reserved graduate places are taken: send the form to join the graduate waitlist, free. To take an open place now at the standard fee instead, reload the page and register without the certificate."
+          : "Certificate applied: a complimentary reserved place.");
+        requote();
+      };
       certInput.addEventListener("change", function () { if (benefit.token) { benefit = { token: "", tier: "" }; requote(); } codeBox.hidden = true; certStatus(""); });
       $("[data-ws-cert-send]").addEventListener("click", function () {
         var email = form.elements.email.value.trim();
@@ -220,22 +230,20 @@
           certStatus("Enter your email and certificate ID first.");
           return;
         }
-        post("/api/workshops/benefit", { step: "request", slug: slug, email: email, certificate_id: certInput.value.trim() }).then(function () {
+        certStatus("Checking your certificate.");
+        post("/api/workshops/benefit", { step: "request", slug: slug, email: email, certificate_id: certInput.value.trim() }).then(function (r) {
+          if (r && r.verified && r.verification) { applied(r); return; }
           codeBox.hidden = false;
-          certStatus("If that certificate is eligible and registered to this email, we have sent a 6-digit code to it. Check spam if it isn't there in two minutes.");
+          certStatus("This email isn't the one on that certificate, so we have emailed a 6-digit code to the address on the certificate. " +
+            "Enter it below. If the certificate isn't eligible for this workshop, no code is sent and the standard price applies.");
           form.elements.cert_code.focus();
-        }).catch(function () { certStatus("We couldn't send a code just now. Try again in a moment."); });
+        }).catch(function () { certStatus("We couldn't check your certificate just now. Try again in a moment."); });
       });
       $("[data-ws-cert-confirm]").addEventListener("click", function () {
         post("/api/workshops/benefit", { step: "confirm", slug: slug, email: form.elements.email.value.trim(),
           certificate_id: certInput.value.trim(), code: form.elements.cert_code.value.trim() }).then(function (r) {
-          if (!r.ok) { certStatus(r.remaining > 0 ? "That code didn't match. " + r.remaining + " tries left." : "That code can't be used. Send a new one."); return; }
-          benefit = { token: r.verification, tier: r.tier };
-          codeBox.hidden = true;
-          certStatus(r.tier !== "graduate" ? "Certificate confirmed: the Foundations certificate price."
-            : graduateFull && !offerToken ? "Certificate confirmed. The reserved graduate places are taken: send the form to join the graduate waitlist, free. To take an open place now at the standard fee instead, reload the page and register without the certificate."
-            : "Certificate confirmed: a complimentary reserved place.");
-          requote();
+          if (!r.ok) { certStatus(r.remaining > 0 ? "That code didn't match. " + r.remaining + " tries left." : "That code can't be used. Ask for a new one."); return; }
+          applied(r);
         }).catch(function () { certStatus("We couldn't check the code just now. Try again in a moment."); });
       });
     }
@@ -303,6 +311,7 @@
         if (d.status === "open") heroNotice.hidden = true;
         if (d.status === "registration_closed") closeForm("Registration closed", "Registration closes seven days before the session starts, so places are confirmed and invitations sent in good time. Other sessions are listed on the webinars page.", [{ href: "/workshops", text: "See other sessions", quiet: true }]);
         else if (d.status === "full") closeForm("This session is full", "No payment was taken. Other dates are listed on the webinars page.", [{ href: "/workshops", text: "See other sessions", quiet: true }]);
+        else if (d.status === "cancelled") closeForm("This session has been cancelled", "Nobody can register for it. If you had a place, we will contact you about a refund or a place on another session.", [{ href: "/workshops", text: "See other sessions", quiet: true }]);
         else if (d.status !== "open") closeForm("Registration has closed", "This session has started or registration is no longer open.", [{ href: "/workshops", text: "See other sessions", quiet: true }]);
       })
       .catch(function () {
