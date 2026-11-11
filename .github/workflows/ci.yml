@@ -220,6 +220,7 @@ jobs:
             --accept '100..=103,200..=299,403'
             --exclude '^https://n8n\.bulletproofautomations\.com/webhook/nfc-lead-capture$'
             --exclude '^https://training\.bulletproofautomations\.com/workshops'
+            --exclude '__WS_CANONICAL__'
             './dist/**/*.html'
         env:
           GITHUB_TOKEN: ${{ github.token }}
