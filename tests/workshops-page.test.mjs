@@ -8,13 +8,13 @@ import fs from "node:fs";
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
 
-const html = fs.readFileSync("dist/workshops/sample-webinar/index.html", "utf8");
+const html = fs.readFileSync("dist/workshops/sample-webinar/register/index.html", "utf8");
 const script = fs.readFileSync("assets/js/workshops.js", "utf8");
 const TOKEN = "T".repeat(43);
 
 const FULL = { open: false, full: true, general_full: true, graduate_places_open: false, waitlist_open: true, status: "full" };
 async function soldOutPage(stored, availability = FULL) {
-  const dom = new JSDOM(html, { url: "https://training.example/workshops/sample-webinar/", runScripts: "outside-only" });
+  const dom = new JSDOM(html, { url: "https://training.example/workshops/sample-webinar/register", runScripts: "outside-only" });
   const w = dom.window;
   if (stored) w.localStorage.setItem("bpa_ws_sample-webinar", JSON.stringify(stored));
   const main = w.document.querySelector("main[data-ws-page]");
@@ -90,11 +90,11 @@ const shell = fs.readFileSync("dist/workshops/_shell.html", "utf8");
 function gradPage() {
   const rows = JSON.parse(fs.readFileSync("tests/fixtures/workshop-rows.json", "utf8")).samples;
   Object.assign(rows[0], { graduate_free: true, reserved_graduate_seats: 5, foundations_discount_pct: 20 });
-  return pages.fill(shell, pages.route("/workshops/sample-webinar", pages.catalog(rows, [], Date.parse("2026-11-11T00:00:00Z"))));
+  return pages.fill(shell, pages.route("/workshops/sample-webinar/register", pages.catalog(rows, [], Date.parse("2026-11-11T00:00:00Z"))));
 }
 {
   const gradHtml = gradPage();
-  const dom = new JSDOM(gradHtml, { url: "https://training.example/workshops/sample-webinar/", runScripts: "outside-only" });
+  const dom = new JSDOM(gradHtml, { url: "https://training.example/workshops/sample-webinar/register", runScripts: "outside-only" });
   const w = dom.window;
   const main = w.document.querySelector("main[data-ws-page]");
   const posts = [];
@@ -139,7 +139,7 @@ console.log("workshops page: graduate waitlist when the reserved places are take
 
 // Release 6: the email on the certificate applies its price at once, with no code to type.
 {
-  const dom = new JSDOM(gradPage(), { url: "https://training.example/workshops/sample-webinar/", runScripts: "outside-only" });
+  const dom = new JSDOM(gradPage(), { url: "https://training.example/workshops/sample-webinar/register", runScripts: "outside-only" });
   const w = dom.window;
   const main = w.document.querySelector("main[data-ws-page]");
   const posts = [];
@@ -171,3 +171,56 @@ console.log("workshops page: graduate waitlist when the reserved places are take
 }
 
 console.log("workshops page: certificate applied at once for its own email ok");
+
+// Two steps (November 2026). The workshop page's short form keeps the name and
+// email for this tab and opens the form page; the form page fills them in.
+{
+  const shortHtml = fs.readFileSync("dist/workshops/sample-webinar/index.html", "utf8");
+  const dom = new JSDOM(shortHtml, { url: "https://training.example/workshops/sample-webinar?ref=KWAME50", runScripts: "outside-only" });
+  const w = dom.window;
+  const main = w.document.querySelector("main[data-ws-page]");
+  const calls = [];
+  w.fetch = async (url) => {
+    calls.push(String(url));
+    return { status: 200, ok: true, json: async () => ({ ok: true, session: { slug: "sample-webinar", price_ghs: Number(main.dataset.price), starts_at: main.dataset.starts },
+      open: true, full: false, general_full: false, graduate_places_open: false, waitlist_open: false, status: "open" }) };
+  };
+  w.eval(script);
+  await new Promise((r) => setTimeout(r, 50));
+  const short = w.document.querySelector("[data-ws-short]");
+  const submit = w.document.querySelector("[data-ws-submit]");
+  assert.equal(submit.textContent, "Register now");
+  short.dispatchEvent(new w.Event("submit", { cancelable: true }));
+  assert.match(w.document.querySelector("[data-ws-error]").textContent, /full name and a working email/);
+  assert.equal(w.sessionStorage.getItem("bpa_ws_prefill"), null, "nothing kept for an invalid entry");
+  short.elements.full_name.value = "Ama Mensah";
+  short.elements.email.value = "ama@example.com";
+  short.dispatchEvent(new w.Event("submit", { cancelable: true }));
+  assert.deepEqual(JSON.parse(w.sessionStorage.getItem("bpa_ws_prefill")), { slug: "sample-webinar", full_name: "Ama Mensah", email: "ama@example.com" });
+  assert.equal(submit.textContent, "Opening the form");
+  assert.ok(!calls.some((u) => u.includes("register") || u.includes("ama")), "nothing about the person is sent from the workshop page");
+
+  // The form page, in the same tab: name and email filled in, referral code kept.
+  const formDom = new JSDOM(html, { url: "https://training.example/workshops/sample-webinar/register?ref=KWAME50", runScripts: "outside-only" });
+  const fw = formDom.window;
+  fw.sessionStorage.setItem("bpa_ws_prefill", w.sessionStorage.getItem("bpa_ws_prefill"));
+  const fmain = fw.document.querySelector("main[data-ws-page]");
+  fw.fetch = async () => ({ status: 200, ok: true, json: async () => ({ ok: true, session: { slug: "sample-webinar", price_ghs: Number(fmain.dataset.price), starts_at: fmain.dataset.starts },
+    open: true, full: false, general_full: false, graduate_places_open: false, waitlist_open: false, status: "open", price_ghs: 150, list_price_ghs: 150 }) });
+  fw.eval(script);
+  await new Promise((r) => setTimeout(r, 50));
+  const f = fw.document.querySelector("[data-ws-form]");
+  assert.equal(f.elements.full_name.value, "Ama Mensah");
+  assert.equal(f.elements.email.value, "ama@example.com");
+  if (f.elements.ref) assert.equal(f.elements.ref.value, "KWAME50");
+
+  // Another workshop's details are not filled in.
+  const otherDom = new JSDOM(html, { url: "https://training.example/workshops/sample-webinar/register", runScripts: "outside-only" });
+  otherDom.window.sessionStorage.setItem("bpa_ws_prefill", JSON.stringify({ slug: "something-else", full_name: "X Y", email: "x@example.com" }));
+  otherDom.window.fetch = fw.fetch;
+  otherDom.window.eval(script);
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(otherDom.window.document.querySelector("[data-ws-form]").elements.email.value, "");
+}
+
+console.log("workshops page: short form carries name and email to the form page ok");

@@ -98,6 +98,7 @@ Reviewed changes to existing built files, listed in `tests/baseline/compare-site
 | `assets/js/admin-workshops.js` | Rewritten: create, edit, open, close, cancel and delete workshops; referral codes for anyone; one "Needs you" queue |
 | `assets/js/workshops.js` | The certificate box applies the price at once when the server verifies the email; a cancelled session explains itself |
 | `workshops/what-to-charge-for-automation/index.html` | Wording only: "with a referral code", "From someone's referral link or code", and the certificate hint and button |
+| Two-step registration (November 2026) | The workshop page's panel holds a short form (name, email, Register now) and stays on screen below the site header; the whole form moved to `/workshops/<slug>/register` (noindex, not in the sitemap), grouped under About you, Joining the meeting, Discounts and Reminders. Name and email pass between the two in `sessionStorage` for the tab only, never in the address. Waitlist offer and payment-retry links go to the form page. Field names, the register endpoint, prices and Paystack are unchanged. `assets/css/workshops.css` and `assets/js/workshops.js` carry `?v=20261111` so a cached script never meets the new page |
 | `sitemap.xml` | Workshop entries are added on request by `functions/sitemap.xml.js` instead of at build time |
 
 Every other workshop page renders byte-identical to `main`'s build, from the seeded database rows

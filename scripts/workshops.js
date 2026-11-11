@@ -19,9 +19,9 @@ const ORIGIN = "https://training.bulletproofautomations.com";
 const HEAD =
   '<!-- include: head.html title="__WS_TITLE__" description="__WS_DESCRIPTION__" canonical="__WS_CANONICAL__" -->\n' +
   '<link rel="preload" href="/assets/fonts/eb-garamond-600.woff2" as="font" type="font/woff2" crossorigin>\n' +
-  '<link rel="stylesheet" href="/assets/css/workshops.css">\n' +
+  '<link rel="stylesheet" href="/assets/css/workshops.css?v=20261111">\n' +
   '<script src="/assets/js/workshop-tracking.js" defer></script>\n' +
-  '<script src="/assets/js/workshops.js" defer></script>';
+  '<script src="/assets/js/workshops.js?v=20261111" defer></script>';
 
 const CONSENT_BAR =
   '<aside class="ws-consent" aria-label="Advert measurement" data-ad-consent hidden>\n' +

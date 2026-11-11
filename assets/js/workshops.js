@@ -44,6 +44,13 @@
     return /^[A-Za-z0-9]{4,16}$/.test(fromUrl) ? fromUrl.toUpperCase() : "";
   }
   referralCode();
+  /* The site header stays on screen while the page scrolls, and its height
+     changes with the width (its menu wraps near 900px). The registration panel
+     sticks just below it, so the header never covers the panel's top. */
+  var siteHeader = document.querySelector(".site-header");
+  function headerHeight() { if (siteHeader) main.style.setProperty("--ws-head", Math.ceil(siteHeader.getBoundingClientRect().height) + "px"); }
+  headerHeight();
+  window.addEventListener("resize", headerHeight);
   function saveAccess(slug, value) {
     try { var s = store(); if (s) s.setItem("bpa_ws_" + slug, JSON.stringify(value)); } catch (e) { /* private mode */ }
   }
@@ -90,7 +97,17 @@
     var price = Number(main.getAttribute("data-price"));
     var starts = main.getAttribute("data-starts");
     var title = main.getAttribute("data-title");
-    var form = $("[data-ws-form]");
+    // Two pages share this code: the workshop page, whose panel holds the short
+    // form (name and email), and /workshops/<slug>/register, which holds the
+    // whole form. Everything below about availability applies to both.
+    var formPage = main.getAttribute("data-ws-step") === "register";
+    var registerUrl = "/workshops/" + slug + "/register";
+    // Waitlist offer links (emailed as /workshops/<slug>/?offer=...) and "decline"
+    // links go straight to the form page, where the offer is filled in.
+    if (!formPage && /[?&]offer=/.test(location.search)) { location.replace(registerUrl + location.search); return; }
+    var shortForm = formPage ? null : $("[data-ws-short]");
+    var form = $("[data-ws-form]") || shortForm;
+    var PREFILL = "bpa_ws_prefill";
     var trace = $("[data-trace]");
     var submit = $("[data-ws-submit]");
     var errorBox = $("[data-ws-error]");
@@ -115,8 +132,9 @@
     // sheet is in view, and never while the consent bar is showing.
     var sticky = $("[data-ws-sticky]");
     var jump = $(".ws-jump");
-    if (jump) jump.parentNode.insertBefore(heroNotice, jump);
     var sheetEl = $("[data-ws-sheet]");
+    if (jump) jump.parentNode.insertBefore(heroNotice, jump);
+    else if (formPage && banner) banner.parentNode.insertBefore(heroNotice, banner);
     if (sticky && jump && sheetEl && "IntersectionObserver" in window) {
       var seen = { jump: true, sheet: false };
       var consentBar = $("[data-ad-consent]");
@@ -129,8 +147,11 @@
       document.addEventListener("click", function () { setTimeout(update, 0); });
     }
 
-    var vcId = "vc_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
-    track("ViewContent", vcId, { content_ids: [slug], content_name: title, content_type: "product", currency: "GHS", value: price });
+    // One ViewContent per visit to the workshop, not a second one on the form page.
+    if (!formPage) {
+      var vcId = "vc_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      track("ViewContent", vcId, { content_ids: [slug], content_name: title, content_type: "product", currency: "GHS", value: price });
+    }
 
     var wa = form && form.elements.whatsapp;
     var waConsent = $("[data-wa-consent]");
@@ -162,6 +183,17 @@
     var graduateFull = false;
     var ghsText = function (n) { return n === 0 ? "nothing" : "GHS " + Number(n).toLocaleString("en-GB"); };
     if (refInput && !refInput.value) refInput.value = referralCode();
+    // The name and email typed on the workshop page, held for this tab only.
+    // An offer link fills the form from the waitlist entry instead.
+    if (formPage && form && !offerToken) {
+      try {
+        var pre = JSON.parse(window.sessionStorage.getItem(PREFILL) || "null");
+        if (pre && pre.slug === slug) {
+          if (!form.elements.full_name.value) form.elements.full_name.value = pre.full_name || "";
+          if (!form.elements.email.value) form.elements.email.value = pre.email || "";
+        }
+      } catch (e) { /* storage blocked: the fields are simply empty */ }
+    }
 
     function setPrice(n, note) {
       quoted = n;
@@ -291,10 +323,10 @@
         if ((d.full || d.general_full) && loadAccess(slug) && d.status !== "registration_closed" && d.status !== "started") {
           heroNotice.hidden = false;
           heroNotice.textContent = "Session full. You have an existing registration in this browser. You can continue that registration, or join the free waitlist using different attendee details.";
-          if (jump && !document.querySelector('[data-ws-switch-waitlist]')) {
+          if (heroNotice.parentNode && !document.querySelector('[data-ws-switch-waitlist]')) {
             var switchBtn = el("button", { type: "button", class: "ws-btn ws-btn--quiet", "data-ws-switch-waitlist": "" }, "Join the waitlist instead");
             switchBtn.addEventListener("click", function () { switchBtn.hidden = true; enterWaitlist(); });
-            jump.parentNode.insertBefore(switchBtn, jump);
+            heroNotice.parentNode.insertBefore(switchBtn, heroNotice.nextSibling);
           }
           return;
         }
@@ -305,7 +337,9 @@
           graduatesOnly = true;
           heroNotice.hidden = false;
           heroNotice.textContent = "General places are full. Eligible Intermediate graduates may still claim reserved places. Everyone else can join the free waitlist below; joining does not reserve a seat.";
-          banner.textContent = "The open places are taken. Intermediate graduates: confirm your certificate below to claim a reserved place. Everyone else: send the form to join the waitlist, free.";
+          banner.textContent = shortForm
+            ? "The open places are taken. Intermediate graduates: continue, and confirm your certificate on the next page to claim a reserved place. Everyone else joins the waitlist there, free."
+            : "The open places are taken. Intermediate graduates: confirm your certificate below to claim a reserved place. Everyone else: send the form to join the waitlist, free.";
           banner.hidden = false;
           return;
         }
@@ -325,7 +359,7 @@
       graduatesOnly = false;
       banner.textContent = "Sold out — join the waitlist. It's free: if a place opens, we email you a link that holds it for you for up to 24 hours.";
       banner.hidden = false;
-      label = "Join the waitlist";
+      label = shortForm ? "Continue to the waitlist" : "Join the waitlist";
       submit.textContent = label;
       if (quoteLine) quoteLine.textContent = "Joining the waitlist is free. You pay only if you take a place we offer you.";
       Array.prototype.forEach.call(document.querySelectorAll(".ws-jump .ws-btn, [data-ws-sticky] .ws-btn"), function (a) { a.textContent = "Sold out — join the waitlist"; });
@@ -443,7 +477,28 @@
       }
     }
 
-    if (form) form.addEventListener("submit", function (e) {
+    // The workshop page's short form: check name and email, keep them for this
+    // tab, and open the form page. Nothing is sent to the server here.
+    if (shortForm) shortForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      if (submit.disabled) return;
+      var bad = [];
+      var name = shortForm.elements.full_name, email = shortForm.elements.email;
+      var nameOk = name.value.trim().length >= 2, emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.value.trim());
+      name.setAttribute("aria-invalid", nameOk ? "false" : "true");
+      email.setAttribute("aria-invalid", emailOk ? "false" : "true");
+      if (!nameOk) bad.push(name);
+      if (!emailOk) bad.push(email);
+      if (bad.length) { showError("Enter your full name and a working email address."); bad[0].focus(); return; }
+      showError("");
+      try { window.sessionStorage.setItem(PREFILL, JSON.stringify({ slug: slug, full_name: name.value.trim(), email: email.value.trim() })); } catch (err) { /* storage blocked */ }
+      busy(true, "Opening the form");
+      location.assign(registerUrl + location.search);
+    });
+    // Back from the form page: the browser may restore this page as it was left.
+    window.addEventListener("pageshow", function (e) { if (e.persisted && shortForm && submit.textContent === "Opening the form") busy(false); });
+
+    if (form && !shortForm) form.addEventListener("submit", function (e) {
       e.preventDefault();
       if (submit.disabled) return;
       if (!validateForm()) return;
@@ -618,7 +673,7 @@
           titleEl.textContent = "Payment not confirmed yet";
           ledeEl.textContent = "If you paid, you'll get a confirmation email as soon as Paystack confirms it. Please don't pay again. If you didn't finish paying, you can pay now.";
           setStep(list, "pay", "wait", "No confirmation from Paystack yet");
-          bodyEl.appendChild(el("a", { class: "ws-btn ws-btn--quiet", href: "/workshops/" + session + "#register" }, "Return to the session page"));
+          bodyEl.appendChild(el("a", { class: "ws-btn ws-btn--quiet", href: "/workshops/" + session + "/register" }, "Return to registration"));
         }
         return;
       }
@@ -626,7 +681,7 @@
         titleEl.textContent = "Payment wasn't completed";
         ledeEl.textContent = "Nothing was charged. Your details are saved, so you can pay without filling the form again.";
         setStep(list, "pay", "fail", "Not completed");
-        bodyEl.appendChild(el("a", { class: "ws-btn", href: "/workshops/" + session + "#register" }, "Pay " + ghs(s.amount_ghs)));
+        bodyEl.appendChild(el("a", { class: "ws-btn", href: "/workshops/" + session + "/register" }, "Pay " + ghs(s.amount_ghs)));
         return;
       }
       if (s.state === "needs_attention") {

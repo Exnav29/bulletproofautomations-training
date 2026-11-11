@@ -36,8 +36,12 @@ jobs:
           node tests/render-workshop-pages.mjs real
           npx --yes html-validate "dist/workshops/**/*.html"
           test -f dist/workshops/index.html
-          test "$(grep -l 'data-ws-form' dist/workshops/*/index.html | wc -l)" -eq 1
-          grep -q 'data-ws-form' dist/workshops/what-to-charge-for-automation/index.html
+          # Two steps: the workshop page has the short form, its /register page the full one.
+          test "$(grep -l 'data-ws-short' dist/workshops/*/index.html | wc -l)" -eq 1
+          grep -q 'data-ws-short' dist/workshops/what-to-charge-for-automation/index.html
+          test "$(grep -l 'data-ws-form' dist/workshops/*/index.html | wc -l)" -eq 0
+          grep -q 'data-ws-form' dist/workshops/what-to-charge-for-automation/register/index.html
+          grep -q 'name="robots" content="noindex"' dist/workshops/what-to-charge-for-automation/register/index.html
           test "$(grep -l 'data-ws-page="planned"' dist/workshops/*/index.html | wc -l)" -eq 9
           # Joining links are private: they live on the database row and go only to
           # confirmed participants by email. None may ever reach the built site.
