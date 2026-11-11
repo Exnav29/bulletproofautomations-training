@@ -195,6 +195,11 @@ jobs:
           node-version: 22
       - name: Build
         run: npm run build
+      # /workshops pages are rendered on request by a Function (release 6), so the
+      # build has no file for them. Render them from the real rows, as of today, so
+      # links to them resolve and the links inside them are checked too.
+      - name: Render the workshop pages
+        run: RENDER_NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)" node tests/render-workshop-pages.mjs real
       - name: Check links
         uses: lycheeverse/lychee-action@v2
         with:
