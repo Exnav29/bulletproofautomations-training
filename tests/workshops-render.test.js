@@ -97,7 +97,8 @@ test("invitation-only sessions ask for the Google account to join with; others d
 test("certificate and referral wording: anyone's referral code, and the certificate email applies at once", async () => {
   const p = await load();
   const w01 = p.route("/workshops/what-to-charge-for-automation", p.catalog(data.real, data.series, NOW)).body;
-  assert.match(w01, /GHS 300 with a referral code/);
+  // The Fee line shows the price and how to pay only; discounts are explained at the form fields.
+  assert.doesNotMatch(w01, /with a referral code<\/small>|with a Foundations certificate<\/small>|Free for eligible Intermediate graduates/);
   assert.match(w01, /From someone's referral link or code: GHS 300/);
   assert.match(w01, /Applied straight away if the email above is the one on your certificate/);
   assert.doesNotMatch(w01, /graduate's referral|Intermediate graduate's link/);
