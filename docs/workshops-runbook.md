@@ -839,17 +839,30 @@ Verify: `select status_code, timed_out from net._http_response order by created 
 `200` within a minute or two. `403` means the hash and the Vault secret differ. pg_net's default
 timeout is 5 seconds, which a run that reconciles several checkouts can exceed; hence the 30 seconds.
 
-## Publish a later session (workshops 02 to 10): from the admin (release 6)
+## Publish a later session (workshops 02 to 10): from the admin (releases 6 and 7)
 
-Everything is done in `/admin/workshops/`. Nothing goes through GitHub or Supabase by hand.
+Everything is done in `/admin/workshops/`. Nothing goes through GitHub, Supabase or Google
+Calendar by hand.
 
-1. Workshops 02 to 10 are already there as drafts listed "coming soon" (seeded from the old
-   series file). Choose **Add a date** on one, or **New workshop** for something new.
-2. Fill in the date, price, places and page content. For a workshop joined by invitation, create
-   its Google Calendar event first (guests can't see the guest list or invite others) and paste
-   the event ID.
-3. **Save and open registration.** The page, the directory entry and the sitemap entry are live at
-   once. If something is missing, the editor says exactly what, and nothing opens.
+1. Workshops 02 to 10 are already there as drafts listed "coming soon". Their pages have a short
+   description and outcomes but no running order, questions or "why" yet. Open one with **Edit**,
+   write a sentence or two under **Page content → What it covers**, press **Generate draft
+   content**, read and correct the draft, then **Save as draft**.
+2. Choose **Schedule workshop**, pick the date (the start time comes from the series), check the
+   settings it lists, and press **Schedule and open registration**. That one step saves the date,
+   creates the Google Calendar event with its own Meet link (guests can't edit it, invite others
+   or see the guest list), and opens registration. The page, the directory entry and the sitemap
+   entry are live at once.
+3. If Google fails, nothing opens: the workshop stays a draft, the panel says why, and **Retry**
+   finishes the job. The same item appears under **Needs you**. Retrying never makes a second
+   event: each workshop's event ID is derived from the workshop itself.
+
+**If you already made a Calendar event for a workshop** (the dates were kept in Google Calendar
+before release 7), paste its event ID under **Joining and Google Calendar → Use an event I made
+myself** before scheduling, or delete your event. Otherwise the workshop gets its own new event and
+yours stays on your calendar as a second one. An event you attach this way is kept as you set it
+up: moving the date moves its time and emails guests, but its title, description and Meet settings
+are never rewritten.
 
 Afterwards: **Close registration** stops new bookings and keeps every place; **Cancel workshop**
 (needs a reason) stops it and lists every paid person under "Needs you" for a refund or a move;
@@ -861,6 +874,36 @@ deliberately **not** in this repository or on the coming-soon pages: each opens 
 places and terms are approved, and the 26 December and 2 January dates need marketing approval
 before anyone advertises them. A calendar date never opens registration. Only the database row
 does.
+
+## Release 7: streamlined administration (deployment)
+
+What it adds: series defaults (**Series settings** on the Workshops tab), a server-side
+**Duplicate**, **Schedule workshop**, automatic Google Calendar events and Meet links, moving the
+event when a date changes, and **Generate draft content** with a free OpenRouter model. Payments,
+registrations, refunds, the waitlist, invitations and cohort code are unchanged.
+
+1. **Database.** Apply `supabase/migrations/20261114120000_workshop_admin_streamline.sql` (additive;
+   the release 6 admin keeps working on it). It gives the series Workshop 01's settings as its
+   defaults, marks Workshop 01's existing event as the owner's own, and changes no other row.
+   Rollback: `rollback/20261114120000_workshop_admin_streamline_down.sql`; Calendar events and
+   their IDs stay.
+2. **OpenRouter (owner).** Create a free account at openrouter.ai, create an API key, and add it to
+   the Cloudflare Pages project as `OPENROUTER_API_KEY`, for Production and Preview separately, then
+   redeploy. If drafting reports that every model refused, check that OpenRouter's privacy
+   settings allow free models for your account. Free models cost
+   nothing and have a daily request limit; they may log prompts, which is fine here because only
+   public page copy is sent. Without the key everything else works and the button says what to set.
+3. **Google Calendar.** No change: event creation and Meet links use the existing connection and
+   its `calendar.events` permission. If Preview has no Google values, scheduling on the preview
+   says so and nothing opens.
+4. **Merge** the PR. Then, on a **test** workshop: Schedule it, check the event and its Meet link
+   appeared on your calendar with guest permissions off, move its date and check the event moved,
+   then delete the test workshop and its event.
+
+**Meet "Restricted" access is not set automatically yet.** Calendar cannot set it. The next step,
+approved by the owner, is a one-time re-authorisation that adds the Meet API permission
+(`meetings.space.created`), a test on a test event, and only then turning it on. Until then, set
+Meet → Host controls → Meeting access: **Restricted** by hand on each new event (one setting).
 
 ## Rollback of the whole feature
 

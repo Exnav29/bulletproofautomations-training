@@ -55,7 +55,11 @@
       return fetch("/api/admin/workshops", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify(body) });
     };
     var go = current.expires_at && Date.now() > current.expires_at ? refresh().then(function (fresh) { return send(fresh.access_token); }) : send(current.access_token);
-    return go.then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { if (!r.ok || !j.ok) throw new Error(j.error || "The change was refused."); return j; }); });
+    return go.then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) {
+      // The answer travels with the error, so a caller can offer Retry (release 7).
+      if (!r.ok || !j.ok) { var err = new Error(j.error || "The change was refused."); err.data = j; throw err; }
+      return j;
+    }); });
   }
   function getJson(path) {
     return authFetch(path).then(function (r) {
@@ -151,6 +155,32 @@
   }
 
   /* ---------- render ---------- */
+  /* ---------- release 7: Calendar state and series defaults ---------- */
+  function calendarTrouble(s) { return s.admission === "invite" && (s.calendar_status === "failed" || s.calendar_status === "needs_update"); }
+  function calendarShort(s) {
+    if (s.calendar_status === "failed") return "Not created yet";
+    if (s.calendar_status === "needs_update") return "Still on the old time";
+    if (!s.calendar_event_id) return "Made when you schedule";
+    return s.calendar_managed ? "Event and Meet link ready" : "Your own event";
+  }
+  function sentence(x) { x = String(x || "").trim(); return /[.!?]$/.test(x) ? x : x + "."; }
+  function seriesOf(slug) { return ws.series.filter(function (x) { return x.slug === slug; })[0] || null; }
+  function defaultsOf(slug) { var x = seriesOf(slug); return (x && x.defaults) || {}; }
+  function hours(min) { var h = Number(min) / 60; return (h === Math.floor(h) ? h : h.toFixed(1)) + (h === 1 ? " hour" : " hours"); }
+  function cutoffText(d, t) {
+    return d ? "Registration closes automatically 7 days before: " + when(Date.parse(d + "T" + (t || "00:00") + ":00Z") - 168 * 3600000, { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) + " GMT."
+      : "Registration closes automatically 7 days before the start.";
+  }
+  function contentGaps(c) {
+    c = c || {};
+    var miss = [];
+    if (!c.summary) miss.push("short description");
+    if (!(c.outcomes && c.outcomes.length)) miss.push("outcomes");
+    if (!(c.run_of_show && c.run_of_show.length)) miss.push("running order");
+    if (!(c.faq && c.faq.length)) miss.push("questions and answers");
+    return miss;
+  }
+
   function render() {
     var real = ws.list.filter(function (s) { return !s.is_test; });
     var open = real.filter(function (s) { return s.status === "published" && !hasStarted(s); }).length;
@@ -196,6 +226,12 @@
     ws.waitlist.filter(function (w) { return w.email_error; }).forEach(function (w) {
       items.push({ who: "Waitlist email failed: " + w.full_name, why: w.email_error + " (" + w.email_failures + " tries)", acts: [act("waitlist_retry_email", "Retry email", w.id, true)] });
     });
+    // Release 7: a workshop's own Calendar event that could not be created or moved.
+    ws.list.filter(function (s) { return calendarTrouble(s) && !ended(s); }).forEach(function (s) {
+      items.push({ bad: s.status !== "draft", who: (s.calendar_status === "failed" ? "Calendar event not created: " : "Calendar event not moved to the new date: ") + s.title + (s.is_test ? " (test)" : ""),
+        why: sentence(s.calendar_error || "Google Calendar did not respond") + (s.status === "draft" ? " Registration stays closed until it works." : " People already invited still have the old time."),
+        acts: [act("calendar_retry", "Retry", s.id, true), act("session_edit", "Open", s.id)] });
+    });
     ws.list.filter(function (s) { return !s.is_test && (s.status === "published" || s.status === "closed") && hasStarted(s) && Date.now() - startsAt(s) > 3 * 3600000; }).forEach(function (s) {
       items.push({ who: s.title + " has taken place", why: "Record attendance on the Registrations tab, then mark it completed so it leaves the current list.", acts: [act("session_complete", "Mark completed", s.id, true)] });
     });
@@ -228,7 +264,12 @@
     $("ws-n-ws").textContent = current.length;
     $("ws-series").innerHTML = ws.series.map(function (x) {
       var n = ws.list.filter(function (s) { return s.series_slug === x.slug && !s.is_test; }).length;
-      return "<span>Series: <strong>" + esc(x.name) + "</strong>, " + n + " workshop" + (n === 1 ? "" : "s") + '.</span><button class="wsd-btn wsd-btn--sm wsd-btn--quiet" type="button" data-wsd="series_edit" data-id="' + esc(x.slug) + '">Edit the series page text</button>';
+      var d = x.defaults || {};
+      var std = Object.keys(d).length ? " Standard: " + (Number(d.price_ghs) ? "GHS " + cedis(d.price_ghs) : "free") + ", " + (d.capacity || 0) + " places" +
+        (Number(d.reserved_graduate_seats) ? " + " + d.reserved_graduate_seats + " for graduates" : "") + ", " + hours(d.duration_minutes || 180) + (d.start_time ? " from " + d.start_time + " GMT" : "") + "." : "";
+      return "<span>Series: <strong>" + esc(x.name) + "</strong>, " + n + " workshop" + (n === 1 ? "" : "s") + "." + esc(std) + "</span>" +
+        '<span class="wsd-acts"><button class="wsd-btn wsd-btn--sm wsd-btn--quiet" type="button" data-wsd="series_defaults" data-id="' + esc(x.slug) + '">Series settings</button>' +
+        '<button class="wsd-btn wsd-btn--sm wsd-btn--quiet" type="button" data-wsd="series_edit" data-id="' + esc(x.slug) + '">Edit the series page text</button></span>';
     }).join("");
   }
   function ticket(s) {
@@ -250,7 +291,7 @@
     var closesIn = t !== null ? daysUntil(t - 168 * 3600000) : null;
     var onEvent = mine.filter(function (r) { return r.invited_email && !toRemove(r); }).length;
     var facts = undated ? '<p class="wsd-hint">' + (s.announce ? "Listed on the website as coming soon. " : "Not on the website yet. ") +
-        (cap ? cap + (grad ? " + " + grad + " graduate" : "") + " places, " : "") + (Number(s.price_ghs) ? "GHS " + cedis(s.price_ghs) : "free") + ". Add a date to open registration.</p>"
+        (cap ? cap + (grad ? " + " + grad + " graduate" : "") + " places, " : "") + (Number(s.price_ghs) ? "GHS " + cedis(s.price_ghs) : "free") + ". Schedule it to open registration.</p>"
       : '<dl class="wsd-facts">' +
       (cap ? "<div><dt>Open places</dt><dd>" + st8.general + " of " + cap + "</dd></div>" : "") +
       (grad ? "<div><dt>Graduate places</dt><dd>" + st8.grad + " of " + grad + "</dd></div>" : "") +
@@ -258,12 +299,13 @@
       (s.status !== "draft" ? "<div><dt>Taken so far</dt><dd>GHS " + ghsMinor(revenue) + "</dd></div>" : "") +
       (s.status === "published" && closesIn !== null && closesIn > 0 ? '<div><dt>Registration closes</dt><dd class="is-soon">in ' + closesIn + " day" + (closesIn === 1 ? "" : "s") + "</dd></div>" : "") +
       (waiting.length ? "<div><dt>Waiting</dt><dd>" + waiting.length + "</dd></div>" : "") +
-      (s.admission === "invite" && s.status !== "draft" ? "<div><dt>On the Calendar invitation</dt><dd>" + onEvent + "</dd></div>" : "") + "</dl>";
+      (s.admission === "invite" && s.status !== "draft" ? "<div><dt>On the Calendar invitation</dt><dd>" + onEvent + "</dd></div>" : "") +
+      (s.admission === "invite" && s.starts_at ? "<div><dt>Calendar</dt><dd" + (calendarTrouble(s) ? ' class="is-soon"' : "") + ">" + esc(calendarShort(s)) + "</dd></div>" : "") + "</dl>";
     var viewable = (s.status === "draft" && s.announce) || (s.status !== "draft" && s.status !== "completed" && !hasStarted(s));
     var holding = mine.some(function (r) { return HOLDING.indexOf(r.status) !== -1 || r.status === "pending_payment"; }) || ws.waitlist.some(function (w) { return w.session_id === s.id; }) || mine.length > 0;
     var b = function (a, label, cls) { return '<button class="wsd-btn wsd-btn--sm' + (cls ? " " + cls : "") + '" type="button" data-wsd="' + a + '" data-id="' + s.id + '">' + label + "</button>"; };
-    var acts = (undated ? b("session_edit", "Add a date", "wsd-btn--primary") : b("session_edit", "Edit")) +
-      (s.status === "draft" && !undated ? b("session_publish", "Open registration", "wsd-btn--primary") : "") +
+    // Release 7: a draft is scheduled in one step (date, Calendar event and Meet link, registration open).
+    var acts = (s.status === "draft" ? b("session_schedule", "Schedule workshop", "wsd-btn--primary") : "") + b("session_edit", "Edit") +
       (s.status === "closed" && !hasStarted(s) ? b("session_publish", "Reopen registration", "wsd-btn--primary") : "") +
       (s.status === "published" && !hasStarted(s) ? b("session_close", "Close registration") : "") +
       ((s.status === "published" || s.status === "closed") && hasStarted(s) ? b("session_complete", "Mark completed", "wsd-btn--primary") : "") +
@@ -494,17 +536,101 @@
     if (p && rd) bits.push("GHS " + cedis(Math.max(0, p - rd)) + " with a referral code");
     if (p && $("wse-f-free").checked && gr) bits.push("free for Intermediate graduates");
     $("wse-priceline").textContent = bits.join(", ") + ". " + (cap + gr) + " people in total" + (gr ? " (" + cap + " open, " + gr + " kept for graduates)." : ".");
-    var d = $("wse-f-date").value, t = $("wse-f-time").value || "00:00";
-    $("wse-cutoff").textContent = d ? "Registration closes automatically 7 days before: " + when(Date.parse(d + "T" + t + ":00Z") - 168 * 3600000, { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) + " GMT." : "Registration closes automatically 7 days before the start.";
+    $("wse-cutoff").textContent = cutoffText($("wse-f-date").value, $("wse-f-time").value);
     $("wse-cal-wrap").hidden = !$("wse-a-invite").checked;
+    // What each folded section holds, so it can stay folded.
+    $("wse-discount-note").textContent = (gr ? gr + " graduate places" + ($("wse-f-free").checked ? ", free" : "") : "No graduate places") + (f ? ", Foundations " + f + "% off" : "");
+    $("wse-join-note").textContent = $("wse-a-invite").checked ? "Google Calendar invitation" : "Link in the confirmation email";
+    $("wse-page-note").textContent = "/workshops/" + ($("wse-f-slug").value || slugify($("wse-f-title").value));
+    var gaps = contentGaps({ summary: $("wse-f-summary").value.trim(), outcomes: readList("outcomes"), run_of_show: readList("run"), faq: readList("faq") });
+    $("wse-content-note").textContent = gaps.length ? "Missing: " + gaps.join(", ") : "Complete";
+    $("wse-content-note").className = "wsd-sec__note" + (gaps.length ? " is-missing" : "");
+    seriesNote();
   }
+
+  /* Series defaults (release 7): the editor says where a workshop differs from its series. */
+  var SERIES_FIELDS = [
+    ["price_ghs", "wse-f-price", "price", function (v) { return "GHS " + cedis(v); }],
+    ["capacity", "wse-f-cap", "open places", String],
+    ["reserved_graduate_seats", "wse-f-grad", "graduate places", String],
+    ["foundations_discount_pct", "wse-f-fnd", "Foundations discount", function (v) { return v + "%"; }],
+    ["duration_minutes", "wse-f-dur", "length", hours]
+  ];
+  function seriesNote() {
+    var slug = $("wse-f-series").value, ser = seriesOf(slug), def = defaultsOf(slug);
+    if (!ser || !Object.keys(def).length) { $("wse-series-note").hidden = true; return; }
+    var diff = SERIES_FIELDS.filter(function (k) { return def[k[0]] !== undefined && Number(def[k[0]]) !== (Number($(k[1]).value) || 0); })
+      .map(function (k) { return k[2] + " (series: " + k[3](def[k[0]]) + ")"; });
+    if (def.graduate_free !== undefined && !!def.graduate_free !== $("wse-f-free").checked) diff.push("free graduate places (series: " + (def.graduate_free ? "on" : "off") + ")");
+    if (def.admission && def.admission !== ($("wse-a-invite").checked ? "invite" : "link")) diff.push("joining (series: " + (def.admission === "invite" ? "Calendar invitation" : "email link") + ")");
+    $("wse-series-note").hidden = false;
+    $("wse-series-note").className = "wsd-series-note" + (diff.length ? " is-different" : "");
+    $("wse-series-text").textContent = diff.length ? "Differs from the " + ser.name + " settings: " + diff.join(", ") + "." : "Uses the " + ser.name + " settings for price, places, discounts, length and joining.";
+    $("wse-use-series").hidden = !diff.length;
+  }
+  function useSeries() {
+    var def = defaultsOf($("wse-f-series").value);
+    SERIES_FIELDS.forEach(function (k) {
+      if (def[k[0]] === undefined) return;
+      if (k[0] === "duration_minutes" && !Array.prototype.some.call($("wse-f-dur").options, function (o) { return o.value === String(def[k[0]]); })) return;
+      $(k[1]).value = String(def[k[0]]);
+    });
+    if (def.graduate_free !== undefined) $("wse-f-free").checked = !!def.graduate_free;
+    if (def.admission) $("wse-a-" + (def.admission === "invite" ? "invite" : "link")).checked = true;
+    if (!$("wse-f-date").value && def.start_time) $("wse-f-time").value = def.start_time;
+    priceLine();
+  }
+
+  function statusLine(s) {
+    if (!s) return "New. Nothing is public until you schedule it.";
+    var st = s.status;
+    if (st === "draft") return s.announce ? "Draft, listed as coming soon. Nobody can book yet." : "Draft. Not on the website yet.";
+    if (st === "published") return hasStarted(s) ? "Taken place." : "Open. People can book and pay now.";
+    if (st === "closed") return "Closed. The page is up but nobody new can book.";
+    if (st === "cancelled") return "Cancelled.";
+    if (st === "completed") return "Completed.";
+    return st;
+  }
+
+  /* The workshop's own Calendar event (release 7). */
+  function calPanel(s) {
+    var p = $("wse-cal-panel");
+    var retry = s ? '<button class="wsd-btn wsd-btn--sm wsd-btn--primary" type="button" data-wsd="calendar_retry" data-id="' + esc(s.id) + '">Retry</button>' : "";
+    if (!s || !s.calendar_event_id) {
+      p.innerHTML = "<p><strong>Made for you.</strong> When you schedule this workshop, its Google Calendar event and its own Meet link are created automatically. " +
+        "Guests can't change the event, invite others or see who else is coming. Paid people are added as they confirm and removed if refunded.</p>" +
+        (s && s.calendar_status === "failed" ? '<p class="wsd-cal__bad">The last attempt failed: ' + esc(s.calendar_error || "Google Calendar did not respond.") + "</p>" + retry : "");
+      return;
+    }
+    var link = s.meet_link ? '<div class="wsd-copy"><input type="text" readonly value="' + esc(s.meet_link) + '" aria-label="Meet link (private)">' +
+      '<button class="wsd-btn wsd-btn--sm" type="button" data-wsd-copy="' + esc(s.meet_link) + '">Copy</button></div><span class="wsd-hint">Private. Only invited people get it, in their Calendar invitation.</span>' : "";
+    p.innerHTML = "<p><strong>" + (s.calendar_managed ? "Event and Meet link created automatically." : "Your own event, kept exactly as you set it up.") + "</strong> " +
+      (s.calendar_managed ? "Moving the date here moves the event and Google emails everyone invited." : "Moving the date here moves your event's time and Google emails everyone invited; its title and description stay yours.") + "</p>" +
+      link + (calendarTrouble(s) ? '<p class="wsd-cal__bad">' + esc(s.calendar_status === "failed" ? "Not created: " : "Still on the old time: ") + esc(s.calendar_error || "") + "</p>" + retry : "");
+  }
+
+  var aiExtra = null;
+  function fillContent(c) {
+    $("wse-f-summary").value = c.summary || ""; $("wse-f-audience").value = c.audience || "";
+    $(LISTS.why).innerHTML = (c.why || []).map(function (x) { return listRow("why", x); }).join("");
+    $(LISTS.outcomes).innerHTML = (c.outcomes && c.outcomes.length ? c.outcomes : [""]).map(function (x) { return listRow("outcomes", x); }).join("");
+    $(LISTS.leave).innerHTML = (c.leave_with || []).map(function (x) { return listRow("leave", x); }).join("");
+    $(LISTS.run).innerHTML = (c.run_of_show || []).map(function (x) { return listRow("run", x); }).join("");
+    $(LISTS.faq).innerHTML = (c.faq || []).map(function (x) { return listRow("faq", x); }).join("");
+    $("wse-f-fit").value = c.good_fit || ""; $("wse-f-notfit").value = c.not_fit || ""; $("wse-f-bring").value = c.bring || "";
+    $("wse-f-problem").value = c.problem || ""; $("wse-f-fitline").value = c.series_fit || "";
+  }
+
   function openEditor(s, copy) {
     editing = copy ? null : s;
+    aiExtra = null;
     var c = (s && s.content) || {};
-    var v = s || { kind: "workshop", price_ghs: 350, capacity: 25, reserved_graduate_seats: 5, foundations_discount_pct: 20, graduate_free: true,
-      admission: "invite", duration_minutes: 180, series_slug: ws.series[0] ? ws.series[0].slug : "", announce: false };
+    var firstSeries = ws.series[0] ? ws.series[0].slug : "";
+    // A new workshop starts from its series' settings (release 7).
+    var v = s || Object.assign({ kind: "workshop", price_ghs: 350, capacity: 25, reserved_graduate_seats: 5, foundations_discount_pct: 20, graduate_free: true,
+      admission: "invite", duration_minutes: 180, announce: false }, defaultsOf(firstSeries), { series_slug: firstSeries });
     $("wse-title").textContent = copy ? "Copy of " + s.title : s ? "Edit workshop" : "New workshop";
-    $("wse-error").hidden = true;
+    $("wse-error").hidden = true; $("wse-retry-wrap").hidden = true;
     $("wse-f-title").value = copy ? s.title + " (copy)" : v.title || "";
     $("wse-f-slug").value = copy ? "" : v.slug || "";
     var locked = !!(editing && (editing.status !== "draft" || rowsOf(editing.id).length));
@@ -516,31 +642,31 @@
     ser.value = v.series_slug || "";
     var used = ws.list.filter(function (x) { return x.series_slug && !x.is_test && x.series_number; }).map(function (x) { return x.series_number; });
     $("wse-f-number").value = copy || !s ? (used.length ? Math.max.apply(null, used) + 1 : 1) : v.series_number || "";
-    $("wse-f-summary").value = c.summary || ""; $("wse-f-audience").value = c.audience || "";
     $("wse-announce-wrap").hidden = !!(editing && editing.status !== "draft");
     $("wse-f-announce").checked = !copy && !!v.announce;
     $("wse-test-wrap").hidden = !!editing;
     $("wse-f-test").checked = !!(copy && s.is_test);
     var t = !copy && v.starts_at ? new Date(v.starts_at) : null;
     $("wse-f-date").value = t ? t.toISOString().slice(0, 10) : "";
-    $("wse-f-time").value = t ? t.toISOString().slice(11, 16) : "11:30";
+    $("wse-f-time").value = t ? t.toISOString().slice(11, 16) : (defaultsOf(v.series_slug).start_time || "11:30");
     $("wse-f-dur").value = String(v.duration_minutes || 180);
     if ($("wse-f-dur").value !== String(v.duration_minutes || 180)) { var o = document.createElement("option"); o.value = String(v.duration_minutes); o.textContent = v.duration_minutes + " minutes"; $("wse-f-dur").appendChild(o); $("wse-f-dur").value = String(v.duration_minutes); }
     $("wse-f-price").value = Number(v.price_ghs || 0); $("wse-f-cap").value = v.capacity || ""; $("wse-f-grad").value = Number(v.reserved_graduate_seats || 0);
     $("wse-f-fnd").value = Number(v.foundations_discount_pct || 0); $("wse-f-free").checked = !!v.graduate_free;
     $("wse-a-" + (v.admission === "invite" ? "invite" : "link")).checked = true;
     $("wse-f-cal").value = copy ? "" : v.calendar_event_id || "";
-    $("wse-f-join").value = v.join_instructions || "";
-    $("wse-f-fit").value = c.good_fit || ""; $("wse-f-notfit").value = c.not_fit || ""; $("wse-f-bring").value = c.bring || "";
-    $("wse-f-problem").value = c.problem || ""; $("wse-f-fitline").value = c.series_fit || "";
-    $(LISTS.why).innerHTML = (c.why || []).map(function (x) { return listRow("why", x); }).join("");
-    $(LISTS.outcomes).innerHTML = (c.outcomes && c.outcomes.length ? c.outcomes : [""]).map(function (x) { return listRow("outcomes", x); }).join("");
-    $(LISTS.leave).innerHTML = (c.leave_with || []).map(function (x) { return listRow("leave", x); }).join("");
-    $(LISTS.run).innerHTML = (c.run_of_show || []).map(function (x) { return listRow("run", x); }).join("");
-    $(LISTS.faq).innerHTML = (c.faq || []).map(function (x) { return listRow("faq", x); }).join("");
+    $("wse-f-join").value = copy ? "" : v.join_instructions || "";
+    fillContent(c);
+    $("wse-f-brief").value = c.problem || c.summary || "";
+    $("wse-ai-status").textContent = "";
+    $("wse-status").textContent = statusLine(editing);
+    $("wse-referral-line").textContent = "Referral codes: GHS " + cedis(ws.settings.referral_discount_ghs) + " off and GHS " + cedis(ws.settings.referral_commission_ghs) +
+      " commission. One setting for every workshop, changed under Referrals.";
+    calPanel(editing);
     var held = editing ? rowsOf(editing.id).filter(function (r) { return HOLDING.indexOf(r.status) !== -1; }) : [];
     $("wse-held").hidden = !held.length;
-    $("wse-held").textContent = held.length ? held.length + (held.length === 1 ? " person has" : " people have") + " a place. A new price applies only to people who register from now on, and places can't go below the ones already taken. If you change the date, change it on the Google Calendar event too, and tell the people booked." : "";
+    $("wse-held").textContent = held.length ? held.length + (held.length === 1 ? " person has" : " people have") + " a place. A new price applies only to people who register from now on, and places can't go below the ones already taken. " +
+      (editing.admission === "invite" && editing.calendar_event_id ? "A new date moves the Calendar event, and Google emails everyone invited." : "If you change the date, tell the people booked.") : "";
     $("wse-history-wrap").hidden = !(editing && editing.admin_notes);
     $("wse-history").textContent = editing && editing.admin_notes ? editing.admin_notes : "";
     var st = editing ? editing.status : "draft";
@@ -549,6 +675,11 @@
     var anyone = editing && (rowsOf(editing.id).length || ws.waitlist.some(function (w) { return w.session_id === editing.id; }));
     $("wse-remove").hidden = !editing || st === "cancelled" || st === "completed";
     $("wse-remove").textContent = anyone ? "Cancel workshop" : "Delete";
+    // Essentials first; the rest stays folded unless something in it needs attention.
+    $("wse-sec-content").open = !s || contentGaps(c).length > 0;
+    $("wse-sec-discounts").open = false;
+    $("wse-sec-join").open = !!(editing && calendarTrouble(editing));
+    $("wse-sec-page").open = !s;
     priceLine();
     $("ws-editor").showModal();
     $("wse-f-title").focus();
@@ -567,38 +698,160 @@
         leave_with: readList("leave"), run_of_show: readList("run"), faq: readList("faq"), good_fit: $("wse-f-fit").value,
         not_fit: $("wse-f-notfit").value, bring: $("wse-f-bring").value, problem: $("wse-f-problem").value, series_fit: $("wse-f-fitline").value }
     };
-    // Keep the existing extra content (description, directory line) the form does not show.
-    if (editing && editing.content) { out.content.description = editing.content.description || ""; out.content.directory_line = editing.content.directory_line || ""; }
+    // Keep the extra content the form does not show (description, directory line), or take the draft's.
+    var extra = aiExtra || (editing && editing.content) || {};
+    out.content.description = extra.description || ""; out.content.directory_line = extra.directory_line || "";
     if (!$("wse-f-slug").readOnly) out.slug = $("wse-f-slug").value.trim() || slugify(out.title);
     if (!editing || editing.status === "draft") out.announce = $("wse-f-announce").checked;
     if (!editing) out.is_test = $("wse-f-test").checked;
     return out;
   }
+  function editorFailed(err, open) {
+    $("wse-error").textContent = err.message; $("wse-error").hidden = false;
+    $("wse-retry-wrap").hidden = !(err.data && err.data.retry);
+    $("wse-retry").onclick = function () { saveEditor(open); };
+    $("wse-error").scrollIntoView({ block: "nearest" });
+  }
   function saveEditor(open) {
     var payload = editorPayload();
-    $("wse-error").hidden = true;
+    $("wse-error").hidden = true; $("wse-retry-wrap").hidden = true;
     if (payload.title.length < 3) { $("wse-error").textContent = "Give the workshop a title."; $("wse-error").hidden = false; $("wse-f-title").focus(); return; }
     var buttons = [$("wse-save"), $("wse-draft")];
     buttons.forEach(function (b) { b.disabled = true; });
     var wasDraft = !editing || editing.status === "draft";
-    apiPost({ action: "session_save", session_id: editing ? editing.id : undefined, session: payload })
-      .then(function (j) { return open && wasDraft ? apiPost({ action: "session_publish", session_id: j.id }).then(function () { return "Saved. Registration is open and the page is live."; }, function (err) {
-        // Saved as a draft, but not yet publishable: say exactly what is missing.
-        editing = editing || { id: j.id, status: "draft" };
-        throw err;
-      }) : (wasDraft ? "Saved as a draft. Nothing is public until you open registration." : "Saved. The page shows the change now."); })
-      .then(function (msg) { $("ws-editor").close(); said(msg); return load(); })
-      .catch(function (err) { $("wse-error").textContent = err.message; $("wse-error").hidden = false; $("wse-error").scrollIntoView({ block: "nearest" }); load(); })
+    var invite = payload.admission === "invite";
+    // Opening a draft is scheduling it: save, create the Calendar event and Meet link, open registration.
+    var schedule = function (id) {
+      return apiPost({ action: "session_schedule", session_id: id, session: payload }).then(function () {
+        return invite ? "Scheduled. The Calendar event and Meet link are ready, and registration is open." : "Saved. Registration is open and the page is live.";
+      });
+    };
+    var step = open && wasDraft
+      ? (editing ? schedule(editing.id) : apiPost({ action: "session_save", session: payload }).then(function (j) { editing = { id: j.id, status: "draft" }; delete payload.slug; return schedule(j.id); }))
+      : apiPost({ action: "session_save", session_id: editing ? editing.id : undefined, session: payload }).then(function (j) {
+          if (j.warning) return { warning: j.warning };
+          if (wasDraft) return "Saved as a draft. Nothing is public until you open registration.";
+          return j.calendar === "moved" ? "Saved. The Calendar event moved to the new date and Google emailed everyone invited." : "Saved. The page shows the change now.";
+        });
+    step.then(function (msg) { $("ws-editor").close(); if (msg && msg.warning) failed(new Error(msg.warning)); else said(msg); return load(); })
+      .catch(function (err) { editorFailed(err, open); load(); })
       .then(function () { buttons.forEach(function (b) { b.disabled = false; }); });
   }
   $("wse-form").addEventListener("submit", function (e) { e.preventDefault(); saveEditor(true); });
   $("wse-draft").addEventListener("click", function () { saveEditor(false); });
   $("wse-remove").addEventListener("click", function () { if (editing) removeSession(editing); });
   $("wse-f-title").addEventListener("input", function () { if (!$("wse-f-slug").readOnly && !(editing && editing.slug)) $("wse-f-slug").value = slugify($("wse-f-title").value); });
-  ["wse-f-price", "wse-f-fnd", "wse-f-cap", "wse-f-grad", "wse-f-free", "wse-f-date", "wse-f-time", "wse-a-invite", "wse-a-link"].forEach(function (id) {
+  ["wse-f-price", "wse-f-fnd", "wse-f-cap", "wse-f-grad", "wse-f-free", "wse-f-date", "wse-f-time", "wse-a-invite", "wse-a-link",
+    "wse-f-dur", "wse-f-series", "wse-f-slug", "wse-f-title", "wse-f-summary"].forEach(function (id) {
     $(id).addEventListener("input", priceLine); $(id).addEventListener("change", priceLine);
   });
+  $("wse-use-series").addEventListener("click", useSeries);
   $("ws-new").addEventListener("click", function () { openEditor(null); });
+
+  /* ---------- Generate draft content (release 7) ---------- */
+  $("wse-ai").addEventListener("click", function () {
+    var btn = $("wse-ai"), note = $("wse-ai-status");
+    var title = $("wse-f-title").value.trim(), brief = $("wse-f-brief").value.trim();
+    if (title.length < 3 || brief.length < 10) { note.textContent = "Give it a title, and a sentence or two about what it covers."; return; }
+    var go = function () {
+      btn.disabled = true;
+      note.textContent = "Writing a draft with a free AI model. This can take up to a minute.";
+      return apiPost({ action: "content_draft", title: title, brief: brief, kind: $("wse-k-webinar").checked ? "webinar" : "workshop",
+        duration_minutes: Number($("wse-f-dur").value), series_slug: $("wse-f-series").value, series_number: Number($("wse-f-number").value) || 0 })
+        .then(function (j) {
+          fillContent(j.content);
+          aiExtra = { description: j.content.description || "", directory_line: j.content.directory_line || "" };
+          note.textContent = "Draft written by " + j.model + ". Read it through and change anything that isn't right. Nothing is saved until you press Save.";
+          priceLine();
+        })
+        .catch(function (err) { note.textContent = err.message; })
+        .then(function () { btn.disabled = false; });
+    };
+    var has = readList("why").length || readList("outcomes").length || readList("run").length || readList("faq").length;
+    if (has) ask({ title: "Replace the page content with a new draft?", yes: "Write a new draft",
+      text: "Everything under Page content is replaced in this form. Nothing is saved until you press Save, so closing without saving keeps what you had.",
+      run: function () { go(); } });
+    else go();
+  });
+
+  /* ---------- Schedule a draft (release 7) ---------- */
+  var scheduling = null;
+  function reviewRow(label, value) { return "<div><dt>" + esc(label) + "</dt><dd>" + esc(value) + "</dd></div>"; }
+  function openSchedule(s) {
+    scheduling = s;
+    var def = defaultsOf(s.series_slug), ser = seriesOf(s.series_slug), t = s.starts_at ? new Date(s.starts_at) : null;
+    $("wss-title").textContent = "Schedule “" + s.title + "”";
+    $("wss-date").value = t ? t.toISOString().slice(0, 10) : "";
+    $("wss-time").value = t ? t.toISOString().slice(11, 16) : (def.start_time || "11:30");
+    $("wss-date").min = new Date(Date.now() + 864e5).toISOString().slice(0, 10);
+    $("wss-error").hidden = true;
+    $("wss-progress").hidden = true;
+    Array.prototype.forEach.call($("wss-progress").children, function (li) { li.className = ""; });
+    $("wss-go").textContent = "Schedule and open registration"; $("wss-go").disabled = false;
+    var cap = Number(s.capacity || 0), gr = Number(s.reserved_graduate_seats || 0), p = Number(s.price_ghs || 0);
+    var same = ser && Object.keys(def).length && SERIES_FIELDS.every(function (k) { return def[k[0]] === undefined || Number(def[k[0]]) === Number(s[k[0]]); }) &&
+      (def.graduate_free === undefined || !!def.graduate_free === !!s.graduate_free) && (!def.admission || def.admission === s.admission);
+    $("wss-review").innerHTML =
+      (ser ? reviewRow("Series", ser.name + (same ? ", standard settings" : ", with its own settings")) : "") +
+      reviewRow("Length", hours(s.duration_minutes) + ", " + (s.format || "live online")) +
+      reviewRow("Price", p ? "GHS " + cedis(p) : "Free") +
+      reviewRow("Places", cap + " open" + (gr ? " and " + gr + " kept for Intermediate graduates" + (s.graduate_free ? ", free" : "") : "")) +
+      (p && Number(s.foundations_discount_pct) ? reviewRow("Foundations certificate", Number(s.foundations_discount_pct) + "% off") : "") +
+      (p ? reviewRow("Referral codes", "GHS " + cedis(ws.settings.referral_discount_ghs) + " off, GHS " + cedis(ws.settings.referral_commission_ghs) + " commission") : "") +
+      reviewRow("Joining", s.admission === "invite"
+        ? (s.calendar_event_id ? (s.calendar_managed ? "Its Calendar event and Meet link already exist" : "Your own Calendar event") + "; the time is set to match"
+          : "A Google Calendar event with its own Meet link, made now. Guests can't edit it, invite others or see each other")
+        : "The joining instructions, by email to each confirmed person");
+    var gaps = contentGaps(s.content);
+    var box = $("wss-content");
+    box.hidden = !gaps.length && !(s.admission === "link" && !s.join_instructions);
+    box.innerHTML = (gaps.length ? "<p><strong>The page is missing: " + esc(gaps.join(", ")) + ".</strong> " +
+        (gaps.indexOf("short description") !== -1 ? "Registration can't open without a short description. " : "People would see a thin page. ") +
+        'Draft it first: open the editor, then use Generate draft content.</p><p><button class="wsd-btn wsd-btn--sm" type="button" id="wss-write">Write the page first</button></p>' : "") +
+      (s.admission === "link" && !s.join_instructions ? "<p><strong>No joining instructions yet.</strong> Confirmed people get these by email; add them in the editor under Joining.</p>" : "");
+    var write = $("wss-write");
+    if (write) write.onclick = function () { $("ws-schedule").close(); openEditor(s); $("wse-sec-content").open = true; $("wse-f-brief").focus(); };
+    $("wss-cutoff").textContent = cutoffText($("wss-date").value, $("wss-time").value);
+    $("ws-schedule").showModal();
+    $("wss-date").focus();
+  }
+  ["wss-date", "wss-time"].forEach(function (id) { $(id).addEventListener("input", function () { $("wss-cutoff").textContent = cutoffText($("wss-date").value, $("wss-time").value); }); });
+  $("wss-change").addEventListener("click", function () {
+    var s = scheduling, d = $("wss-date").value, t = $("wss-time").value;
+    $("ws-schedule").close(); openEditor(s);
+    if (d) { $("wse-f-date").value = d; $("wse-f-time").value = t || "11:30"; }
+    $("wse-sec-discounts").open = true; $("wse-sec-join").open = true; priceLine();
+  });
+  $("wss-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var s = scheduling, d = $("wss-date").value, t = $("wss-time").value;
+    if (!s) return;
+    if (!d || !t) { $("wss-error").textContent = "Choose the date and the start time."; $("wss-error").hidden = false; return; }
+    if (Date.parse(d + "T" + t + ":00Z") < Date.now() + 7 * 864e5) {
+      $("wss-error").textContent = "Registration closes 7 days before the start, so choose a date at least a week away."; $("wss-error").hidden = false; return;
+    }
+    var steps = $("wss-progress").children, mark = function (i, cls) { steps[i].className = cls; };
+    $("wss-error").hidden = true; $("wss-progress").hidden = false;
+    steps[1].hidden = s.admission !== "invite";
+    mark(0, "is-active"); mark(1, ""); mark(2, "");
+    $("wss-go").disabled = true; $("wss-go").textContent = "Scheduling";
+    apiPost({ action: "session_schedule", session_id: s.id, session: { starts_at: d + "T" + t + ":00Z" } })
+      .then(function () {
+        mark(0, "is-done"); mark(1, "is-done"); mark(2, "is-done");
+        $("ws-schedule").close();
+        said("Scheduled: " + s.title + ", " + when(Date.parse(d + "T" + t + ":00Z"), { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) + " GMT. " +
+          (s.admission === "invite" ? "Its Calendar event and Meet link are ready. " : "") + "Registration is open.");
+        return load();
+      })
+      .catch(function (err) {
+        var calendar = err.data && err.data.retry;
+        mark(0, "is-done"); mark(1, calendar ? "is-failed" : ""); mark(2, calendar ? "" : "is-failed");
+        $("wss-error").textContent = err.message; $("wss-error").hidden = false;
+        $("wss-go").textContent = calendar ? "Retry" : "Try again";
+        load();
+      })
+      .then(function () { $("wss-go").disabled = false; });
+  });
 
   function removeSession(s) {
     var anyone = rowsOf(s.id).length || ws.waitlist.some(function (w) { return w.session_id === s.id; });
@@ -656,7 +909,17 @@
     var run = function (p, msg) { b.disabled = true; return p.then(function () { if (msg) said(msg); return load(); }).catch(failed).then(function () { b.disabled = false; }); };
 
     if (a === "session_edit") openEditor(s);
-    else if (a === "session_copy") openEditor(s, true);
+    else if (a === "session_copy") {
+      // Release 7: copied on the server (content, settings, running order, questions), as a
+      // draft with a new address and no date, registrations, Calendar event or Meet link.
+      b.disabled = true;
+      apiPost({ action: "session_copy", session_id: s.id }).then(function (j) {
+        return load().then(function () {
+          said("Copied as a draft at /workshops/" + j.slug + ". Give it its own title, then schedule it.");
+          if (ws.sessions[j.id]) { openEditor(ws.sessions[j.id]); $("wse-f-title").select(); }
+        });
+      }).catch(failed).then(function () { b.disabled = false; });
+    }
     else if (a === "session_delete" || a === "session_cancel") removeSession(s);
     else if (a === "session_publish") {
       ask({ title: (s.status === "closed" ? "Reopen" : "Open") + " registration for “" + s.title + "”?", yes: "Open registration",
@@ -678,6 +941,32 @@
           return apiPost({ action: "series_save", series: { slug: ser.slug, name: name, presenter: ser.presenter, positioning: pos,
             intro: intro.split(/\n\s*\n/).map(function (p) { return p.trim(); }).filter(Boolean), standalone: alone, disclaimer: disc } }).then(function () { said("Series text saved. The page shows it now."); return load(); });
         } });
+    } else if (a === "series_defaults") {
+      var sx = ws.series.filter(function (y) { return y.slug === id; })[0], dd = sx.defaults || {};
+      ask({ title: "Settings for " + sx.name, yes: "Save settings",
+        text: "New workshops in this series start with these, and Schedule uses them. Changing them never changes a workshop that already exists; open that workshop to change it.",
+        fields: [{ label: "Price (GHS)", type: "number", value: String(dd.price_ghs != null ? dd.price_ghs : 350), min: 1 },
+          { label: "Open places", type: "number", value: String(dd.capacity || 25), min: 1 },
+          { label: "Places kept for Intermediate graduates", type: "number", value: String(dd.reserved_graduate_seats != null ? dd.reserved_graduate_seats : 5), min: 1 },
+          { label: "Graduates attend free", type: "select", options: [["yes", "Yes, in the kept places"], ["no", "No"]], value: dd.graduate_free === false ? "no" : "yes" },
+          { label: "Foundations certificate discount (%)", type: "number", value: String(dd.foundations_discount_pct != null ? dd.foundations_discount_pct : 20), min: 1 },
+          { label: "Length", type: "select", options: [["60", "1 hour"], ["90", "1.5 hours"], ["120", "2 hours"], ["150", "2.5 hours"], ["180", "3 hours"], ["240", "4 hours"]], value: String(dd.duration_minutes || 180) },
+          { label: "Usual start time (GMT)", type: "time", value: dd.start_time || "11:30", min: 5 },
+          { label: "How people join", type: "select", options: [["invite", "Google Calendar invitation, made automatically"], ["link", "Link in the confirmation email"]], value: dd.admission || "invite" }],
+        run: function (price, cap, grad, free, fnd, dur, time, adm) {
+          return apiPost({ action: "series_save", series: { slug: sx.slug, name: sx.name, presenter: sx.presenter, positioning: sx.positioning, intro: sx.intro || [],
+            standalone: sx.standalone, disclaimer: sx.disclaimer,
+            defaults: { kind: dd.kind || "workshop", format: dd.format || "live online", price_ghs: Number(price), capacity: Number(cap), reserved_graduate_seats: Number(grad),
+              graduate_free: free === "yes", foundations_discount_pct: Number(fnd), duration_minutes: Number(dur), start_time: time, admission: adm } } })
+            .then(function () { said("Series settings saved. Workshops you create or schedule from now on use them."); return load(); });
+        } });
+    } else if (a === "session_schedule") openSchedule(s);
+    else if (a === "calendar_retry") {
+      b.disabled = true;
+      apiPost({ action: "calendar_retry", session_id: id }).then(function (j) {
+        said(j.calendar === "created" ? "The Calendar event and Meet link are ready." : j.calendar === "moved" ? "The Calendar event is on the new time, and Google emailed everyone invited." : "The Calendar event is already in step.");
+        return load().then(function () { if ($("ws-editor").open && editing && editing.id === id) calPanel(ws.sessions[id]); });
+      }).catch(function (err) { failed(err); if ($("ws-editor").open) editorFailed(err, false); }).then(function () { b.disabled = false; });
     } else if (a === "open_person") openPerson(id);
     else if (a === "admit" || a === "retry_email" || a === "retry_calendar") run(regAction(a, id));
     else if (REG_CONFIRM[a]) {
