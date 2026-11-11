@@ -39,7 +39,7 @@ export function workshopMode(env) {
 
 /* WORKSHOP_PAYSTACK_API_BASE (local testing) is honoured only under a test
    key: a live key always talks to api.paystack.co. */
-function paystackBase(env) {
+export function paystackBase(env) {
   return workshopMode(env) === "test" && typeof env.WORKSHOP_PAYSTACK_API_BASE === "string" && env.WORKSHOP_PAYSTACK_API_BASE
     ? env.WORKSHOP_PAYSTACK_API_BASE.replace(/\/+$/, "")
     : "https://api.paystack.co";

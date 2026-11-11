@@ -7,14 +7,17 @@
  * after the admin has paid it by hand; nothing here moves money.
  *
  * Signed-in admin only (the existing Supabase Auth session and email
- * allowlist). The RPC re-checks the actor. Refunds themselves are issued in
- * the Paystack dashboard; nothing here moves money. */
+ * allowlist). The RPC re-checks the actor. request_refund and send_refund are
+ * the one exception that moves money: they ask Paystack to refund the
+ * registration's own transaction (_workshop_refunds.js); the place is released
+ * only when Paystack's refund webhook confirms it. */
 
 import { readJson, rpc } from "../_shared.js";
 import { requireAdmin, result } from "../_installments.js";
 import { processOutbox, rest } from "../_workshops.js";
 import { ensureEvent, updateEvent } from "../_calendar.js";
 import { draftContent } from "../_ai_draft.js";
+import { sendRefunds, refundNote, refundSentence } from "../_workshop_refunds.js";
 
 const ACTIONS = new Set(["admit", "request_refund", "resolve_duplicate", "cancel", "attendance", "note"]);
 const ADMISSION = new Set(["mark_invited", "mark_removed", "set_attend_email"]);
@@ -325,6 +328,18 @@ async function referrerAction(env, admin, action, body) {
   return result({ ok: true, id: d.id || rid, code: d.code || null, status: d.status || null, count: d.count || 0, amount_ghs: d.amount_ghs || 0 });
 }
 
+/* The place is already marked refund_pending; this moves the money and keeps a
+   line on the registration saying what Paystack was asked and what it said. */
+async function refundAndNote(env, admin, id) {
+  const sent = await sendRefunds(env, id, String(admin.email).toLowerCase());
+  const note = refundNote(sent);
+  if (note) {
+    await rpc(env, "workshop_admin_action", { p_actor_email: String(admin.email).toLowerCase(), p_registration_id: id,
+      p_action: "note", p_value: null, p_note: note }).catch(function () {});
+  }
+  return result({ ok: true, refund: { sent: sent.sent.length, problem: sent.problems.length > 0, message: refundSentence(sent) } });
+}
+
 export async function onRequestPost(context) {
   const { request, env } = context;
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return result({ ok: false, error: "Service is not configured." }, 503);
@@ -410,6 +425,15 @@ export async function onRequestPost(context) {
     }
     return result({ ok: true, already: done.data.already === true });
   }
+  // Sends the money back through Paystack for a place already marked for refund
+  // (after a timeout, a refusal, or a refund requested before this existed).
+  if (id && action === "send_refund") {
+    const res = await rest(env, "workshop_registrations?select=status&id=eq." + encodeURIComponent(id) + "&limit=1");
+    const reg = res.ok ? ((await res.json().catch(function () { return []; })) || [])[0] : null;
+    if (!reg) return result({ ok: false, error: "Registration not found." }, 409);
+    if (reg.status !== "refund_pending") return result({ ok: false, error: "Only a place marked for refund can be refunded from here." }, 409);
+    return refundAndNote(env, admin, id);
+  }
   if (!id || !ACTIONS.has(action)) return result({ ok: false, error: "A registration and a valid action are required." }, 400);
   const value = typeof body.value === "string" ? body.value.slice(0, 40) : null;
   const note = typeof body.note === "string" ? body.note.slice(0, 300) : null;
@@ -429,6 +453,7 @@ export async function onRequestPost(context) {
     };
     return result({ ok: false, error: messages[out.data && out.data.error] || "The action was refused." }, 409);
   }
+  if (action === "request_refund") return refundAndNote(env, admin, id);
   if (action === "admit" && context.waitUntil) {
     context.waitUntil(processOutbox(env, new URL(request.url).origin, { emails: 3, meta: 0, reconcile: 0 }).catch(function () {}));
   }
