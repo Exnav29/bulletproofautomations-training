@@ -48,8 +48,11 @@
   font-synthesis: none;
   font-variant-numeric: lining-nums;
 }
-.ws h1, .ws h2, .ws h3 { margin: 0; text-wrap: balance; }
-.ws p { margin: 0; }
+/* Resets at zero specificity (:where), so any class that sets its own spacing
+   (.ws-lede, .ws-kind, .ws-sumline, ...) wins. As .ws p they overrode those
+   classes, and the summary ran into the title. */
+:where(.ws) h1, :where(.ws) h2, :where(.ws) h3 { margin: 0; text-wrap: balance; }
+:where(.ws) p { margin: 0; }
 .ws a { color: inherit; }
 .ws :focus-visible { outline: 3px solid var(--ws-time); outline-offset: 3px; }
 .ws-wrap {
@@ -60,6 +63,7 @@
 .ws-crumbs { font-size: 14px; color: var(--ws-soft); padding-top: 12px; }
 .ws-crumbs a { color: var(--ws-soft); }
 .ws-small { font-size: 15px; color: var(--ws-soft); }
+.ws-small + .ws-small { margin-top: 10px; }
 
 /* ---------- hero ---------- */
 .ws-hero { padding-block: 10px 22px; display: grid; gap: 14px; }
@@ -71,9 +75,10 @@
 }
 .ws-lede { font-size: clamp(1.06rem, 2.4vw, 1.3rem); line-height: 1.5; max-width: 34em; margin-top: 18px; }
 
-.ws-facts { display: grid; grid-template-columns: 5.2rem minmax(0, 1fr); margin: 0; border-top: 2px solid var(--ws-ink); }
+.ws-facts { display: grid; grid-template-columns: 6.6rem minmax(0, 1fr); margin: 0; border-top: 2px solid var(--ws-ink); }
 .ws-facts dt, .ws-facts dd { margin: 0; padding-block: 9px; border-bottom: 1px solid var(--ws-line); }
-.ws-facts dt { font-size: 15px; color: var(--ws-soft); padding-top: 11px; }
+.ws-facts dt { font-size: 15px; line-height: 1.35; color: var(--ws-soft); padding-top: 11px; padding-right: 14px; }
+@media (min-width: 600px) { .ws-facts { grid-template-columns: 9.5rem minmax(0, 1fr); } }
 .ws-facts dd { font-weight: 700; font-size: 16.5px; line-height: 1.35; }
 .ws-facts small { display: block; font-weight: 400; color: var(--ws-soft); font-size: 15px; margin-top: 2px; }
 .ws-date { font-family: var(--ws-display); font-weight: 600; font-size: 1.45rem; line-height: 1.1; color: var(--ws-time); }
@@ -231,6 +236,8 @@
   .ws-layout { display: grid; grid-template-columns: minmax(0, 1fr) 25rem; gap: 56px; align-items: start; }
   .ws-aside { position: sticky; top: 20px; padding-top: 24px; padding-bottom: 32px; }
   .ws-jump { display: none; }
+  /* The facts already end on a rule; with the button hidden, a second rule 20px below it read as a gap. */
+  [data-ws-page="detail"] .ws-content > .ws-sec:first-child { border-top: 0; padding-top: 6px; }
   .ws-two { grid-template-columns: 1fr 1fr; gap: 28px; }
   .ws-row { grid-template-columns: 6rem minmax(0, 1fr) 14rem; align-items: start; }
   .ws-row__side { grid-column: 3; grid-row: 1 / span 3; flex-direction: column; align-items: flex-end; margin-top: 2px; }
