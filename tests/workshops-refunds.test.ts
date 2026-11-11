@@ -35,7 +35,7 @@ let loseAnswer = false
 let refuseWith: string | null = null
 let nextId = 9000
 function paystack(url: URL, method: string, body: Row | null, auth: string): Response {
-  if (auth !== 'Bearer sk_test_webinar12345') return Response.json({ status: false, message: 'Invalid key' }, { status: 401 })
+  if (auth !== 'Bearer sk_test_webinar_refund_suite') return Response.json({ status: false, message: 'Invalid key' }, { status: 401 })
   if (url.pathname !== '/refund') return new Response('no', { status: 404 })
   if (method === 'GET') {
     if (listDown) return new Response('upstream', { status: 502 })
@@ -65,7 +65,7 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
 }
 
 const ENV: Row = { SUPABASE_URL: DB.url, SUPABASE_SERVICE_ROLE_KEY: 'service-role-for-tests',
-  WORKSHOP_PAYSTACK_SECRET_KEY: 'sk_test_webinar12345', WORKSHOP_PAYSTACK_API_BASE: 'https://paystack.stand-in', PAYSTACK_SECRET_KEY: 'sk_test_training999' }
+  WORKSHOP_PAYSTACK_SECRET_KEY: 'sk_test_webinar_refund_suite', WORKSHOP_PAYSTACK_API_BASE: 'https://paystack.stand-in', PAYSTACK_SECRET_KEY: 'sk_test_training_refund_suite' }
 
 async function admin(body: Row, env: Row = ENV) {
   const request = new Request('https://training.example/api/admin/workshops', {
@@ -183,7 +183,7 @@ Deno.test('a payment taken under the other mode\'s keys, or no Paystack key, sen
   assertEquals([posts.length, off.json.refund.problem, (await reg(p.id)).status], [0, true, 'refund_pending'])
   assert(/Refund it in the Paystack dashboard/.test(off.json.refund.message))
   // The training business's key is never used for a webinar refund.
-  const same = await admin({ action: 'send_refund', registration_id: p.id }, { ...ENV, WORKSHOP_PAYSTACK_SECRET_KEY: 'sk_test_training999' })
+  const same = await admin({ action: 'send_refund', registration_id: p.id }, { ...ENV, WORKSHOP_PAYSTACK_SECRET_KEY: 'sk_test_training_refund_suite' })
   assertEquals([posts.length, same.json.refund.problem], [0, true])
 })
 

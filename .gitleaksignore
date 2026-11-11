@@ -7,3 +7,12 @@
 # renamed CONSENT_STORAGE in a later commit, so current code no longer matches;
 # this entry only covers the historical commit that gitleaks still scans.
 383a079c0f27e5dcc65dd0e642a5509bd4ae3828:assets/js/workshop-tracking.js:generic-api-key:31
+
+# 255e0b1, tests/workshops-refunds.test.ts lines 38, 68 and 186: made-up Paystack
+# test keys for a stand-in Paystack in the refund tests (sk_test_ plus letters and
+# digits, which the stripe-access-token rule matches). Never real keys. The next
+# commit renamed them in the underscored style the other suites use, so current code
+# no longer matches; these entries only cover the commit that gitleaks still scans.
+255e0b14a60b419fc1989666f11d6ee35bf31cc7:tests/workshops-refunds.test.ts:stripe-access-token:38
+255e0b14a60b419fc1989666f11d6ee35bf31cc7:tests/workshops-refunds.test.ts:stripe-access-token:68
+255e0b14a60b419fc1989666f11d6ee35bf31cc7:tests/workshops-refunds.test.ts:stripe-access-token:186
