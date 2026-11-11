@@ -135,3 +135,133 @@ export async function syncInvitations(env, test, limit) {
   }
   return report;
 }
+
+/* ---------------------------------------------------------------------------
+   Release 7: the workshop's own event, created and kept in step automatically.
+
+   ensureEvent() creates the event, with its own Google Meet link, the first
+   time an invitation-only workshop is scheduled. updateEvent() moves it when the
+   date or length changes and emails the people already invited.
+
+   Never a duplicate: the event's ID is derived from the workshop's ID, so a
+   retried save, a double click or a lost response asks Google for the same
+   event again. Google answers 409 for an ID it already has; the existing event
+   is then read back and used (and restored, if it had been deleted).
+
+   Guests cannot change the event, invite others or see the guest list. Meet's
+   own "Restricted" access is not something Calendar can set; see the runbook.
+   ------------------------------------------------------------------------- */
+const TZ = "Africa/Accra";
+const sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+
+/** Google event IDs use base32hex (0-9, a-v); a UUID's hex digits are all in it. */
+export function eventIdFor(sessionId) {
+  return "bpa" + String(sessionId || "").toLowerCase().replace(/[^0-9a-f]/g, "");
+}
+
+function eventsUrl(env) {
+  return base(env, "GOOGLE_API_BASE", "https://www.googleapis.com") + "/calendar/v3/calendars/" +
+    encodeURIComponent(env.GOOGLE_CALENDAR_ID || "primary") + "/events";
+}
+
+function times(s) {
+  const start = new Date(s.starts_at);
+  const end = new Date(start.getTime() + Number(s.duration_minutes || 0) * 60000);
+  return { start: { dateTime: start.toISOString(), timeZone: TZ }, end: { dateTime: end.toISOString(), timeZone: TZ } };
+}
+
+function details(s, origin) {
+  const summary = s.content && typeof s.content.summary === "string" ? s.content.summary : "";
+  return {
+    summary: (s.is_test ? "TEST: " : "") + s.title,
+    description: (summary ? summary + "\n\n" : "") +
+      "Join with the Google account this invitation was sent to. The invitation is personal: please don't forward it.\n\n" +
+      "Workshop page: " + origin + "/workshops/" + s.slug + "\n" +
+      "Questions: info@bulletproofautomations.com",
+    guestsCanInviteOthers: false,
+    guestsCanSeeOtherGuests: false,
+    guestsCanModify: false
+  };
+}
+
+/** What Google was last told, so the database knows when the event is out of step. */
+export function syncedFrom(s) {
+  return { starts_at: new Date(s.starts_at).toISOString(), duration_minutes: Number(s.duration_minutes), title: s.title };
+}
+
+async function signIn(env) {
+  if (!calendarConfigured(env)) return { error: "Google Calendar isn't connected, so the event can't be created. The connection is set on the Cloudflare Pages project (see the runbook)." };
+  try {
+    const got = await accessToken(env);
+    return got.token ? { token: got.token } : { error: "Could not sign in to Google Calendar: " + got.error };
+  } catch (err) { return { error: "Could not sign in to Google Calendar: Google was unreachable" }; }
+}
+
+function meetLink(event) {
+  const link = event && typeof event.hangoutLink === "string" ? event.hangoutLink : "";
+  return /^https:\/\/meet\.google\.com\/[a-z0-9-]{3,60}$/.test(link) ? link : "";
+}
+
+/** { ok: true, event_id, meet_link, managed: true, synced } or { ok: false, error }. Never throws. */
+export async function ensureEvent(env, s, origin) {
+  if (!s || !s.id || !s.starts_at) return { ok: false, error: "Set a date first." };
+  const auth = await signIn(env);
+  if (!auth.token) return { ok: false, error: auth.error };
+  const headers = { Authorization: "Bearer " + auth.token, "Content-Type": "application/json" };
+  const id = eventIdFor(s.id);
+  const body = Object.assign({ id: id }, details(s, origin), times(s), {
+    conferenceData: { createRequest: { requestId: id, conferenceSolutionKey: { type: "hangoutsMeet" } } }
+  });
+  try {
+    let event = null;
+    const made = await fetch(eventsUrl(env) + "?conferenceDataVersion=1&sendUpdates=none", { method: "POST", headers: headers, body: JSON.stringify(body) });
+    if (made.ok) event = await made.json();
+    else if (made.status === 409) {
+      // Already created by an earlier attempt: use it, and restore it if it was deleted.
+      await made.text();
+      const got = await fetch(eventsUrl(env) + "/" + id, { headers: headers });
+      if (!got.ok) return Object.assign({ ok: false }, failure(got.status, "read"));
+      event = await got.json();
+      if (event.status === "cancelled" || !meetLink(event)) {
+        const fix = Object.assign({ status: "confirmed" }, details(s, origin), times(s),
+          meetLink(event) ? {} : { conferenceData: body.conferenceData });
+        const res = await fetch(eventsUrl(env) + "/" + id + "?conferenceDataVersion=1&sendUpdates=none", { method: "PATCH", headers: headers, body: JSON.stringify(fix) });
+        if (!res.ok) return Object.assign({ ok: false }, failure(res.status, "restore"));
+        event = await res.json();
+      }
+    } else {
+      await made.text();
+      return Object.assign({ ok: false }, failure(made.status, "create"));
+    }
+    // Google may take a moment to attach the Meet link.
+    for (let i = 0; i < 3 && !meetLink(event); i++) {
+      await sleep(1200);
+      const again = await fetch(eventsUrl(env) + "/" + id, { headers: headers });
+      if (again.ok) event = await again.json(); else await again.text();
+    }
+    if (!meetLink(event)) return { ok: false, error: "The event was created but Google hasn't attached a Meet link yet. Press Retry in a minute." };
+    return { ok: true, event_id: id, meet_link: meetLink(event), managed: true, synced: syncedFrom(s) };
+  } catch (err) {
+    return { ok: false, error: "Google Calendar was unreachable" };
+  }
+}
+
+/** Moves the event to the workshop's date and length and emails everyone invited.
+    The title and description are rewritten only on an event this system created;
+    an event the owner made by hand keeps their wording. */
+export async function updateEvent(env, s, origin) {
+  if (!s || !s.calendar_event_id || !s.starts_at) return { ok: false, error: "There is no Calendar event to update." };
+  const auth = await signIn(env);
+  if (!auth.token) return { ok: false, error: auth.error };
+  const body = Object.assign({}, times(s), s.calendar_managed ? details(s, origin) : {});
+  try {
+    const res = await fetch(eventsUrl(env) + "/" + encodeURIComponent(s.calendar_event_id) + "?sendUpdates=all", {
+      method: "PATCH", headers: { Authorization: "Bearer " + auth.token, "Content-Type": "application/json" }, body: JSON.stringify(body)
+    });
+    if (!res.ok) { await res.text(); return Object.assign({ ok: false }, failure(res.status, "update")); }
+    const event = await res.json();
+    return { ok: true, event_id: s.calendar_event_id, synced: syncedFrom(s), meet_link: meetLink(event) || undefined };
+  } catch (err) {
+    return { ok: false, error: "Google Calendar was unreachable" };
+  }
+}

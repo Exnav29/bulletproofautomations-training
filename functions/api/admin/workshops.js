@@ -12,7 +12,9 @@
 
 import { readJson, rpc } from "../_shared.js";
 import { requireAdmin, result } from "../_installments.js";
-import { processOutbox } from "../_workshops.js";
+import { processOutbox, rest } from "../_workshops.js";
+import { ensureEvent, updateEvent } from "../_calendar.js";
+import { draftContent } from "../_ai_draft.js";
 
 const ACTIONS = new Set(["admit", "request_refund", "resolve_duplicate", "cancel", "attendance", "note"]);
 const ADMISSION = new Set(["mark_invited", "mark_removed", "set_attend_email"]);
@@ -54,7 +56,7 @@ const ADMISSION_ERRORS = {
    input and turns its answers into sentences.
    ------------------------------------------------------------------------- */
 const SESSION = { session_save: "save", session_publish: "publish", session_close: "close", session_complete: "complete",
-  session_cancel: "cancel", session_delete: "delete" };
+  session_cancel: "cancel", session_delete: "delete", session_copy: "copy" };
 const SESSION_ERRORS = {
   not_found: "That workshop no longer exists. Refresh the page.",
   slug_taken: "Another workshop already uses that page address. Choose a different one.",
@@ -73,7 +75,8 @@ const SESSION_ERRORS = {
 const PROBLEMS = {
   no_date: "set a date", date_past: "choose a date in the future", no_summary: "write the short description",
   no_calendar_event: "attach the Google Calendar event (or choose to send the joining link by email)",
-  graduate_free_needs_places: "keep at least one place for graduates, or turn off free places for graduates"
+  graduate_free_needs_places: "keep at least one place for graduates, or turn off free places for graduates",
+  calendar_not_updated: "bring the Google Calendar event in step with the date (press Retry)"
 };
 // Meeting links are private: they go only to confirmed participants, by email or invitation.
 const MEETING_LINK = /https?:\/\/([a-z0-9-]+\.)*(meet\.google\.com|zoom\.us|teams\.microsoft\.com|teams\.live\.com|whereby\.com|webex\.com)\b/i;
@@ -119,35 +122,177 @@ function cleanSession(v) {
 }
 function cleanSeries(v) {
   v = v && typeof v === "object" ? v : {};
-  return { slug: s(v.slug, 80), name: s(v.name, 120), presenter: s(v.presenter, 120) || "Bulletproof Automations",
+  const out = { slug: s(v.slug, 80), name: s(v.name, 120), presenter: s(v.presenter, 120) || "Bulletproof Automations",
     positioning: s(v.positioning, 400), intro: list(v.intro, 6, function (x) { return s(x, 1200); }),
     standalone: s(v.standalone, 600), disclaimer: s(v.disclaimer, 1200) };
+  // Release 7: the settings a new workshop in the series starts from. Only these keys.
+  if (v.defaults && typeof v.defaults === "object") {
+    const d = cleanSession(v.defaults), keep = {};
+    ["kind", "duration_minutes", "format", "price_ghs", "capacity", "reserved_graduate_seats", "foundations_discount_pct", "graduate_free", "admission"]
+      .forEach(function (k) { if (d[k] !== undefined) keep[k] = d[k]; });
+    if (typeof v.defaults.start_time === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v.defaults.start_time)) keep.start_time = v.defaults.start_time;
+    out.defaults = keep;
+  }
+  return out;
 }
 
-async function sessionAction(env, admin, action, body) {
+/* ---------------------------------------------------------------------------
+   Release 7: the workshop's Google Calendar event and Meet link, created and
+   moved automatically. Registration never opens on an invitation-only workshop
+   until its event exists and matches the date.
+   ------------------------------------------------------------------------- */
+async function loadSession(env, id) {
+  const res = await rest(env, "workshop_sessions?select=*&id=eq." + encodeURIComponent(id) + "&limit=1");
+  if (!res.ok) { await res.text(); return null; }
+  return (await res.json().catch(function () { return []; }))[0] || null;
+}
+
+/** Creates the event if there is none, moves it if the date or length changed. */
+async function syncCalendar(env, admin, ses, origin) {
+  if (!ses || ses.admission !== "invite" || !ses.starts_at) return { ok: true, skipped: true };
+  let out, creating = false;
+  if (!ses.calendar_event_id) { creating = true; out = await ensureEvent(env, ses, origin); }
+  else if (ses.calendar_status === "needs_update" || ses.calendar_status === "failed") out = await updateEvent(env, ses, origin);
+  else return { ok: true, skipped: true };
+  const data = out.ok
+    ? Object.assign({ result: "ready", event_id: out.event_id, synced: out.synced }, out.meet_link ? { meet_link: out.meet_link } : {}, creating ? { managed: true } : {})
+    : { result: "failed", error: out.error };
+  const rec = await rpc(env, "workshop_admin_calendar", { p_actor_email: String(admin.email).toLowerCase(), p_session_id: ses.id, p_data: data });
+  if (out.ok && (!rec.ok || !rec.data || rec.data.ok !== true)) {
+    // The event exists on Google but is not recorded: a retry asks for the same
+    // event ID and records it then. Never a second event.
+    return { ok: false, creating: creating, error: "Google made the change, but it could not be recorded here" };
+  }
+  return out.ok ? { ok: true, creating: creating } : { ok: false, creating: creating, error: out.error };
+}
+function calendarSentence(cal) {
+  return "the Google Calendar event couldn't be " + (cal.creating ? "created" : "moved to the new date") + ". " + cal.error;
+}
+
+/* Before registration opens: the event must exist and match the date. */
+async function calendarBeforePublish(env, admin, sid, origin) {
+  const ses = await loadSession(env, sid);
+  if (!ses) return result({ ok: false, error: SESSION_ERRORS.not_found }, 409);
+  const cal = await syncCalendar(env, admin, ses, origin);
+  if (!cal.ok) {
+    return result({ ok: false, retry: true, id: sid, error: "Registration has not opened: " + calendarSentence(cal) +
+      ". The workshop is still " + (ses.status === "draft" ? "a draft" : ses.status) + ". Press Retry." }, 409);
+  }
+  return null;
+}
+
+/* Generate draft page content (release 7). Nothing is saved here. */
+async function contentDraft(env, body, origin) {
+  const title = s(body.title, 160), brief = s(body.brief, 1200);
+  if (title.length < 3) return result({ ok: false, error: "Give the workshop a title first." }, 409);
+  if (brief.length < 10) return result({ ok: false, error: "Write a sentence or two about what it covers." }, 409);
+  const seriesSlug = s(body.series_slug, 80);
+  const [ser, ex] = await Promise.all([
+    seriesSlug ? rest(env, "workshop_series?select=name,positioning,intro&slug=eq." + encodeURIComponent(seriesSlug) + "&limit=1") : null,
+    // The model page: the most complete live workshop (Workshop 01).
+    rest(env, "workshop_sessions?select=title,content,series_slug&is_test=eq.false&status=in.(published,closed,completed)&limit=20")
+  ]);
+  const series = ser && ser.ok ? ((await ser.json().catch(function () { return []; }))[0] || null) : null;
+  const pool = ex && ex.ok ? await ex.json().catch(function () { return []; }) : [];
+  // A complete page (outcomes, questions and a running order) first, then the fullest.
+  const full = function (r) { const c = (r && r.content) || {}; return ["outcomes", "faq", "run_of_show"].every(function (k) { return Array.isArray(c[k]) && c[k].length; }) ? 1 : 0; };
+  const size = function (r) { return JSON.stringify((r && r.content) || {}).length; };
+  pool.sort(function (a, b) { return (b.series_slug === seriesSlug) - (a.series_slug === seriesSlug) || full(b) - full(a) || size(b) - size(a); });
+  const example = pool[0];
+  const out = await draftContent(env, {
+    title: title, brief: brief, kind: body.kind === "webinar" ? "webinar" : "workshop",
+    duration_minutes: Math.min(600, Math.max(15, Number(body.duration_minutes) || 180)),
+    series: series, series_number: Number(body.series_number) || null,
+    example: example ? Object.assign({ title: example.title }, example.content) : null
+  }, origin);
+  if (!out.ok) return result({ ok: false, error: out.error }, 502);
+  const content = cleanContent(out.content);
+  if (MEETING_LINK.test(JSON.stringify(content))) return result({ ok: false, error: "The draft contained a meeting link, so it was discarded. Generate it again." }, 502);
+  return result({ ok: true, model: out.model, content: content });
+}
+
+function refused(d) {
+  if (d.error === "not_publishable") {
+    const what = (d.problems || []).map(function (p) { return PROBLEMS[p] || p; });
+    return result({ ok: false, error: "Before registration can open: " + what.join("; ") + ".", problems: d.problems || [] }, 409);
+  }
+  const taken = d.taken !== undefined ? " (" + d.taken + " taken)" : "";
+  return result({ ok: false, error: (SESSION_ERRORS[d.error] || "The change was refused.") + taken }, 409);
+}
+async function sessionRpc(env, admin, verb, sid, data, reason) {
+  return rpc(env, "workshop_admin_session", {
+    p_actor_email: String(admin.email).toLowerCase(), p_action: verb, p_session_id: sid, p_data: data || {}, p_reason: reason || null
+  });
+}
+
+/* session_schedule (release 7): save the date and any changed settings, create
+   or move the Calendar event and Meet link, then open registration. Each step
+   stops on failure with the workshop left as it was: still a draft, never
+   published without its meeting. */
+async function sessionAction(env, admin, action, body, origin) {
+  const schedule = action === "session_schedule";
   const sid = typeof body.session_id === "string" && /^[0-9a-f-]{36}$/.test(body.session_id) ? body.session_id : null;
   if (action !== "session_save" && !sid) return result({ ok: false, error: "A workshop is required." }, 400);
-  const data = action === "session_save" ? cleanSession(body.session) : {};
-  if (action === "session_save" && data.content && MEETING_LINK.test(JSON.stringify(data.content))) {
+  const editing = action === "session_save" || schedule;
+  const data = editing ? cleanSession(body.session) : {};
+  if (schedule && !data.starts_at) return result({ ok: false, error: "Choose the date and the start time." }, 409);
+  if (editing && data.content && MEETING_LINK.test(JSON.stringify(data.content))) {
     return result({ ok: false, error: "A meeting link can't go on the public page. Put it in the joining instructions, which only confirmed people receive." }, 409);
   }
   if (action === "session_save" && !sid && (!data.title || data.title.length < 3)) return result({ ok: false, error: "Give the workshop a title." }, 409);
   if (action === "session_save" && !sid && !data.slug) data.slug = (data.title || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
-  const done = await rpc(env, "workshop_admin_session", {
-    p_actor_email: String(admin.email).toLowerCase(), p_action: SESSION[action], p_session_id: sid, p_data: data,
-    p_reason: typeof body.reason === "string" ? body.reason.slice(0, 300) : null
-  });
+  const reason = typeof body.reason === "string" ? body.reason.slice(0, 300) : null;
+
+  // Opening registration needs the event first (and nothing is created for a page
+  // that could not open anyway).
+  if (action === "session_publish") {
+    const ses = await loadSession(env, sid);
+    if (ses && !(ses.content && ses.content.summary)) return refused({ error: "not_publishable", problems: ["no_summary"] });
+    const stop = await calendarBeforePublish(env, admin, sid, origin);
+    if (stop) return stop;
+  }
+
+  const done = await sessionRpc(env, admin, schedule ? "save" : SESSION[action], sid, data, reason);
   if (!done.ok) return result({ ok: false, error: "The change could not be saved." }, 502);
   const d = done.data || {};
-  if (d.ok !== true) {
-    if (d.error === "not_publishable") {
-      const what = (d.problems || []).map(function (p) { return PROBLEMS[p] || p; });
-      return result({ ok: false, error: "Before registration can open: " + what.join("; ") + ".", problems: d.problems || [] }, 409);
+  if (d.ok !== true) return refused(d);
+
+  if (schedule) {
+    const ses = await loadSession(env, sid);
+    if (ses && !(ses.content && ses.content.summary)) return refused({ error: "not_publishable", problems: ["no_summary"] });
+    const stop = await calendarBeforePublish(env, admin, sid, origin);
+    if (stop) return stop;
+    if (ses && ses.status === "published") return result({ ok: true, id: sid, slug: ses.slug, status: "published" });
+    const pub = await sessionRpc(env, admin, "publish", sid, {}, null);
+    if (!pub.ok) return result({ ok: false, error: "The date is saved, but registration could not be opened. Try again." }, 502);
+    if (!pub.data || pub.data.ok !== true) return refused(pub.data || {});
+    return result({ ok: true, id: sid, slug: ses ? ses.slug : null, status: "published" });
+  }
+
+  // An edit that moved the date or length: move the Calendar event now, and say
+  // plainly if that failed (the workshop is saved; Retry is under Needs you).
+  if (action === "session_save" && sid) {
+    const ses = await loadSession(env, sid);
+    if (ses && ses.calendar_status === "needs_update") {
+      const cal = await syncCalendar(env, admin, ses, origin);
+      return result({ ok: true, id: sid, slug: ses.slug, status: ses.status,
+        calendar: cal.ok ? "moved" : "failed",
+        warning: cal.ok ? null : "Saved. But " + calendarSentence(cal) + ". It's listed under Needs you with a Retry button." });
     }
-    const taken = d.taken !== undefined ? " (" + d.taken + " taken)" : "";
-    return result({ ok: false, error: (SESSION_ERRORS[d.error] || "The change was refused.") + taken }, 409);
   }
   return result({ ok: true, id: d.id || sid, slug: d.slug || null, status: d.status || null, deleted: d.deleted === true });
+}
+
+/* Retry the Calendar step on its own (Needs you, the editor, the schedule panel). */
+async function calendarRetry(env, admin, body, origin) {
+  const sid = typeof body.session_id === "string" && /^[0-9a-f-]{36}$/.test(body.session_id) ? body.session_id : null;
+  const ses = sid ? await loadSession(env, sid) : null;
+  if (!ses) return result({ ok: false, error: SESSION_ERRORS.not_found }, 409);
+  if (ses.admission !== "invite") return result({ ok: false, error: "This workshop sends its joining link by email, so it has no Calendar event." }, 409);
+  if (!ses.starts_at) return result({ ok: false, error: "Set a date first." }, 409);
+  const cal = await syncCalendar(env, admin, ses, origin);
+  if (!cal.ok) return result({ ok: false, retry: true, error: "Still not done: " + calendarSentence(cal) }, 409);
+  return result({ ok: true, id: sid, calendar: cal.skipped ? "already" : cal.creating ? "created" : "moved" });
 }
 
 const REFERRER = { referrer_create: "create", referrer_update: "update", referrer_suspend: "suspend", referrer_activate: "activate",
@@ -190,7 +335,10 @@ export async function onRequestPost(context) {
   const body = await readJson(request, 65536);
   const id = body && typeof body.registration_id === "string" && /^[0-9a-f-]{36}$/.test(body.registration_id) ? body.registration_id : "";
   const action = body && typeof body.action === "string" ? body.action : "";
-  if (SESSION[action]) return sessionAction(env, admin, action, body);
+  const origin = new URL(request.url).origin;
+  if (SESSION[action] || action === "session_schedule") return sessionAction(env, admin, action, body, origin);
+  if (action === "calendar_retry") return calendarRetry(env, admin, body, origin);
+  if (action === "content_draft") return contentDraft(env, body, origin);
   if (REFERRER[action]) return referrerAction(env, admin, action, body);
   if (action === "series_save") {
     const done = await rpc(env, "workshop_admin_series", { p_actor_email: String(admin.email).toLowerCase(), p_data: cleanSeries(body.series) });

@@ -307,7 +307,7 @@
 
 </style>
 <link rel="stylesheet" href="/assets/css/admin-console.css?v=20261103-a">
-<link rel="stylesheet" href="/assets/css/admin-workshops.css?v=20261113-a">
+<link rel="stylesheet" href="/assets/css/admin-workshops.css?v=20261114-a">
 </head>
 <body>
 
@@ -760,77 +760,102 @@
         <div class="wsd-drawer__body">
           <p class="wsd-callout" id="wse-held" hidden></p>
           <p class="msg msg--bad" id="wse-error" role="alert" hidden></p>
+          <p class="wsd-retry" id="wse-retry-wrap" hidden><button class="wsd-btn wsd-btn--sm wsd-btn--primary" type="button" id="wse-retry">Retry</button></p>
 
-          <fieldset>
-            <legend>The basics</legend>
+          <fieldset class="wsd-essentials">
+            <legend>Essentials</legend>
             <div class="wsd-field"><label for="wse-f-title">Title</label><input type="text" id="wse-f-title" maxlength="160" required></div>
-            <div class="wsd-field"><label for="wse-f-slug">Page address</label>
-              <div class="wsd-affix"><span>/workshops/</span><input type="text" id="wse-f-slug" maxlength="80" autocomplete="off" spellcheck="false"></div>
-              <span class="wsd-hint" id="wse-slug-hint">Filled in from the title. It can't change once registration has opened, so links you have shared keep working.</span></div>
-            <div class="wsd-grid">
-              <div class="wsd-field"><span class="wsd-label" id="wse-l-kind">Type</span>
-                <div class="wsd-seg" role="radiogroup" aria-labelledby="wse-l-kind">
-                  <label><input type="radio" name="wse-kind" id="wse-k-workshop" value="workshop" checked><span>Workshop</span></label>
-                  <label><input type="radio" name="wse-kind" id="wse-k-webinar" value="webinar"><span>Webinar</span></label>
-                </div></div>
-              <div class="wsd-field"><label for="wse-f-series">Series</label><select id="wse-f-series"></select></div>
-              <div class="wsd-field"><label for="wse-f-number">Number in the series</label><input id="wse-f-number" type="number" min="1" max="99" step="1"></div>
-            </div>
-            <div class="wsd-field"><label for="wse-f-summary">Short description</label><textarea id="wse-f-summary" rows="3" maxlength="600"></textarea><span class="wsd-hint">Shown at the top of the page and in the workshops list.</span></div>
-            <div class="wsd-field"><label for="wse-f-audience">Who it is for, in one line</label><input type="text" id="wse-f-audience" maxlength="300"></div>
-            <label class="wsd-check" id="wse-announce-wrap"><input type="checkbox" id="wse-f-announce"> <span>List it as coming soon while it's a draft (no date, no price, no form)</span></label>
-            <label class="wsd-check" id="wse-test-wrap"><input type="checkbox" id="wse-f-test"> <span>Test session: only the test site can see and book it</span></label>
-          </fieldset>
-
-          <fieldset>
-            <legend>When</legend>
             <div class="wsd-grid">
               <div class="wsd-field"><label for="wse-f-date">Date</label><input id="wse-f-date" type="date"></div>
               <div class="wsd-field"><label for="wse-f-time">Starts (Ghana time, GMT)</label><input id="wse-f-time" type="time" value="11:30"></div>
               <div class="wsd-field"><label for="wse-f-dur">Length</label>
                 <select id="wse-f-dur"><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option><option value="150">2.5 hours</option><option value="180">3 hours</option><option value="240">4 hours</option></select></div>
             </div>
-            <p class="wsd-hint" id="wse-cutoff"></p>
-          </fieldset>
-
-          <fieldset>
-            <legend>Price and places</legend>
             <div class="wsd-grid">
               <div class="wsd-field"><label for="wse-f-price">Price (GHS)</label><input id="wse-f-price" type="number" min="0" step="1" inputmode="decimal"></div>
               <div class="wsd-field"><label for="wse-f-cap">Open places</label><input id="wse-f-cap" type="number" min="1" step="1"></div>
-              <div class="wsd-field"><label for="wse-f-grad">Places kept for Intermediate graduates</label><input id="wse-f-grad" type="number" min="0" step="1"></div>
-              <div class="wsd-field"><label for="wse-f-fnd">Foundations certificate discount (%)</label><input id="wse-f-fnd" type="number" min="0" max="100" step="1"></div>
+              <div class="wsd-field"><span class="wsd-label">Registration</span><p class="wsd-status" id="wse-status" aria-live="polite"></p></div>
             </div>
-            <label class="wsd-check"><input type="checkbox" id="wse-f-free"> <span>Intermediate graduates attend free, in the kept places</span></label>
-            <p class="wsd-summary" id="wse-priceline" aria-live="polite"></p>
+            <p class="wsd-hint" id="wse-cutoff"></p>
+            <div class="wsd-series-note" id="wse-series-note" hidden><span id="wse-series-text"></span>
+              <button class="wsd-btn wsd-btn--sm wsd-btn--quiet" type="button" id="wse-use-series" hidden>Use the series settings</button></div>
           </fieldset>
 
-          <fieldset>
-            <legend>How people join</legend>
-            <div class="wsd-seg" role="radiogroup" aria-label="How people join">
-              <label><input type="radio" name="wse-adm" id="wse-a-invite" value="invite" checked><span>Google Calendar invitation</span></label>
-              <label><input type="radio" name="wse-adm" id="wse-a-link" value="link"><span>Link in the confirmation email</span></label>
+          <details class="wsd-sec" id="wse-sec-content">
+            <summary><span>Page content</span><span class="wsd-sec__note" id="wse-content-note"></span></summary>
+            <div class="wsd-sec__body">
+              <div class="wsd-ai">
+                <div class="wsd-field"><label for="wse-f-brief">What it covers, in a sentence or two</label><textarea id="wse-f-brief" rows="2" maxlength="1200"></textarea>
+                  <span class="wsd-hint">Used only to draft the page. A free AI model writes every field below in the style of Workshop 01. Nothing is saved until you press Save.</span></div>
+                <p class="wsd-ai__row"><button class="wsd-btn wsd-btn--sm" type="button" id="wse-ai">Generate draft content</button><span class="wsd-hint" id="wse-ai-status" role="status"></span></p>
+              </div>
+              <div class="wsd-field"><label for="wse-f-summary">Short description</label><textarea id="wse-f-summary" rows="3" maxlength="600"></textarea><span class="wsd-hint">Shown at the top of the page and in the workshops list. Needed before registration can open.</span></div>
+              <div class="wsd-field"><label for="wse-f-audience">Who it is for, in one line</label><input type="text" id="wse-f-audience" maxlength="300"></div>
+              <div class="wsd-field"><span class="wsd-label">Why this workshop (paragraphs)</span><div class="wsd-list" id="wse-l-why"></div><button class="wsd-btn wsd-btn--sm" type="button" data-wsd-add="why">Add a paragraph</button></div>
+              <div class="wsd-field"><span class="wsd-label">What people will be able to do</span><div class="wsd-list" id="wse-l-outcomes"></div><button class="wsd-btn wsd-btn--sm" type="button" data-wsd-add="outcomes">Add an outcome</button></div>
+              <div class="wsd-field"><span class="wsd-label">What they leave with</span><div class="wsd-list" id="wse-l-leave"></div><button class="wsd-btn wsd-btn--sm" type="button" data-wsd-add="leave">Add an item</button></div>
+              <div class="wsd-field"><span class="wsd-label">Running order</span><div class="wsd-list" id="wse-l-run"></div><button class="wsd-btn wsd-btn--sm" type="button" data-wsd-add="run">Add a segment</button></div>
+              <div class="wsd-field"><span class="wsd-label">Questions and answers</span><div class="wsd-list" id="wse-l-faq"></div><button class="wsd-btn wsd-btn--sm" type="button" data-wsd-add="faq">Add a question</button></div>
+              <div class="wsd-grid wsd-grid--2">
+                <div class="wsd-field"><label for="wse-f-fit">Good fit</label><textarea id="wse-f-fit" rows="4" maxlength="1500"></textarea></div>
+                <div class="wsd-field"><label for="wse-f-notfit">Not a fit</label><textarea id="wse-f-notfit" rows="4" maxlength="1500"></textarea></div>
+              </div>
+              <div class="wsd-field"><label for="wse-f-bring">What to bring or prepare</label><input type="text" id="wse-f-bring" maxlength="600"></div>
+              <div class="wsd-field" id="wse-planned-wrap"><label for="wse-f-problem">The problem it solves (coming-soon page)</label><textarea id="wse-f-problem" rows="3" maxlength="1500"></textarea></div>
+              <div class="wsd-field"><label for="wse-f-fitline">Where it fits in the series (coming-soon page)</label><textarea id="wse-f-fitline" rows="2" maxlength="1000"></textarea></div>
             </div>
-            <div class="wsd-field" id="wse-cal-wrap"><label for="wse-f-cal">Google Calendar event ID</label><input type="text" id="wse-f-cal" maxlength="1024" autocomplete="off" spellcheck="false">
-              <span class="wsd-hint">From the event's address in Google Calendar. Paid people are added to this event automatically and removed if refunded. If you change the date here, change it on the event too.</span></div>
-            <div class="wsd-field"><label for="wse-f-join">Joining instructions</label><textarea id="wse-f-join" rows="4" maxlength="3000"></textarea><span class="wsd-hint">Private. Sent only to people with a confirmed place. Never shown on the page.</span></div>
-          </fieldset>
+          </details>
 
-          <fieldset>
-            <legend>Page content</legend>
-            <div class="wsd-field"><span class="wsd-label">Why this workshop (paragraphs)</span><div class="wsd-list" id="wse-l-why"></div><button class="wsd-btn wsd-btn--sm" type="button" data-wsd-add="why">Add a paragraph</button></div>
-            <div class="wsd-field"><span class="wsd-label">What people will be able to do</span><div class="wsd-list" id="wse-l-outcomes"></div><button class="wsd-btn wsd-btn--sm" type="button" data-wsd-add="outcomes">Add an outcome</button></div>
-            <div class="wsd-field"><span class="wsd-label">What they leave with</span><div class="wsd-list" id="wse-l-leave"></div><button class="wsd-btn wsd-btn--sm" type="button" data-wsd-add="leave">Add an item</button></div>
-            <div class="wsd-field"><span class="wsd-label">Running order</span><div class="wsd-list" id="wse-l-run"></div><button class="wsd-btn wsd-btn--sm" type="button" data-wsd-add="run">Add a segment</button></div>
-            <div class="wsd-field"><span class="wsd-label">Questions and answers</span><div class="wsd-list" id="wse-l-faq"></div><button class="wsd-btn wsd-btn--sm" type="button" data-wsd-add="faq">Add a question</button></div>
-            <div class="wsd-grid wsd-grid--2">
-              <div class="wsd-field"><label for="wse-f-fit">Good fit</label><textarea id="wse-f-fit" rows="4" maxlength="1500"></textarea></div>
-              <div class="wsd-field"><label for="wse-f-notfit">Not a fit</label><textarea id="wse-f-notfit" rows="4" maxlength="1500"></textarea></div>
+          <details class="wsd-sec" id="wse-sec-discounts">
+            <summary><span>Discounts and graduate places</span><span class="wsd-sec__note" id="wse-discount-note"></span></summary>
+            <div class="wsd-sec__body">
+              <div class="wsd-grid wsd-grid--2">
+                <div class="wsd-field"><label for="wse-f-grad">Places kept for Intermediate graduates</label><input id="wse-f-grad" type="number" min="0" step="1"></div>
+                <div class="wsd-field"><label for="wse-f-fnd">Foundations certificate discount (%)</label><input id="wse-f-fnd" type="number" min="0" max="100" step="1"></div>
+              </div>
+              <label class="wsd-check"><input type="checkbox" id="wse-f-free"> <span>Intermediate graduates attend free, in the kept places</span></label>
+              <p class="wsd-hint" id="wse-referral-line"></p>
+              <p class="wsd-summary" id="wse-priceline" aria-live="polite"></p>
             </div>
-            <div class="wsd-field"><label for="wse-f-bring">What to bring</label><input type="text" id="wse-f-bring" maxlength="600"></div>
-            <div class="wsd-field" id="wse-planned-wrap"><label for="wse-f-problem">The problem it solves (coming-soon page)</label><textarea id="wse-f-problem" rows="3" maxlength="1500"></textarea></div>
-            <div class="wsd-field"><label for="wse-f-fitline">Where it fits in the series (coming-soon page)</label><textarea id="wse-f-fitline" rows="2" maxlength="1000"></textarea></div>
-          </fieldset>
+          </details>
+
+          <details class="wsd-sec" id="wse-sec-join">
+            <summary><span>Joining and Google Calendar</span><span class="wsd-sec__note" id="wse-join-note"></span></summary>
+            <div class="wsd-sec__body">
+              <div class="wsd-seg" role="radiogroup" aria-label="How people join">
+                <label><input type="radio" name="wse-adm" id="wse-a-invite" value="invite" checked><span>Google Calendar invitation</span></label>
+                <label><input type="radio" name="wse-adm" id="wse-a-link" value="link"><span>Link in the confirmation email</span></label>
+              </div>
+              <div id="wse-cal-wrap">
+                <div class="wsd-cal" id="wse-cal-panel"></div>
+                <details class="wsd-fold wsd-fold--quiet"><summary>Use an event I made myself</summary>
+                  <div class="wsd-field"><label for="wse-f-cal">Google Calendar event ID</label><input type="text" id="wse-f-cal" maxlength="1024" autocomplete="off" spellcheck="false">
+                    <span class="wsd-hint">Leave empty and the event is created for you when you schedule. Fill it in only to use an event you already made; that event is then kept exactly as you set it up.</span></div>
+                </details>
+              </div>
+              <div class="wsd-field"><label for="wse-f-join">Joining instructions</label><textarea id="wse-f-join" rows="4" maxlength="3000"></textarea><span class="wsd-hint">Private. Sent only to people with a confirmed place. Never shown on the page.</span></div>
+            </div>
+          </details>
+
+          <details class="wsd-sec" id="wse-sec-page">
+            <summary><span>Page address, series and listing</span><span class="wsd-sec__note" id="wse-page-note"></span></summary>
+            <div class="wsd-sec__body">
+              <div class="wsd-field"><label for="wse-f-slug">Page address</label>
+                <div class="wsd-affix"><span>/workshops/</span><input type="text" id="wse-f-slug" maxlength="80" autocomplete="off" spellcheck="false"></div>
+                <span class="wsd-hint" id="wse-slug-hint">Filled in from the title. It can't change once registration has opened, so links you have shared keep working.</span></div>
+              <div class="wsd-grid">
+                <div class="wsd-field"><span class="wsd-label" id="wse-l-kind">Type</span>
+                  <div class="wsd-seg" role="radiogroup" aria-labelledby="wse-l-kind">
+                    <label><input type="radio" name="wse-kind" id="wse-k-workshop" value="workshop" checked><span>Workshop</span></label>
+                    <label><input type="radio" name="wse-kind" id="wse-k-webinar" value="webinar"><span>Webinar</span></label>
+                  </div></div>
+                <div class="wsd-field"><label for="wse-f-series">Series</label><select id="wse-f-series"></select></div>
+                <div class="wsd-field"><label for="wse-f-number">Number in the series</label><input id="wse-f-number" type="number" min="1" max="99" step="1"></div>
+              </div>
+              <label class="wsd-check" id="wse-announce-wrap"><input type="checkbox" id="wse-f-announce"> <span>List it as coming soon while it's a draft (no date, no price, no form)</span></label>
+              <label class="wsd-check" id="wse-test-wrap"><input type="checkbox" id="wse-f-test"> <span>Test session: only the test site can see and book it</span></label>
+            </div>
+          </details>
           <details class="wsd-fold" id="wse-history-wrap"><summary>Change history</summary><pre class="wsd-history" id="wse-history"></pre></details>
         </div>
         <div class="wsd-drawer__foot">
@@ -838,6 +863,40 @@
           <button class="wsd-btn" type="button" data-wsd-close>Cancel</button>
           <button class="wsd-btn" type="button" id="wse-draft">Save as draft</button>
           <button class="wsd-btn wsd-btn--primary" type="submit" id="wse-save">Save and open registration</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog class="wsd-drawer wsd-drawer--narrow" id="ws-schedule" aria-labelledby="wss-title">
+      <form id="wss-form" class="wsd-drawer__form" novalidate>
+        <div class="wsd-drawer__head">
+          <div><h3 id="wss-title">Schedule workshop</h3><p id="wss-sub">Pick the date. Everything else comes from the series, and the Calendar event and Meet link are made for you.</p></div>
+          <button class="wsd-btn wsd-btn--quiet wsd-btn--sm" type="button" data-wsd-close>Close</button>
+        </div>
+        <div class="wsd-drawer__body">
+          <p class="msg msg--bad" id="wss-error" role="alert" hidden></p>
+          <div class="wsd-callout" id="wss-content" hidden></div>
+          <fieldset>
+            <legend>When</legend>
+            <div class="wsd-grid wsd-grid--2">
+              <div class="wsd-field"><label for="wss-date">Date</label><input id="wss-date" type="date" required></div>
+              <div class="wsd-field"><label for="wss-time">Starts (Ghana time, GMT)</label><input id="wss-time" type="time" required></div>
+            </div>
+            <p class="wsd-hint" id="wss-cutoff"></p>
+          </fieldset>
+          <fieldset>
+            <legend>Settings it will use</legend>
+            <dl class="wsd-review" id="wss-review"></dl>
+            <p><button class="wsd-btn wsd-btn--sm wsd-btn--quiet" type="button" id="wss-change">Change these settings</button></p>
+          </fieldset>
+          <ol class="wsd-progress" id="wss-progress" hidden>
+            <li data-step="save">Save the date</li>
+            <li data-step="calendar">Create the Google Calendar event and Meet link</li>
+            <li data-step="open">Open registration</li>
+          </ol>
+        </div>
+        <div class="wsd-drawer__foot">
+          <button class="wsd-btn wsd-spacer" type="button" data-wsd-close>Cancel</button>
+          <button class="wsd-btn wsd-btn--primary" type="submit" id="wss-go">Schedule and open registration</button>
         </div>
       </form>
     </dialog>
@@ -989,6 +1048,6 @@
 <script src="/assets/js/admin-previews.js?v=20261016-auto1" defer></script>
 <script src="/assets/js/admin-payments.js" defer></script>
 <script src="/assets/js/admin-studio.js?v=20261017-a" defer></script>
-<script src="/assets/js/admin-workshops.js?v=20261113-a" defer></script>
+<script src="/assets/js/admin-workshops.js?v=20261114-a" defer></script>
 </body>
 </html>

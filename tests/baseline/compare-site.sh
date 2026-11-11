@@ -17,7 +17,7 @@ RENDER_NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)" node tests/render-workshop-pages.mjs
 # Two-step registration (November 2026): the workshop page's short form and the
 # workshop stylesheet; the version tag on the workshop stylesheet and script is
 # ignored on both sides below, so every other workshop page must still match.
-ALLOWED='^\./(_headers|admin/(index|credentials/index|enrollments/index|payments/index|studio/index|verification/index|workshops/index)\.html|assets/css/(admin-console|workshops)\.css|assets/js/(admin-console|admin-workshops|workshops)\.js|workshops/what-to-charge-for-automation/index\.html)$'
+ALLOWED='^\./(_headers|admin/(index|credentials/index|enrollments/index|payments/index|studio/index|verification/index|workshops/index)\.html|assets/css/(admin-console|admin-workshops|workshops)\.css|assets/js/(admin-console|admin-workshops|workshops)\.js|workshops/what-to-charge-for-automation/index\.html)$'
 # Publishing a webinar session (content/workshops) adds exactly two things to existing files:
 # one "Webinars and workshops" nav/footer line per page, and /workshops entries in the sitemap.
 # The refund policy page gains section 23, "Webinars and workshops", and its contents entry.

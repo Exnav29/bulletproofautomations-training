@@ -229,3 +229,52 @@
   .wsd-detail dd { margin-bottom: .5rem; }
   .wsd-drawer__head, .wsd-drawer__body, .wsd-drawer__foot { padding-left: 1rem; padding-right: 1rem; }
 }
+
+/* ---------- release 7: a shorter editor, scheduling in one step ----------
+   Essentials sit open at the top; everything else folds into labelled sections
+   that say what they hold, so a folded section is still readable. */
+.wsd-essentials { background: var(--wsd-sunk); border: 1px solid var(--wsd-line) !important; border-radius: 12px; padding: 1rem 1.1rem 1.1rem !important; }
+.wsd-essentials legend { float: left; width: 100%; margin-bottom: .1rem; }
+.wsd-status { margin: 0; min-height: 40px; display: flex; align-items: center; font-size: .9rem; font-weight: 600; color: var(--wsd-teal); }
+.wsd-series-note { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .8rem; font-size: .85rem; color: var(--wsd-soft); }
+.wsd-series-note.is-different { color: var(--wsd-marigold); }
+.wsd-sec { border: 1px solid var(--wsd-line); border-radius: 12px; background: var(--wsd-surface); }
+.wsd-sec > summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: .2rem .8rem; padding: .85rem 1.1rem; cursor: pointer;
+  font-size: 1rem; font-variation-settings: "wdth" 108, "wght" 720; list-style: none; }
+.wsd-sec > summary::-webkit-details-marker { display: none; }
+.wsd-sec > summary::before { content: ""; width: .5rem; height: .5rem; border: solid var(--wsd-soft); border-width: 0 2px 2px 0;
+  transform: rotate(-45deg); align-self: center; margin-right: .2rem; transition: transform .15s ease; }
+.wsd-sec[open] > summary::before { transform: rotate(45deg); }
+.wsd-sec > summary:focus-visible { outline: 3px solid #ba9258; outline-offset: -3px; border-radius: 12px; }
+.wsd-sec__note { font-size: .82rem; font-variation-settings: "wdth" 100, "wght" 500; color: var(--wsd-soft); }
+.wsd-sec__note.is-missing { color: var(--wsd-marigold); }
+.wsd-sec__body { display: grid; gap: .9rem; padding: .2rem 1.1rem 1.15rem; min-width: 0; }
+.wsd-ai { border: 1px dashed var(--wsd-teal); background: var(--wsd-teal-soft); border-radius: 10px; padding: .8rem .9rem; display: grid; gap: .55rem; }
+.wsd-ai__row { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .8rem; }
+.wsd-cal { display: grid; gap: .5rem; font-size: .88rem; }
+.wsd-cal p { margin: 0; }
+.wsd-cal__bad { color: var(--wsd-bad); font-weight: 600; }
+.wsd-cal > .wsd-btn { justify-self: start; }
+.wsd-copy { display: flex; gap: .4rem; min-width: 0; }
+.wsd-copy input { flex: 1; min-width: 0; min-height: 36px; padding: .35rem .6rem; border: 1px solid var(--wsd-line-strong); border-radius: 8px; background: var(--wsd-sunk); font: inherit; font-size: .86rem; }
+.wsd-fold--quiet { margin-top: .2rem; }
+.wsd-fold--quiet > summary { font-size: .85rem; font-weight: 600; }
+.wsd-retry { margin: -.9rem 0 0; }
+.wsd-series .wsd-acts { display: inline-flex; flex-wrap: wrap; gap: .4rem; }
+
+.wsd-drawer--narrow { width: min(34rem, 100%); }
+.wsd-review { margin: 0; display: grid; border-top: 1px solid var(--wsd-line); }
+.wsd-review > div { display: grid; grid-template-columns: minmax(7rem, 34%) minmax(0, 1fr); gap: .8rem; padding: .55rem 0; border-bottom: 1px solid var(--wsd-line); }
+.wsd-review dt { color: var(--wsd-soft); font-size: .84rem; }
+.wsd-review dd { margin: 0; font-size: .9rem; font-weight: 600; }
+.wsd-progress { margin: 0; padding: 0; list-style: none; display: grid; gap: .45rem; counter-reset: wsd-step; }
+.wsd-progress li { counter-increment: wsd-step; display: flex; gap: .6rem; align-items: center; font-size: .9rem; color: var(--wsd-soft); }
+.wsd-progress li::before { content: counter(wsd-step); display: grid; place-content: center; width: 1.6rem; height: 1.6rem; flex: none; border-radius: 50%;
+  border: 2px solid var(--wsd-line-strong); font-size: .78rem; font-weight: 700; }
+.wsd-progress li.is-active { color: var(--wsd-ink); font-weight: 600; }
+.wsd-progress li.is-active::before { border-color: var(--wsd-teal); color: var(--wsd-teal); border-style: dashed; }
+.wsd-progress li.is-done::before { content: "✓"; background: var(--wsd-good); border-color: var(--wsd-good); color: #fff; }
+.wsd-progress li.is-failed { color: var(--wsd-bad); font-weight: 600; }
+.wsd-progress li.is-failed::before { content: "!"; background: var(--wsd-bad); border-color: var(--wsd-bad); color: #fff; }
+@media (prefers-reduced-motion: reduce) { .wsd-sec > summary::before { transition: none; } }
+@media (max-width: 30rem) { .wsd-review > div { grid-template-columns: minmax(0, 1fr); gap: .1rem; } }
