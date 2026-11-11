@@ -18,8 +18,9 @@ test("the real rows publish one bookable workshop and nine coming-soon pages, in
   assert.equal(cat.planned.length, 9);
   assert.deepEqual(cat.series[0].entries.map((e) => e.number), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
   const w01 = p.route("/workshops/what-to-charge-for-automation", cat);
-  assert.match(w01.body, /data-ws-form/);
+  assert.match(w01.body, /data-ws-short/);
   assert.match(w01.body, /data-price="350"/);
+  assert.match(p.route("/workshops/what-to-charge-for-automation/register", cat).body, /data-ws-form/);
   assert.equal(p.when(cat.listed[0]).accra, "11:30 AM");
   assert.equal(p.when(cat.listed[0]).lagos, "12:30 PM");
   for (const s of cat.planned) {
@@ -28,6 +29,34 @@ test("the real rows publish one bookable workshop and nine coming-soon pages, in
     assert.doesNotMatch(page.body, /data-ws-form|GHS/, s.slug + ": no form and no fee before a date is set");
   }
   assert.equal(p.paths(cat).length, 11, "the directory, workshop 01 and nine coming-soon pages");
+});
+
+test("two steps: the workshop page asks for name and email only; the form page has the rest", async () => {
+  const p = await load();
+  const cat = p.catalog(data.real, data.series, NOW);
+  const detail = p.route("/workshops/what-to-charge-for-automation", cat);
+  const form = p.route("/workshops/what-to-charge-for-automation/register", cat);
+  // Short form: exactly two fields and "Register now"; nothing the full form owns.
+  const short = detail.body.match(/<form[^>]*data-ws-short[\s\S]*?<\/form>/)[0];
+  assert.deepEqual([...short.matchAll(/<input[^>]*name="([a-z_]+)"/g)].map((m) => m[1]), ["full_name", "email"]);
+  assert.match(short, />Register now</);
+  assert.doesNotMatch(detail.body, /data-ws-form|attend_email|certificate_id|ack_terms/);
+  assert.match(detail.body, /ws-trace--compact/);
+  // Form page: the full form, the page script's hooks, and not indexed.
+  assert.match(form.body, /data-ws-page="detail" data-ws-step="register" data-slug="what-to-charge-for-automation" data-price="350"/);
+  for (const name of ["full_name", "email", "attend_email", "ref", "certificate_id", "whatsapp", "ack_terms", "company_website"]) {
+    assert.match(form.body, new RegExp('name="' + name + '"'), name);
+  }
+  assert.match(form.body, />Register and pay GHS\s350</);
+  assert.equal(form.noindex, true);
+  assert.match(p.fill("</head>", form), /noindex/);
+  assert.equal(form.canonical, p.ORIGIN + "/workshops/what-to-charge-for-automation/register");
+  // Not in the sitemap; no form page for a coming-soon workshop or an unknown one.
+  assert.ok(!p.paths(cat).some((x) => x.endsWith("/register")));
+  assert.equal(p.route("/workshops/" + cat.planned[0].slug + "/register", cat), null);
+  assert.equal(p.route("/workshops/nothing-here/register", cat), null);
+  assert.equal(p.route("/workshops/registered/register", cat), null);
+  assert.equal(p.route("/workshops/what-to-charge-for-automation/register/x", cat), null);
 });
 
 test("drafts that are not announced, past sessions and unknown addresses have no page", async () => {
@@ -73,7 +102,7 @@ test("content is escaped, and the page fills the shell", async () => {
 test("refund policy: paid forms link to section 23 of the existing /refund-policy page, whose version is the one registrations record", async () => {
   const p = await load();
   const cat = p.catalog(data.samples, [], NOW);
-  const detail = p.route("/workshops/sample-webinar", cat).body;
+  const detail = p.route("/workshops/sample-webinar/register", cat).body;
   assert.equal(p.POLICY_HREF, "/refund-policy#workshops");
   assert.match(detail, /href="\/refund-policy#workshops">webinar and workshop refund terms<\/a>\. I understand a paid registration is non-refundable/);
   assert.match(detail, /<input type="checkbox" name="ack_terms" required>/);
@@ -88,15 +117,15 @@ test("refund policy: paid forms link to section 23 of the existing /refund-polic
 test("invitation-only sessions ask for the Google account to join with; others do not", async () => {
   const p = await load();
   const cat = p.catalog(data.real.concat(data.samples), data.series, NOW);
-  const w01 = p.route("/workshops/what-to-charge-for-automation", cat).body;
+  const w01 = p.route("/workshops/what-to-charge-for-automation/register", cat).body;
   assert.match(w01, /name="attend_email" type="email"[^>]*required/);
-  const other = p.route("/workshops/sample-webinar", cat).body;
+  const other = p.route("/workshops/sample-webinar/register", cat).body;
   assert.doesNotMatch(other, /attend_email/);
 });
 
 test("certificate and referral wording: anyone's referral code, and the certificate email applies at once", async () => {
   const p = await load();
-  const w01 = p.route("/workshops/what-to-charge-for-automation", p.catalog(data.real, data.series, NOW)).body;
+  const w01 = p.route("/workshops/what-to-charge-for-automation/register", p.catalog(data.real, data.series, NOW)).body;
   // The Fee line shows the price and how to pay only; discounts are explained at the form fields.
   assert.doesNotMatch(w01, /with a referral code<\/small>|with a Foundations certificate<\/small>|Free for eligible Intermediate graduates/);
   assert.match(w01, /From someone's referral link or code: GHS 300/);

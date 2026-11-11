@@ -148,17 +148,20 @@ function factsList(s, w) {
     (s.audience ? '  <dt>For</dt><dd>' + esc(s.audience) + '</dd>\n' : '') + '</dl>';
 }
 
-function trace(s, w) {
+/* The four steps. compact: names only (the workshop page's short panel, which
+   must fit on screen while it stays in view); the details are hidden in CSS so
+   the markup stays the one the page script updates. */
+function trace(s, w, compact) {
   const paid = s.price_ghs > 0;
   const steps = [
-    ['register', 'Your details', 'About a minute'],
+    ['register', 'Your details', 'About two minutes'],
     paid ? ['pay', 'Pay ' + fee(s), 'On Paystack\'s secure page, with mobile money or card'] : null,
     s.admission === "invite"
       ? ['email', 'Confirmation, then your invitation', 'We add your Google account to the workshop invitation, and Google emails you the Meet link']
       : ['email', 'Confirmation email', 'Your joining link'],
     ['join', 'Join live', w.long + ', ' + w.accra + ' in Accra']
   ].filter(Boolean);
-  return '<ol class="ws-trace" data-trace>\n' + steps.map(function (st, i) {
+  return '<ol class="ws-trace' + (compact ? ' ws-trace--compact' : '') + '" data-trace>\n' + steps.map(function (st, i) {
     return '  <li class="ws-step' + (i === 0 ? ' is-active' : ' is-idle') + '" data-step="' + st[0] + '">' +
       '<span class="ws-step__dot" aria-hidden="true">' + (i + 1) + '</span>' +
       '<div class="ws-step__body"><p class="ws-step__name">' + esc(st[1]) + '</p>' +
@@ -166,38 +169,68 @@ function trace(s, w) {
   }).join("\n") + '\n</ol>';
 }
 
+/* The full registration form, on /workshops/<slug>/register. Grouped so a
+   long form reads as four short questions. Field names, ids and data hooks are
+   the ones assets/js/workshops.js and /api/workshops/register have always used. */
 function form(s) {
-  return '<form class="ws-form" data-ws-form novalidate>\n' +
-    '  <div class="ws-field"><label for="ws-name">Full name</label><input id="ws-name" name="full_name" type="text" autocomplete="name" required maxlength="120"></div>\n' +
-    '  <div class="ws-field"><label for="ws-email">Email <span class="ws-hint">' + (s.admission === "invite" ? "Your confirmation goes here" : "Your joining link goes here") + '</span></label><input id="ws-email" name="email" type="email" autocomplete="email" inputmode="email" required maxlength="160"></div>\n' +
-    (s.admission === "invite"
-      ? '  <div class="ws-field"><label for="ws-attend">Google account to join with <span class="ws-hint">Only this account can get into the meeting. It can differ from the email above</span></label><input id="ws-attend" name="attend_email" type="email" autocomplete="email" inputmode="email" required maxlength="160"></div>\n'
-      : '') +
+  const group = function (title, inner) { return '  <fieldset class="ws-group"><legend>' + title + '</legend>\n' + inner + '  </fieldset>\n'; };
+  const you =
+    '    <div class="ws-field"><label for="ws-name">Full name</label><input id="ws-name" name="full_name" type="text" autocomplete="name" required maxlength="120"></div>\n' +
+    '    <div class="ws-field"><label for="ws-email">Email <span class="ws-hint">' + (s.admission === "invite" ? "Your confirmation goes here" : "Your joining link goes here") + '</span></label><input id="ws-email" name="email" type="email" autocomplete="email" inputmode="email" required maxlength="160"></div>\n';
+  const joining = s.admission === "invite"
+    ? '    <div class="ws-field"><label for="ws-attend">Google account to join with <span class="ws-hint">Only this account can get into the meeting. It can differ from the email above</span></label><input id="ws-attend" name="attend_email" type="email" autocomplete="email" inputmode="email" required maxlength="160"></div>\n'
+    : '';
+  const discounts =
     (hasReferral(s)
-      ? '  <div class="ws-field"><label for="ws-ref">Referral code <span class="ws-hint">Optional. From someone\'s referral link or code: ' + esc(referralFee(s)) + '</span></label>' +
+      ? '    <div class="ws-field"><label for="ws-ref">Referral code <span class="ws-hint">Optional. From someone\'s referral link or code: ' + esc(referralFee(s)) + '</span></label>' +
         '<input id="ws-ref" name="ref" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="16" data-ws-ref></div>\n'
       : '') +
     (hasBenefits(s)
-      ? '  <div class="ws-field" data-ws-cert><label for="ws-cert">Certificate ID <span class="ws-hint">Optional. ' +
+      ? '    <div class="ws-field" data-ws-cert><label for="ws-cert">Certificate ID <span class="ws-hint">Optional. ' +
         (s.foundations_discount_pct > 0 ? 'Foundations certificate: ' + esc(foundationsFee(s)) + '. ' : '') +
         (s.graduate_free ? 'Intermediate graduates: free, in a reserved place. ' : '') +
         'Applied straight away if the email above is the one on your certificate</span></label>' +
-        '<input id="ws-cert" name="certificate_id" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="40" placeholder="BPA-">' +
-        '<button class="ws-btn ws-btn--small ws-btn--quiet" type="button" data-ws-cert-send>Apply my certificate</button>' +
+        '<div class="ws-inline"><input id="ws-cert" name="certificate_id" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="40" placeholder="BPA-">' +
+        '<button class="ws-btn ws-btn--small ws-btn--quiet" type="button" data-ws-cert-send>Apply my certificate</button></div>' +
         '<div data-ws-cert-code hidden><label for="ws-cert-code">Code from the email <span class="ws-hint">6 digits, sent to the address on the certificate, valid for 10 minutes</span></label>' +
-        '<input id="ws-cert-code" name="cert_code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6">' +
-        '<button class="ws-btn ws-btn--small" type="button" data-ws-cert-confirm>Confirm code</button></div>' +
+        '<div class="ws-inline"><input id="ws-cert-code" name="cert_code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6">' +
+        '<button class="ws-btn ws-btn--small" type="button" data-ws-cert-confirm>Confirm code</button></div></div>' +
         '<p class="ws-hint" data-ws-cert-status role="status"></p></div>\n'
-      : '') +
-    '  <div class="ws-field"><label for="ws-wa">WhatsApp <span class="ws-hint">Optional</span></label><input id="ws-wa" name="whatsapp" type="tel" autocomplete="tel" inputmode="tel" maxlength="40" placeholder="+233"></div>\n' +
-    '  <label class="ws-check" data-wa-consent hidden><input type="checkbox" name="whatsapp_consent"> <span>Send me session reminders on WhatsApp.</span></label>\n' +
+      : '');
+  const reminders =
+    '    <div class="ws-field"><label for="ws-wa">WhatsApp <span class="ws-hint">Optional</span></label><input id="ws-wa" name="whatsapp" type="tel" autocomplete="tel" inputmode="tel" maxlength="40" placeholder="+233"></div>\n' +
+    '    <label class="ws-check" data-wa-consent hidden><input type="checkbox" name="whatsapp_consent"> <span>Send me session reminders on WhatsApp.</span></label>\n';
+  return '<form class="ws-form" data-ws-form novalidate>\n' +
+    group("About you", you) +
+    (joining ? group("Joining the meeting", joining) : '') +
+    (discounts ? group("Discounts", discounts) : '') +
+    group("Reminders", reminders) +
+    '  <div class="ws-confirm">\n' +
     '  <label class="ws-check"><input type="checkbox" name="ack_terms" required> <span>I agree to the <a href="/privacy">privacy notice</a>' +
     (s.price_ghs > 0 ? ' and the <a href="' + POLICY_HREF + '">webinar and workshop refund terms</a>. I understand a paid registration is non-refundable except as those terms or the law provide' : '') + '.</span></label>\n' +
     '  <div class="ws-hp" aria-hidden="true"><label for="ws-company">Company website</label><input id="ws-company" name="company_website" type="text" tabindex="-1" autocomplete="off"></div>\n' +
     '  <p class="ws-error" data-ws-error role="alert" hidden></p>\n' +
-    (hasReferral(s) || hasBenefits(s) ? '  <p class="ws-note" data-ws-quote aria-live="polite">You pay ' + esc(fee(s)) + '.</p>\n' : '') +
+    (hasReferral(s) || hasBenefits(s) ? '  <p class="ws-quote" data-ws-quote aria-live="polite">You pay ' + esc(fee(s)) + '.</p>\n' : '') +
     '  <button class="ws-btn ws-btn--block" type="submit" data-ws-submit>' + esc(cta(s)) + '</button>\n' +
     (s.price_ghs > 0 ? '  <p class="ws-note">You pay on Paystack\'s secure page. Your place is confirmed once Paystack confirms the payment.</p>\n' : '') +
+    '  </div>\n' +
+    '</form>';
+}
+
+/* The short form in the workshop page's panel: name and email only. The page
+   script carries both to the registration page for this tab only, never in the
+   address, so an email never reaches a URL, a server log or an ad pixel. */
+function shortForm(s) {
+  const next = [];
+  if (s.admission === "invite") next.push("the Google account you'll join with");
+  if (hasReferral(s) || hasBenefits(s)) next.push("any referral code or certificate");
+  const tail = s.price_ghs > 0 ? "then pay on Paystack's secure page." : "then confirm your place.";
+  return '<form class="ws-form ws-form--short" data-ws-short novalidate>\n' +
+    '  <div class="ws-field"><label for="ws-name">Full name</label><input id="ws-name" name="full_name" type="text" autocomplete="name" required maxlength="120"></div>\n' +
+    '  <div class="ws-field"><label for="ws-email">Email</label><input id="ws-email" name="email" type="email" autocomplete="email" inputmode="email" required maxlength="160"></div>\n' +
+    '  <p class="ws-error" data-ws-error role="alert" hidden></p>\n' +
+    '  <button class="ws-btn ws-btn--block" type="submit" data-ws-submit>Register now</button>\n' +
+    '  <p class="ws-note">Next: ' + (next.length ? next.join(", ") + ", " : "") + tail + '</p>\n' +
     '</form>';
 }
 
@@ -257,13 +290,51 @@ export function detailPage(s, cat) {
 '    <h2 id="ws-reg">Register</h2>\n' +
 '    <p class="ws-sumline">' + esc(w.long) + ', ' + esc(w.gmt) + ' GMT. ' + esc(fee(s)) + '. Registration closes ' + esc(w.closes) + ' in Accra.</p>\n' +
 '    <p class="ws-banner" data-ws-banner role="status" hidden></p>\n' +
-'    ' + trace(s, w).replace(/\n/g, "\n    ") + '\n' +
-'    ' + form(s).replace(/\n/g, "\n    ") + '\n' +
+'    ' + trace(s, w, true).replace(/\n/g, "\n    ") + '\n' +
+'    ' + shortForm(s).replace(/\n/g, "\n    ") + '\n' +
 '    <div class="ws-after" data-ws-after hidden></div>\n' +
 '  </div>\n</aside>\n</div>\n' +
 '<div class="ws-stickybar" data-ws-sticky hidden><a class="ws-btn ws-btn--block" href="#register">' + esc(cta(s)) + '</a></div>\n</main>';
   return { title: s.title + " — " + kindLabel(s) + " — Bulletproof Automations Training",
     description: s.description || s.summary || s.title, canonical: ORIGIN + "/workshops/" + s.slug, body: body };
+}
+
+/* /workshops/<slug>/register: the whole form, reached from the workshop page's
+   short form. data-ws-page="detail" so the page script runs the registration
+   it always has; data-ws-step tells it this is the form page. Not indexed:
+   the workshop page is the one address to share and to find. */
+export function registerPage(s) {
+  const w = when(s);
+  const body =
+'<main id="main" class="ws ws-regpage" data-ws-page="detail" data-ws-step="register" data-slug="' + esc(s.slug) + '" data-price="' + esc(s.price_ghs) + '" data-starts="' + esc(new Date(s.starts_at).toISOString()) + '" data-title="' + esc(s.title) + '">\n' +
+'<div class="ws-wrap">\n' +
+'  <p class="ws-crumbs"><a href="/workshops/' + esc(s.slug) + '">Back to the ' + esc(kindLabel(s).toLowerCase()) + '</a></p>\n' +
+'  <header class="ws-reghead">\n' +
+'    <p class="ws-kind">Registration</p>\n' +
+'    <h1 class="ws-regtitle" id="ws-title">' + esc(s.title) + '</h1>\n' +
+'    <dl class="ws-regfacts">\n' +
+'      <div><dt>When</dt><dd><span class="ws-date">' + esc(w.long) + '</span><small>' + esc(w.accra) + ' in Accra, ' + esc(w.lagos) + ' in Lagos</small></dd></div>\n' +
+'      <div><dt>Length</dt><dd>' + esc(duration(s.duration_minutes)) + '<small>' + esc(s.format) + '</small></dd></div>\n' +
+'      <div><dt>Fee</dt><dd>' + esc(fee(s)) + (s.price_ghs > 0 ? '<small>MoMo or card, through Paystack</small>' : '') + '</dd></div>\n' +
+'      <div><dt>Registration closes</dt><dd>' + esc(w.closes) + '<small>in Accra</small></dd></div>\n' +
+'    </dl>\n' +
+'  </header>\n' +
+'  <div class="ws-reggrid">\n' +
+'    <section class="ws-sheet ws-sheet--form" id="register" data-ws-sheet aria-labelledby="ws-reg">\n' +
+'      <h2 id="ws-reg">Your registration</h2>\n' +
+'      <p class="ws-banner" data-ws-banner role="status" hidden></p>\n' +
+'      ' + form(s).replace(/\n/g, "\n      ") + '\n' +
+'      <div class="ws-after" data-ws-after hidden></div>\n' +
+'    </section>\n' +
+'    <aside class="ws-regside" aria-label="What happens next">\n' +
+'      <h2 class="ws-regside__h">What happens next</h2>\n' +
+'      ' + trace(s, w).replace(/\n/g, "\n      ") + '\n' +
+'      <p class="ws-small">Questions before you register? Email <a href="mailto:info@bulletproofautomations.com">info@bulletproofautomations.com</a>.</p>\n' +
+'    </aside>\n' +
+'  </div>\n' +
+'</div>\n</main>';
+  return { title: "Register: " + s.title + " — Bulletproof Automations Training",
+    description: "Register for " + s.title + ".", canonical: ORIGIN + "/workshops/" + s.slug + "/register", body: body, noindex: true };
 }
 
 function directoryRow(s) {
@@ -396,9 +467,13 @@ export function route(path, cat) {
   const parts = String(path || "").replace(/^\/+|\/+$/g, "").split("/");
   if (parts[0] !== "workshops") return null;
   if (parts.length === 1) return directoryPage(cat);
-  if (parts.length !== 2 || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(parts[1])) return null;
-  if (parts[1] === "registered") return registeredPage();
+  if (parts.length === 3 && parts[2] !== "register") return null;
+  if (parts.length > 3 || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(parts[1])) return null;
+  if (parts[1] === "registered") return parts.length === 2 ? registeredPage() : null;
   const live = cat.live.find(function (s) { return s.slug === parts[1]; });
+  // The form page exists only for a workshop that has a page; it shows the
+  // workshop's live state (open, full, closed, cancelled) like that page does.
+  if (parts.length === 3) return live ? registerPage(live) : null;
   if (live) return detailPage(live, cat);
   const planned = cat.planned.find(function (s) { return s.slug === parts[1]; });
   if (planned) return plannedPage(planned, cat);
