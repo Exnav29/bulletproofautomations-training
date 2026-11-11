@@ -307,6 +307,7 @@
 
 </style>
 <link rel="stylesheet" href="/assets/css/admin-console.css?v=20261103-a">
+<link rel="stylesheet" href="/assets/css/admin-workshops.css?v=20261113-a">
 </head>
 <body>
 
@@ -657,104 +658,212 @@
   </div>
 
   <!-- Verification enquiries ---------------------------------------------- -->
-  <!-- Webinars and workshops ----------------------------------------- -->
-  <section class="sec-gap ops-view" data-ops-view="workshops" aria-labelledby="ws-title">
-    <h2 class="panel__title" id="ws-title">Webinars &amp; workshops &mdash; <span id="ws-count">0</span> registrations</h2>
-    <p class="sec-gap__lede">Registrations for standalone sessions, kept apart from the cohort roll. Money is only ever
-      marked received by the Paystack webhook or a server-side verification. Refunds are issued in the Paystack
-      dashboard; a seat is released only when the refund is processed.</p>
+  <!-- Webinars and workshops (release 6: the workshop desk) ------------- -->
+  <section class="ops-view wsd" data-ops-view="workshops" aria-labelledby="ws-title">
+    <h2 class="vh" id="ws-title">Webinars &amp; workshops &mdash; <span id="ws-count">0</span> registrations</h2>
+    <div class="wsd-top">
+      <p class="wsd-top__line" id="ws-summary">Loading workshops.</p>
+      <button class="wsd-btn wsd-btn--primary" type="button" id="ws-new">New workshop</button>
+    </div>
     <p class="msg msg--bad" id="ws-error" role="alert" hidden></p>
     <p class="msg" id="ws-message" role="status" hidden></p>
 
-    <section class="panel" aria-labelledby="ws-attn-title">
-      <h3 class="panel__title" id="ws-attn-title">Needs resolution &mdash; <span id="ws-attn-count">0</span></h3>
-      <div id="ws-attention"><p class="msg msg--empty">Nothing waiting.</p></div>
+    <section class="wsd-attn" aria-labelledby="ws-attn-title">
+      <div class="wsd-attn__head"><span class="wsd-count" id="ws-attn-count">0</span><h3 id="ws-attn-title">Needs you</h3></div>
+      <div id="ws-attention"><p class="wsd-clear">Loading.</p></div>
     </section>
 
-    <section class="panel" aria-labelledby="ws-wl-title">
-      <h3 class="panel__title" id="ws-wl-title">Places and waitlists &mdash; <span id="ws-wl-count">0</span> waiting</h3>
-      <p class="sec-gap__lede">When a session sells out, people join a free waitlist. As places open, they are offered
-        automatically, first in, first out, each held for up to 24 hours or until registration closes seven days before
-        the session. Nothing here needs doing for that to happen; only errors and exceptions are listed for action.</p>
-      <div id="ws-waitlist"><p class="msg msg--empty">No waitlists.</p></div>
-    </section>
-
-    <section class="panel" aria-labelledby="ws-inv-title">
-      <h3 class="panel__title" id="ws-inv-title">Google Calendar invitations &mdash; <span id="ws-inv-count">0</span> to do</h3>
-      <p class="sec-gap__lede">For sessions joined by invitation only. Invitations are sent automatically, within a minute:
-        a confirmed registration that is paid, or a still-eligible complimentary graduate place, is added to the session's
-        Google Calendar event, and a refund, cancellation or change of Google account removes it. Anything the automation
-        could not do is listed first, under &ldquo;Needs attention&rdquo;. The lists below show what is still waiting; the
-        buttons record a change made by hand in Calendar.</p>
-      <div id="ws-invites"><p class="msg msg--empty">Nothing to do.</p></div>
-    </section>
-
-    <section class="panel" aria-labelledby="ws-ref-title">
-      <h3 class="panel__title" id="ws-ref-title">Referrals &mdash; <span id="ws-ref-due">0</span> commissions due</h3>
-      <p class="sec-gap__lede">Codes are issued only to eligible Intermediate graduates, checked against the certificate register.
-        A commission is due on a confirmed registration paid once in full, not refunded, with a valid code. Pay it by
-        MoMo yourself, then record the reference here. Each registration can be paid once. A refund after payout shows
-        for review; nothing is clawed back automatically.</p>
-      <p><button class="mini" type="button" id="ws-ref-new">Issue a referral code</button>
-        <button class="mini" type="button" id="ws-grant-new">Authorise another email for a certificate</button></p>
-      <div id="ws-referrals"><p class="msg msg--empty">No referral codes issued.</p></div>
-      <h4>Places</h4>
-      <ul id="ws-places"></ul>
-    </section>
-
-    <div class="filters">
-      <label class="vh" for="ws-session">Session</label>
-      <select id="ws-session"><option value="">All sessions</option></select>
-      <label class="vh" for="ws-status">Registration status</label>
-      <select id="ws-status"><option value="">All registration states</option></select>
-      <label class="vh" for="ws-payment">Payment status</label>
-      <select id="ws-payment"><option value="">All payment states</option></select>
-      <label class="vh" for="ws-attendance">Attendance</label>
-      <select id="ws-attendance"><option value="">All attendance</option></select>
-      <label class="vh" for="ws-q">Search name, email or campaign</label>
-      <input type="search" id="ws-q" placeholder="Search name, email, campaign">
-      <button class="mini" type="button" id="ws-csv">Export CSV</button>
+    <div class="wsd-tabs" role="tablist" aria-label="Workshop records">
+      <button role="tab" type="button" id="wst-ws" aria-controls="wsp-ws" aria-selected="true">Workshops <span id="ws-n-ws"></span></button>
+      <button role="tab" type="button" id="wst-reg" aria-controls="wsp-reg" aria-selected="false" tabindex="-1">Registrations <span id="ws-n-reg"></span></button>
+      <button role="tab" type="button" id="wst-ref" aria-controls="wsp-ref" aria-selected="false" tabindex="-1">Referral codes <span id="ws-n-ref"></span></button>
+      <button role="tab" type="button" id="wst-camp" aria-controls="wsp-camp" aria-selected="false" tabindex="-1">Ad results</button>
     </div>
 
-    <div class="roll-wrap">
-      <table class="roll">
-        <caption class="vh">Webinar and workshop registrations</caption>
-        <thead>
-          <tr>
-            <th scope="col">Name</th>
-            <th scope="col">Session</th>
-            <th scope="col">Registration</th>
-            <th scope="col">Payment</th>
-            <th scope="col" class="num">Paid</th>
-            <th scope="col">Attendance</th>
-            <th scope="col">Campaign / ad</th>
-            <th scope="col">Registered</th>
-            <th scope="col"><span class="vh">Actions</span></th>
-          </tr>
-        </thead>
-        <tbody id="ws-rows"></tbody>
-      </table>
+    <div role="tabpanel" id="wsp-ws" aria-labelledby="wst-ws">
+      <div class="wsd-series" id="ws-series"></div>
+      <div class="wsd-tickets" id="ws-tickets"></div>
+      <details class="wsd-fold" id="ws-test-fold"><summary id="ws-test-summary">Test sessions</summary><div class="wsd-tickets" id="ws-test-tickets"></div></details>
     </div>
 
-    <section class="panel" aria-labelledby="ws-camp-title">
-      <h3 class="panel__title" id="ws-camp-title">Results by campaign</h3>
-      <p class="sec-gap__lede">Grouped by <code>utm_campaign</code> and <code>utm_content</code> from the ad URL, for the
-        current filters. Confirmed paid means a confirmed registration with a payment Paystack verified: the same
-        definition Meta receives as a Purchase. Payments held for review are counted separately until admitted, and
-        refunds come off revenue. Enter the spend from Ads Manager for the same period to
-        see the cost per paid registration; it is calculated here and not stored.</p>
-      <label for="ws-spend">Ad spend for this selection (GHS)</label>
-      <input id="ws-spend" type="number" min="0" step="0.01" inputmode="decimal">
-      <div class="roll-wrap">
-        <table class="roll">
-          <caption class="vh">Registrations and verified payments by campaign</caption>
-          <thead><tr><th scope="col">Campaign</th><th scope="col">Ad</th><th scope="col" class="num">Registrations</th>
-            <th scope="col" class="num">Confirmed paid</th><th scope="col" class="num">Held for review</th><th scope="col" class="num">Revenue (GHS)</th></tr></thead>
-          <tbody id="ws-camp-rows"></tbody>
-          <tfoot><tr><th scope="row" colspan="3">Cost per confirmed paid enrollment</th><td class="num" id="ws-cac">&mdash;</td><td></td><td></td></tr></tfoot>
+    <div role="tabpanel" id="wsp-reg" aria-labelledby="wst-reg" hidden>
+      <div class="wsd-toolbar">
+        <label class="vh" for="ws-q">Search name, email or campaign</label>
+        <input type="search" id="ws-q" placeholder="Search name, email or campaign">
+        <label class="vh" for="ws-session">Workshop</label>
+        <select id="ws-session"><option value="">All workshops</option></select>
+        <label class="vh" for="ws-status">Registration status</label>
+        <select id="ws-status"><option value="">Any status</option></select>
+        <label class="vh" for="ws-payment">Payment status</label>
+        <select id="ws-payment"><option value="">Any payment</option></select>
+        <label class="vh" for="ws-attendance">Attendance</label>
+        <select id="ws-attendance"><option value="">Any attendance</option></select>
+        <button class="wsd-btn" type="button" id="ws-csv">Export CSV</button>
+        <button class="wsd-btn wsd-btn--quiet" type="button" id="ws-grant-new">Let a certificate holder use another email</button>
+      </div>
+      <div class="wsd-table">
+        <table>
+          <caption class="vh">Webinar and workshop registrations. Select a row for details and actions.</caption>
+          <thead><tr><th scope="col">Person</th><th scope="col">Workshop</th><th scope="col">Status</th>
+            <th scope="col" class="num">Paid (GHS)</th><th scope="col">Registered</th></tr></thead>
+          <tbody id="ws-rows"></tbody>
         </table>
       </div>
-    </section>
+    </div>
+
+    <div role="tabpanel" id="wsp-ref" aria-labelledby="wst-ref" hidden>
+      <div class="wsd-terms">
+        <div class="wsd-terms__head"><h3>Referral terms, every workshop</h3><button class="wsd-btn wsd-btn--sm" type="button" id="ws-terms-edit">Change</button></div>
+        <p id="ws-terms-text"></p>
+        <form class="wsd-terms__form" id="ws-terms-form" hidden novalidate>
+          <div class="wsd-field"><label for="ws-t-off">Buyer pays less by (GHS)</label><input id="ws-t-off" type="number" min="0" step="1" inputmode="decimal"></div>
+          <div class="wsd-field"><label for="ws-t-com">Referrer earns per paid place (GHS)</label><input id="ws-t-com" type="number" min="0" step="1" inputmode="decimal"></div>
+          <div class="wsd-acts"><button class="wsd-btn wsd-btn--primary" type="submit">Save terms</button><button class="wsd-btn" type="button" id="ws-terms-cancel">Cancel</button></div>
+        </form>
+      </div>
+      <div class="wsd-toolbar"><button class="wsd-btn wsd-btn--primary" type="button" id="ws-ref-new">Create a code</button></div>
+      <div class="wsd-codes" id="ws-referrals"></div>
+      <div class="wsd-table" id="ws-ref-table-wrap" hidden>
+        <table>
+          <caption class="vh">Referred registrations and their commission</caption>
+          <thead><tr><th scope="col">Registration</th><th scope="col">Code</th><th scope="col" class="num">Customer paid</th>
+            <th scope="col" class="num">Commission</th><th scope="col">State</th><th scope="col"><span class="vh">Actions</span></th></tr></thead>
+          <tbody id="ws-ref-rows"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div role="tabpanel" id="wsp-camp" aria-labelledby="wst-camp" hidden>
+      <p class="wsd-note">Grouped by the campaign and ad in the advert's link. Paid means confirmed with a payment Paystack verified, the same thing Meta is told is a purchase. Refunds come off revenue; test registrations are left out.</p>
+      <div class="wsd-toolbar">
+        <label for="ws-spend">Ad spend for this selection (GHS)</label>
+        <input id="ws-spend" type="number" min="0" step="0.01" inputmode="decimal">
+      </div>
+      <div class="wsd-table">
+        <table>
+          <caption class="vh">Registrations and verified payments by campaign</caption>
+          <thead><tr><th scope="col">Campaign</th><th scope="col">Ad</th><th scope="col" class="num">Registrations</th>
+            <th scope="col" class="num">Paid</th><th scope="col" class="num">Held for review</th><th scope="col" class="num">Revenue (GHS)</th></tr></thead>
+          <tbody id="ws-camp-rows"></tbody>
+          <tfoot><tr><th scope="row" colspan="5">Cost per paid registration</th><td class="num" id="ws-cac">&mdash;</td></tr></tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- Workshop editor -->
+    <dialog class="wsd-drawer" id="ws-editor" aria-labelledby="wse-title">
+      <form id="wse-form" class="wsd-drawer__form" novalidate>
+        <div class="wsd-drawer__head">
+          <div><h3 id="wse-title">New workshop</h3><p id="wse-sub">Everything here builds the public page and the booking rules. Saved changes are live straight away.</p></div>
+          <button class="wsd-btn wsd-btn--quiet wsd-btn--sm" type="button" data-wsd-close>Close</button>
+        </div>
+        <div class="wsd-drawer__body">
+          <p class="wsd-callout" id="wse-held" hidden></p>
+          <p class="msg msg--bad" id="wse-error" role="alert" hidden></p>
+
+          <fieldset>
+            <legend>The basics</legend>
+            <div class="wsd-field"><label for="wse-f-title">Title</label><input type="text" id="wse-f-title" maxlength="160" required></div>
+            <div class="wsd-field"><label for="wse-f-slug">Page address</label>
+              <div class="wsd-affix"><span>/workshops/</span><input type="text" id="wse-f-slug" maxlength="80" autocomplete="off" spellcheck="false"></div>
+              <span class="wsd-hint" id="wse-slug-hint">Filled in from the title. It can't change once registration has opened, so links you have shared keep working.</span></div>
+            <div class="wsd-grid">
+              <div class="wsd-field"><span class="wsd-label" id="wse-l-kind">Type</span>
+                <div class="wsd-seg" role="radiogroup" aria-labelledby="wse-l-kind">
+                  <label><input type="radio" name="wse-kind" id="wse-k-workshop" value="workshop" checked><span>Workshop</span></label>
+                  <label><input type="radio" name="wse-kind" id="wse-k-webinar" value="webinar"><span>Webinar</span></label>
+                </div></div>
+              <div class="wsd-field"><label for="wse-f-series">Series</label><select id="wse-f-series"></select></div>
+              <div class="wsd-field"><label for="wse-f-number">Number in the series</label><input id="wse-f-number" type="number" min="1" max="99" step="1"></div>
+            </div>
+            <div class="wsd-field"><label for="wse-f-summary">Short description</label><textarea id="wse-f-summary" rows="3" maxlength="600"></textarea><span class="wsd-hint">Shown at the top of the page and in the workshops list.</span></div>
+            <div class="wsd-field"><label for="wse-f-audience">Who it is for, in one line</label><input type="text" id="wse-f-audience" maxlength="300"></div>
+            <label class="wsd-check" id="wse-announce-wrap"><input type="checkbox" id="wse-f-announce"> <span>List it as coming soon while it's a draft (no date, no price, no form)</span></label>
+            <label class="wsd-check" id="wse-test-wrap"><input type="checkbox" id="wse-f-test"> <span>Test session: only the test site can see and book it</span></label>
+          </fieldset>
+
+          <fieldset>
+            <legend>When</legend>
+            <div class="wsd-grid">
+              <div class="wsd-field"><label for="wse-f-date">Date</label><input id="wse-f-date" type="date"></div>
+              <div class="wsd-field"><label for="wse-f-time">Starts (Ghana time, GMT)</label><input id="wse-f-time" type="time" value="11:30"></div>
+              <div class="wsd-field"><label for="wse-f-dur">Length</label>
+                <select id="wse-f-dur"><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option><option value="150">2.5 hours</option><option value="180">3 hours</option><option value="240">4 hours</option></select></div>
+            </div>
+            <p class="wsd-hint" id="wse-cutoff"></p>
+          </fieldset>
+
+          <fieldset>
+            <legend>Price and places</legend>
+            <div class="wsd-grid">
+              <div class="wsd-field"><label for="wse-f-price">Price (GHS)</label><input id="wse-f-price" type="number" min="0" step="1" inputmode="decimal"></div>
+              <div class="wsd-field"><label for="wse-f-cap">Open places</label><input id="wse-f-cap" type="number" min="1" step="1"></div>
+              <div class="wsd-field"><label for="wse-f-grad">Places kept for Intermediate graduates</label><input id="wse-f-grad" type="number" min="0" step="1"></div>
+              <div class="wsd-field"><label for="wse-f-fnd">Foundations certificate discount (%)</label><input id="wse-f-fnd" type="number" min="0" max="100" step="1"></div>
+            </div>
+            <label class="wsd-check"><input type="checkbox" id="wse-f-free"> <span>Intermediate graduates attend free, in the kept places</span></label>
+            <p class="wsd-summary" id="wse-priceline" aria-live="polite"></p>
+          </fieldset>
+
+          <fieldset>
+            <legend>How people join</legend>
+            <div class="wsd-seg" role="radiogroup" aria-label="How people join">
+              <label><input type="radio" name="wse-adm" id="wse-a-invite" value="invite" checked><span>Google Calendar invitation</span></label>
+              <label><input type="radio" name="wse-adm" id="wse-a-link" value="link"><span>Link in the confirmation email</span></label>
+            </div>
+            <div class="wsd-field" id="wse-cal-wrap"><label for="wse-f-cal">Google Calendar event ID</label><input type="text" id="wse-f-cal" maxlength="1024" autocomplete="off" spellcheck="false">
+              <span class="wsd-hint">From the event's address in Google Calendar. Paid people are added to this event automatically and removed if refunded. If you change the date here, change it on the event too.</span></div>
+            <div class="wsd-field"><label for="wse-f-join">Joining instructions</label><textarea id="wse-f-join" rows="4" maxlength="3000"></textarea><span class="wsd-hint">Private. Sent only to people with a confirmed place. Never shown on the page.</span></div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Page content</legend>
+            <div class="wsd-field"><span class="wsd-label">Why this workshop (paragraphs)</span><div class="wsd-list" id="wse-l-why"></div><button class="wsd-btn wsd-btn--sm" type="button" data-wsd-add="why">Add a paragraph</button></div>
+            <div class="wsd-field"><span class="wsd-label">What people will be able to do</span><div class="wsd-list" id="wse-l-outcomes"></div><button class="wsd-btn wsd-btn--sm" type="button" data-wsd-add="outcomes">Add an outcome</button></div>
+            <div class="wsd-field"><span class="wsd-label">What they leave with</span><div class="wsd-list" id="wse-l-leave"></div><button class="wsd-btn wsd-btn--sm" type="button" data-wsd-add="leave">Add an item</button></div>
+            <div class="wsd-field"><span class="wsd-label">Running order</span><div class="wsd-list" id="wse-l-run"></div><button class="wsd-btn wsd-btn--sm" type="button" data-wsd-add="run">Add a segment</button></div>
+            <div class="wsd-field"><span class="wsd-label">Questions and answers</span><div class="wsd-list" id="wse-l-faq"></div><button class="wsd-btn wsd-btn--sm" type="button" data-wsd-add="faq">Add a question</button></div>
+            <div class="wsd-grid wsd-grid--2">
+              <div class="wsd-field"><label for="wse-f-fit">Good fit</label><textarea id="wse-f-fit" rows="4" maxlength="1500"></textarea></div>
+              <div class="wsd-field"><label for="wse-f-notfit">Not a fit</label><textarea id="wse-f-notfit" rows="4" maxlength="1500"></textarea></div>
+            </div>
+            <div class="wsd-field"><label for="wse-f-bring">What to bring</label><input type="text" id="wse-f-bring" maxlength="600"></div>
+            <div class="wsd-field" id="wse-planned-wrap"><label for="wse-f-problem">The problem it solves (coming-soon page)</label><textarea id="wse-f-problem" rows="3" maxlength="1500"></textarea></div>
+            <div class="wsd-field"><label for="wse-f-fitline">Where it fits in the series (coming-soon page)</label><textarea id="wse-f-fitline" rows="2" maxlength="1000"></textarea></div>
+          </fieldset>
+          <details class="wsd-fold" id="wse-history-wrap"><summary>Change history</summary><pre class="wsd-history" id="wse-history"></pre></details>
+        </div>
+        <div class="wsd-drawer__foot">
+          <button class="wsd-btn wsd-btn--danger wsd-btn--sm wsd-spacer" type="button" id="wse-remove">Delete</button>
+          <button class="wsd-btn" type="button" data-wsd-close>Cancel</button>
+          <button class="wsd-btn" type="button" id="wse-draft">Save as draft</button>
+          <button class="wsd-btn wsd-btn--primary" type="submit" id="wse-save">Save and open registration</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Registration detail -->
+    <dialog class="wsd-drawer" id="ws-person" aria-labelledby="wsp-name">
+      <div class="wsd-drawer__form">
+        <div class="wsd-drawer__head"><div><h3 id="wsp-name">Registration</h3><p id="wsp-sub"></p></div>
+          <button class="wsd-btn wsd-btn--quiet wsd-btn--sm" type="button" data-wsd-close>Close</button></div>
+        <div class="wsd-drawer__body" id="wsp-body"></div>
+      </div>
+    </dialog>
+
+    <!-- Confirmation, with an optional typed reason -->
+    <dialog class="wsd-modal" id="ws-ask" aria-labelledby="wsa-title">
+      <form id="wsa-form" novalidate>
+        <h3 id="wsa-title">Are you sure?</h3>
+        <p id="wsa-text"></p>
+        <div class="wsd-field" id="wsa-fields"></div>
+        <p class="msg msg--bad" id="wsa-error" role="alert" hidden></p>
+        <div class="wsd-acts wsd-acts--end">
+          <button class="wsd-btn" type="button" data-wsd-close>Keep it</button>
+          <button class="wsd-btn wsd-btn--primary" type="submit" id="wsa-yes">Confirm</button>
+        </div>
+      </form>
+    </dialog>
   </section>
   <section class="sec-gap ops-view" data-ops-view="verification" aria-labelledby="enq-title">
     <h2 class="panel__title" id="enq-title">Verification enquiries &mdash; <span id="enq-count">0</span></h2>
@@ -880,6 +989,6 @@
 <script src="/assets/js/admin-previews.js?v=20261016-auto1" defer></script>
 <script src="/assets/js/admin-payments.js" defer></script>
 <script src="/assets/js/admin-studio.js?v=20261017-a" defer></script>
-<script src="/assets/js/admin-workshops.js?v=20261111-a" defer></script>
+<script src="/assets/js/admin-workshops.js?v=20261113-a" defer></script>
 </body>
 </html>

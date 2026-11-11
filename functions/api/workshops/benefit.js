@@ -2,11 +2,13 @@
  * applies (Foundations) or its reserved place is given (Intermediate graduate).
  *
  *   { step: "request", slug, email, certificate_id }
- *       If the certificate is eligible for this session, the email may claim
- *       it (the address recorded on the certificate, or one the admin
- *       authorised) and it has not been redeemed for this session, a 6-digit
- *       code is emailed to that address. The answer is the same either way, so
- *       this cannot be used to learn whose certificate is whose.
+ *       If the certificate is eligible for this session and not yet redeemed
+ *       for it:
+ *         - the email is the one on the certificate (or one the admin
+ *           authorised): verified at once, and the answer carries the token;
+ *         - any other email: a 6-digit code goes to the address ON THE
+ *           CERTIFICATE, never to the one typed, so a copied ID is useless.
+ *       Otherwise the answer is the generic one, the same as when a code is sent.
  *   { step: "confirm", slug, email, certificate_id, code }
  *       A correct code within 10 minutes and 5 tries returns a 30-minute,
  *       single-use verification token, which registration spends.
@@ -42,11 +44,15 @@ export async function onRequestPost({ request, env }) {
 
   if (body.step === "request") {
     const code = sixDigits();
-    const out = await rpc(env, "workshop_benefit_request", { p_slug: slug, p_email: email, p_credential_id: cred, p_code_hash: await bind(code) });
+    const token = newToken();
+    const out = await rpc(env, "workshop_benefit_request", { p_slug: slug, p_email: email, p_credential_id: cred,
+      p_code_hash: await bind(code), p_token_hash: await sha256Hex(token) });
     if (!out.ok) return json({ ok: false, code: "unavailable" }, 503);
+    if (out.data && out.data.verified === true) return json({ ok: true, verified: true, verification: token, tier: out.data.tier });
     if (out.data && out.data.send === true) {
       const text = "Your Bulletproof Automations verification code is " + code + ".\n\n" +
-        "It confirms your certificate for a workshop registration. It expires in 10 minutes and works once.\n\n" +
+        "Someone is registering for a workshop with your certificate, using the email " + email + ". " +
+        "If that is you, enter this code on the registration form. It expires in 10 minutes and works once.\n\n" +
         "If you did not ask for it, ignore this email. Nobody can use your certificate without this code.\n\nBulletproof Automations Training";
       const sent = await sendMail(env, {
         to: out.data.to,
@@ -54,7 +60,8 @@ export async function onRequestPost({ request, env }) {
         text: text,
         html: '<!doctype html><html><body style="font-family:Arial,sans-serif;color:#10251d;background:#f3efe5;padding:24px">' +
           '<p>Your Bulletproof Automations verification code is</p><p style="font-size:28px;font-weight:700;letter-spacing:.2em">' + esc(code) + "</p>" +
-          "<p>It confirms your certificate for a workshop registration. It expires in 10 minutes and works once.</p>" +
+          "<p>Someone is registering for a workshop with your certificate, using the email " + esc(email) + ". " +
+          "If that is you, enter this code on the registration form. It expires in 10 minutes and works once.</p>" +
           "<p>If you did not ask for it, ignore this email. Nobody can use your certificate without this code.</p></body></html>"
       });
       if (!sent.ok) console.log("workshop-benefit-mail-failed:", sent.code);

@@ -13,7 +13,7 @@ const u = (p: string) => new URL(p, import.meta.url)
 const pg = await loadDatabase([u('./fixtures/payment-ledger.sql'), u('./fixtures/supabase-stubs.sql'), u('./fixtures/graduate-records.sql'),
   u('../supabase/migrations/20261103120000_workshops.sql'), u('../supabase/migrations/20261109120000_workshop_admission_benefits.sql'),
   u('../supabase/migrations/20261110120000_workshop_calendar_sync.sql'), u('../supabase/migrations/20261111120000_workshop_waitlist.sql'),
-  u('../supabase/migrations/20261112120000_workshop_audit_corrections.sql')])
+  u('../supabase/migrations/20261112120000_workshop_audit_corrections.sql'), u('../supabase/migrations/20261113120000_workshop_admin_studio.sql')])
 const DB = serveDatabase(pg, 54341)
 
 const register = (await import('../functions/api/workshops/register.js')).onRequestPost
@@ -603,12 +603,19 @@ const codeSentTo = (email: string) => {
   const m = [...mail].reverse().find((x) => x.to[0] === email && /verification code/i.test(x.subject))
   return m ? m.text.match(/code is (\d{6})/)![1] : null
 }
-async function verifyCert(email: string, certificate_id: string) {
-  const req = await call(benefit, '/api/workshops/benefit', { step: 'request', slug: 'automate-invoices', email, certificate_id })
+/* Release 6: the certificate's own email (or one the admin authorised) is verified
+   at once; any other email gets the generic answer and a code goes to the address
+   on the certificate. This returns the token the person typing `email` can obtain. */
+async function verifyCert(email: string, certificate_id: string, slug = 'automate-invoices') {
+  const req = await call(benefit, '/api/workshops/benefit', { step: 'request', slug, email, certificate_id })
+  if (req.json.verified === true) {
+    assertEquals(typeof req.json.verification, 'string')
+    return req.json.verification as string
+  }
   assertEquals(req.json, { ok: true, sent: 'if_eligible' }, 'the same answer whatever the outcome')
   const code = codeSentTo(email)
   if (!code) return null
-  const ok = await call(benefit, '/api/workshops/benefit', { step: 'confirm', slug: 'automate-invoices', email, certificate_id, code })
+  const ok = await call(benefit, '/api/workshops/benefit', { step: 'confirm', slug, email, certificate_id, code })
   return ok.json.verification as string
 }
 const payable = async (email: string) => (await rows(`select public.workshop_commission_payable(r) p from public.workshop_registrations r
@@ -720,38 +727,45 @@ Deno.test('release 8: unknown, expired, suspended, self and lapsed-referrer code
   await adminPost({ action: 'suspend_referrer', credential_id: 'BPA-TRN-2026-GRAD01' })
   await bad('c@example.com', 'KWAME50')
   await bad('abena@example.com', 'ABENA50')            // the referrer's own email
+  // Release 6: a referral code no longer needs a graduate behind it, so a referrer
+  // whose certificate lapses keeps a working code (suspend it to stop it).
   await pg.exec(`update public.credentials set status = 'revoked' where credential_id = 'BPA-TRN-2026-GRAD02'`)
-  await bad('d@example.com', 'ABENA50')                // referrer no longer eligible
+  assertEquals((await call(quote, '/api/workshops/quote', { slug: 'automate-invoices', email: 'd@example.com', ref: 'ABENA50' })).json.price_ghs, 300)
   assertEquals((await rows(`select count(*)::int n from public.workshop_registrations`))[0].n, 0)
   assertEquals(paystack.initialized.length, 0)
 })
 
 Deno.test('release 9: certificate claims need the one-time code from the certificate email; sharing, guessing and replay fail', opts, async () => {
   await reset({ ...RELEASE }); await seedRecords()
-  // Someone else's (public) certificate ID with my email: same answer, no code sent anywhere.
+  // Someone else's (public) certificate ID with my email: the generic answer, and the
+  // code goes to the certificate's own address (release 6), never to mine.
   mail.length = 0
   assertEquals(await verifyCert('me@example.com', 'BPA-FND-2026-AAAAAA'), null)
+  assertEquals(mail.map((m) => m.to[0]), ['efua@example.com'])
   assertEquals(await verifyCert('revoked@example.com', 'BPA-FND-2026-RRRRRR'), null)
   assertEquals(await verifyCert('owing@example.com', 'BPA-TRN-2026-OWING1'), null)
-  assertEquals(mail.length, 0)
+  assertEquals(mail.length, 1, 'ineligible certificates get no code at all')
   // A certificate ID alone, with no token, gives no benefit.
   const plain = await reg({ email: 'efua@example.com', certificate_id: 'BPA-FND-2026-AAAAAA', expected_price: 350 })
   assertEquals(plain.json.price_ghs, 350)
   await reset({ ...RELEASE }); await seedRecords()
-  // Guessing: five wrong codes burn the request.
-  await call(benefit, '/api/workshops/benefit', { step: 'request', slug: 'automate-invoices', email: 'efua@example.com', certificate_id: 'BPA-FND-2026-AAAAAA' })
+  // Guessing: five wrong codes burn the request. (A different email from the
+  // certificate's, so a code is needed; it goes to the certificate's address.)
+  await call(benefit, '/api/workshops/benefit', { step: 'request', slug: 'automate-invoices', email: 'efua.work@example.com', certificate_id: 'BPA-FND-2026-AAAAAA' })
   const real = codeSentTo('efua@example.com')!
   const wrong = real === '000000' ? '111111' : '000000'
   for (let i = 0; i < 5; i++) {
-    const r = await call(benefit, '/api/workshops/benefit', { step: 'confirm', slug: 'automate-invoices', email: 'efua@example.com', certificate_id: 'BPA-FND-2026-AAAAAA', code: wrong })
+    const r = await call(benefit, '/api/workshops/benefit', { step: 'confirm', slug: 'automate-invoices', email: 'efua.work@example.com', certificate_id: 'BPA-FND-2026-AAAAAA', code: wrong })
     assertEquals(r.json.ok, false)
   }
-  const late = await call(benefit, '/api/workshops/benefit', { step: 'confirm', slug: 'automate-invoices', email: 'efua@example.com', certificate_id: 'BPA-FND-2026-AAAAAA', code: real })
+  const late = await call(benefit, '/api/workshops/benefit', { step: 'confirm', slug: 'automate-invoices', email: 'efua.work@example.com', certificate_id: 'BPA-FND-2026-AAAAAA', code: real })
   assertEquals(late.json.ok, false, 'the right code after five misses is refused')
   // Throttle: a fourth request in an hour sends nothing.
   mail.length = 0
-  for (let i = 0; i < 3; i++) await call(benefit, '/api/workshops/benefit', { step: 'request', slug: 'automate-invoices', email: 'efua@example.com', certificate_id: 'BPA-FND-2026-AAAAAA' })
+  for (let i = 0; i < 3; i++) await call(benefit, '/api/workshops/benefit', { step: 'request', slug: 'automate-invoices', email: 'efua.work@example.com', certificate_id: 'BPA-FND-2026-AAAAAA' })
   assertEquals(mail.filter((m) => m.to[0] === 'efua@example.com').length, 2, '3 requests an hour, the first already used')
+  // The certificate's own email is throttled the same way: no instant token either.
+  assert(!(await verifyCert('efua@example.com', 'BPA-FND-2026-AAAAAA')), 'throttled: no token')
   await pg.exec(`update public.workshop_benefit_verifications set created_at = now() - interval '2 hours'`)
   // A token works once, for its own email only.
   const t = (await verifyCert('esi@example.com', 'BPA-FND-2026-BBBBBB'))!
@@ -873,10 +887,7 @@ Deno.test('isolation: a live deployment cannot register on a test session; test 
     const t = await reg({ slug: 'rehearsal-what-to-charge', email, expected_price: 350 })
     await pay(t.json.reference, 35000)
   }
-  const tg = await call(benefit, '/api/workshops/benefit', { step: 'request', slug: 'rehearsal-what-to-charge', email: 'abena@example.com', certificate_id: 'BPA-TRN-2026-GRAD02' })
-  assertEquals(tg.json.ok, true)
-  const code = codeSentTo('abena@example.com')!
-  const tok = (await call(benefit, '/api/workshops/benefit', { step: 'confirm', slug: 'rehearsal-what-to-charge', email: 'abena@example.com', certificate_id: 'BPA-TRN-2026-GRAD02', code })).json.verification
+  const tok = (await verifyCert('abena@example.com', 'BPA-TRN-2026-GRAD02', 'rehearsal-what-to-charge'))!
   assertEquals((await reg({ slug: 'rehearsal-what-to-charge', email: 'abena@example.com', verification: tok, expected_price: 0 })).json.state, 'confirmed')
   assertEquals(await seats('rehearsal-what-to-charge'), { g: 2, r: 1 })
   // The live workshop is untouched: every place still free, and both kinds still bookable.
@@ -884,10 +895,7 @@ Deno.test('isolation: a live deployment cannot register on a test session; test 
   const live = await call(session, '/api/workshops/session?slug=automate-invoices', null, LIVE)
   assertEquals([live.json.status, live.json.general_full, live.json.graduate_places_open], ['open', false, true])
   // A graduate who rehearsed can still redeem the same certificate on the live workshop.
-  const t2 = await call(benefit, '/api/workshops/benefit', { step: 'request', slug: 'automate-invoices', email: 'abena@example.com', certificate_id: 'BPA-TRN-2026-GRAD02' })
-  assertEquals(t2.json.ok, true)
-  const code2 = codeSentTo('abena@example.com')!
-  const tok2 = (await call(benefit, '/api/workshops/benefit', { step: 'confirm', slug: 'automate-invoices', email: 'abena@example.com', certificate_id: 'BPA-TRN-2026-GRAD02', code: code2 })).json.verification
+  const tok2 = (await verifyCert('abena@example.com', 'BPA-TRN-2026-GRAD02'))!
   assertEquals((await liveReg({ email: 'abena@example.com', verification: tok2, expected_price: 0 })).json.state, 'confirmed')
   assertEquals(await seats('automate-invoices'), { g: 0, r: 1 })
   // Test rows are identified by the database itself.

@@ -1,56 +1,36 @@
 # Webinar and workshop content
 
-One JSON file per scheduled session, named `<slug>.json`. Never shipped; the build reads it and
-generates `/workshops` and `/workshops/<slug>` (see `scripts/workshops.js`).
+**Since release 6 (November 2026) workshops are managed in `/admin/workshops/`, not here.**
+Each workshop's page content lives on its `workshop_sessions` row (`content`), and the series
+text lives in `workshop_series`. The public pages at `/workshops` and `/workshops/<slug>` are
+rendered on request from the database by `functions/workshops/[[path]].js`, so a workshop
+created, edited, opened, closed, cancelled or deleted in the admin is live at once, with no
+GitHub change and no deploy.
 
-- `"status": "draft"` never renders. Set `"published"` only when every detail is real.
-- The build refuses a published file with a missing field, a past start time, or any
-  `[PLACEHOLDER]`, TODO or TBC.
-- The matching `workshop_sessions` row in Supabase is the authority for price, time, capacity and
-  whether registration is open. Create it with the same `slug`, `starts_at` and `price_ghs`; a
-  registration is refused if the page and the database disagree.
-- `tests/fixtures/workshops/sample-webinar.json` shows every field. It is a test fixture with
-  sample content and must never be copied here as published.
-- Optional fields `why` (paragraphs) and `outcomes` (a numbered list) add "Why this workshop" and
-  "What you will be able to do" sections.
-- **Opening registration is a database change, not a deploy.** Keep the row `draft` until go-live:
-  the page then says registration isn't open yet, and the API refuses bookings. Set it to
-  `published` to open.
+What the admin enforces (in `workshop_admin_session()`, not only in the page):
 
-## Series
+- Registration opens only with a future date, a short description and, for invitation-only
+  workshops, the Google Calendar event attached.
+- Places never go below the people who already hold one.
+- The page address can't change once registration has opened, so shared links keep working.
+- A workshop anyone has registered or queued for is cancelled, never deleted, and its paid
+  places stay on record for a refund or a move.
+- A meeting link can't go on the public page: joining details are private and live only in
+  the joining instructions, which go to confirmed people.
+- Every change is stamped in the row's `admin_notes`.
 
-`series/<slug>.json` groups sessions under one name. Today there is one series,
-`get-paid-for-automation`. Each entry is one of two kinds:
-
-- `{ "number": 1, "session": "<slug>" }`: a published session file. It is bookable.
-- `{ "number": 2, "status": "planned", "slug", "title", "headline", "problem", "audience", "outcomes", "series_fit" }`:
-  copy only. It gets a coming-soon page with no form.
-
-The build refuses the series if any of these is true:
-
-- a planned entry carries `starts_at`, `price_ghs`, `capacity`, `duration_minutes` or any other
-  schedule field;
-- a session entry points at a file that is not published;
-- the numbers are not 1, 2, 3 and so on in order.
-
-Planned workshops never get a database row, so the registration API refuses them.
-
-To schedule a planned workshop, add its session file with real values and a matching `draft` row,
-then replace its series entry with `{ "number": n, "session": "<slug>" }`. Keep the same slug so its
-URL does not change.
-
-`materials/<session slug>/` holds participant materials. They are never published (see its README).
+`materials/<session slug>/` still holds participant materials. They are never published (see its
+README).
 
 ## Joining links never go here
 
 This repository is public. A workshop's Meet (or other) joining link lives only in
 `workshop_sessions.join_instructions` on its database row, and reaches confirmed participants
-by email. The build fails on a meeting link or a `join_instructions` field in any file in this
-folder, draft or not.
+by email or Calendar invitation. The page renderer never selects it.
 
 ## Refund policy
 
 Paid forms link to the webinar and workshop terms: section 23, "Webinars and workshops", of the
-existing `/refund-policy` page (`refund-policy/index.html#workshops`). No separate policy page is
-built. When the terms change, update that section's version line and `TERMS_VERSION` in
-`functions/api/_workshops.js` together; a build test fails if they differ.
+existing `/refund-policy` page (`refund-policy/index.html#workshops`). When the terms change,
+update that section's version line and `TERMS_VERSION` in `functions/api/_workshops.js`
+together; `tests/workshops-render.test.js` fails if they differ.

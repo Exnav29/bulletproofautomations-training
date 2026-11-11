@@ -232,27 +232,18 @@ for (const item of publicPaths) {
 }
 
 /* --------------------------------------------------------------------------
-   Webinars and workshops: generated from content/workshops/*.json (which
-   never ships). With no published session nothing is emitted at all: no
-   route, no nav item, no sitemap entry. A published file that is incomplete,
-   in the past, or carries a [PLACEHOLDER] fails the build. See
-   scripts/workshops.js.
+   Webinars and workshops: rendered on request from the database since
+   release 6 (functions/workshops/[[path]].js), because they are created and
+   edited in /admin/workshops/. The build writes only the page shell, and the
+   nav and footer always carry the link (the series is always there to see).
+   /sitemap.xml adds the live workshop pages at request time.
    -------------------------------------------------------------------------- */
 const workshops = require("./workshops.js");
-// WORKSHOP_CONTENT_DIR lets local QA and CI render the test fixtures. It is
-// ignored on Cloudflare Pages, so a fixture can never reach production.
-const workshopDir = process.env.WORKSHOP_CONTENT_DIR && !process.env.CF_PAGES
-  ? path.resolve(root, process.env.WORKSHOP_CONTENT_DIR)
-  : path.join(root, "content", "workshops");
-const workshopSessions = workshops.loadSessions(workshopDir);
-const workshopPaths = workshops.render(workshopSessions, dist, workshops.loadSeries(workshopDir, workshopSessions));
-const navItem = workshopPaths.length
-  ? '<li><a href="/workshops" aria-current="{{n_workshops}}">Webinars and workshops</a></li>' : "";
-const footItem = workshopPaths.length ? '<li><a href="/workshops">Webinars and workshops</a></li>' : "";
-// The whole marker line goes when there is nothing to show, so no blank,
-// whitespace-only line is left behind for html-validate to reject.
-partialCache.set("header.html", readPartial("header.html").replace(/\n[ \t]*<!-- workshops-nav -->/, navItem ? "\n          " + navItem : ""));
-partialCache.set("footer.html", readPartial("footer.html").replace(/\n[ \t]*<!-- workshops-footer -->/, footItem ? "\n          " + footItem : ""));
+const workshopPaths = workshops.writeShell(dist);
+const navItem = '<li><a href="/workshops" aria-current="{{n_workshops}}">Webinars and workshops</a></li>';
+const footItem = '<li><a href="/workshops">Webinars and workshops</a></li>';
+partialCache.set("header.html", readPartial("header.html").replace(/\n[ \t]*<!-- workshops-nav -->/, "\n          " + navItem));
+partialCache.set("footer.html", readPartial("footer.html").replace(/\n[ \t]*<!-- workshops-footer -->/, "\n          " + footItem));
 if (workshopPaths.length) {
   const sitemapFile = path.join(dist, "sitemap.xml");
   const entries = workshopPaths.map(function (p) {
@@ -351,4 +342,4 @@ console.log(
   "Built " + (publicPaths.length - missing.length) + " of " + publicPaths.length +
   " declared paths into dist/ - resolved includes in " + processed + " page(s)"
 );
-console.log("Webinar and workshop pages: " + (workshopPaths.length ? workshopPaths.join(", ") : "none published, so none built"));
+console.log("Webinar and workshop pages: rendered on request from the database (shell at /workshops/_shell.html)");

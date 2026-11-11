@@ -3,7 +3,7 @@
  * re-registering sends this browser's status token (Codex audit, 9 November 2026).
  * Run after `npm install` of the Studio test deps (jsdom), and after building the
  * fixture pages:
- *   WORKSHOP_CONTENT_DIR=tests/fixtures/workshops npm run build && node tests/workshops-page.test.mjs */
+ *   npm run build && node tests/render-workshop-pages.mjs samples && node tests/workshops-page.test.mjs */
 import fs from "node:fs";
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
@@ -73,18 +73,16 @@ console.log("workshops page: sold-out retry and token resume ok");
 // Codex audit 2: the open places are free but the reserved graduate places are taken.
 // A confirmed graduate is told so and joins the graduate waitlist, instead of being
 // told the session is full. Rendered from the fixture with graduate places added.
+// The sample session with graduate places added, rendered as the request handler renders it.
+const pages = await import("../functions/api/_workshop_pages.js");
+const shell = fs.readFileSync("dist/workshops/_shell.html", "utf8");
+function gradPage() {
+  const rows = JSON.parse(fs.readFileSync("tests/fixtures/workshop-rows.json", "utf8")).samples;
+  Object.assign(rows[0], { graduate_free: true, reserved_graduate_seats: 5, foundations_discount_pct: 20 });
+  return pages.fill(shell, pages.route("/workshops/sample-webinar", pages.catalog(rows, [], Date.parse("2026-11-11T00:00:00Z"))));
+}
 {
-  const { createRequire } = await import("node:module");
-  const os = await import("node:os");
-  const path = await import("node:path");
-  const gen = createRequire(import.meta.url)("../scripts/workshops.js");
-  const src = fs.mkdtempSync(path.join(os.tmpdir(), "ws-grad-src-"));
-  const out = fs.mkdtempSync(path.join(os.tmpdir(), "ws-grad-out-"));
-  const data = JSON.parse(fs.readFileSync("tests/fixtures/workshops/sample-webinar.json", "utf8"));
-  Object.assign(data, { graduate_free: true, reserved_graduate_seats: 5, foundations_discount_pct: 20 });
-  fs.writeFileSync(path.join(src, "sample-webinar.json"), JSON.stringify(data));
-  gen.render(gen.loadSessions(src), out, []);
-  const gradHtml = fs.readFileSync(path.join(out, "workshops", "sample-webinar", "index.html"), "utf8");
+  const gradHtml = gradPage();
   const dom = new JSDOM(gradHtml, { url: "https://training.example/workshops/sample-webinar/", runScripts: "outside-only" });
   const w = dom.window;
   const main = w.document.querySelector("main[data-ws-page]");
@@ -124,8 +122,41 @@ console.log("workshops page: sold-out retry and token resume ok");
   assert.equal(sent.length, 1);
   assert.equal(sent[0].url, "/api/workshops/waitlist", "a graduate was sent to registration, where the reserved places are full");
   assert.equal(sent[0].body.verification, TOKEN, "joins the graduate queue, with the confirmed certificate");
-  fs.rmSync(src, { recursive: true, force: true });
-  fs.rmSync(out, { recursive: true, force: true });
 }
 
 console.log("workshops page: graduate waitlist when the reserved places are taken ok");
+
+// Release 6: the email on the certificate applies its price at once, with no code to type.
+{
+  const dom = new JSDOM(gradPage(), { url: "https://training.example/workshops/sample-webinar/", runScripts: "outside-only" });
+  const w = dom.window;
+  const main = w.document.querySelector("main[data-ws-page]");
+  const posts = [];
+  const reply = (body, status = 200) => ({ status, ok: status < 400, json: async () => body });
+  w.fetch = async (url, init) => {
+    const u = String(url);
+    if (u.startsWith("/api/workshops/session")) {
+      return reply({ ok: true, session: { slug: "sample-webinar", price_ghs: Number(main.dataset.price), starts_at: main.dataset.starts },
+        open: true, full: false, general_full: false, graduate_places_open: true, waitlist_open: false, graduate_waitlist_open: false, status: "open" });
+    }
+    const body = init && init.body ? JSON.parse(init.body) : {};
+    posts.push({ url: u, body });
+    if (u === "/api/workshops/benefit" && body.step === "request") return reply({ ok: true, verified: true, verification: TOKEN, tier: "foundations" });
+    if (u === "/api/workshops/quote") return reply({ ok: true, price_ghs: 120, list_price_ghs: 150, discount_kind: "foundations" });
+    return reply({ ok: true });
+  };
+  w.eval(script);
+  await new Promise((r) => setTimeout(r, 50));
+  const form = w.document.querySelector("[data-ws-form]");
+  form.elements.email.value = "esi@example.com";
+  form.elements.certificate_id.value = "BPA-FND-2026-AAAAAA";
+  w.document.querySelector("[data-ws-cert-send]").click();
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(w.document.querySelector("[data-ws-cert-code]").hidden, true, "no code box when the email matches");
+  assert.match(w.document.querySelector("[data-ws-cert-status]").textContent, /Certificate applied: the Foundations certificate price/);
+  const q = posts.filter((p) => p.url === "/api/workshops/quote").at(-1);
+  assert.equal(q.body.verification, TOKEN, "the price is quoted with the certificate");
+  assert.equal(posts.filter((p) => p.url === "/api/workshops/benefit").length, 1, "one request, no confirm step");
+}
+
+console.log("workshops page: certificate applied at once for its own email ok");
