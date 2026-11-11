@@ -12,7 +12,8 @@ const html = fs.readFileSync("dist/workshops/sample-webinar/index.html", "utf8")
 const script = fs.readFileSync("assets/js/workshops.js", "utf8");
 const TOKEN = "T".repeat(43);
 
-async function soldOutPage(stored) {
+const FULL = { open: false, full: true, general_full: true, graduate_places_open: false, waitlist_open: true, status: "full" };
+async function soldOutPage(stored, availability = FULL) {
   const dom = new JSDOM(html, { url: "https://training.example/workshops/sample-webinar/", runScripts: "outside-only" });
   const w = dom.window;
   if (stored) w.localStorage.setItem("bpa_ws_sample-webinar", JSON.stringify(stored));
@@ -22,8 +23,7 @@ async function soldOutPage(stored) {
   w.fetch = async (url, init) => {
     const u = String(url);
     if (u.startsWith("/api/workshops/session")) {
-      return reply({ ok: true, session: { slug: "sample-webinar", price_ghs: Number(main.dataset.price), starts_at: main.dataset.starts },
-        open: false, full: true, general_full: true, graduate_places_open: false, waitlist_open: true, status: "full" });
+      return reply(Object.assign({ ok: true, session: { slug: "sample-webinar", price_ghs: Number(main.dataset.price), starts_at: main.dataset.starts } }, availability));
     }
     if (init && init.method === "POST") {
       posts.push({ url: u, body: JSON.parse(init.body) });
@@ -66,6 +66,17 @@ async function soldOutPage(stored) {
   assert.equal(p.posts[0].body.token, TOKEN, "this browser's status token is sent");
   // Refused (another browser's registration): told plainly, nothing else.
   assert.match(p.error(), /already has a registration for this session/);
+}
+
+// A browser that registered before, on a session with places left (e.g. after a
+// refund), sees the normal form and no "Session full" notice.
+{
+  const p = await soldOutPage({ token: TOKEN, reference: null },
+    { open: true, full: false, general_full: false, graduate_places_open: true, waitlist_open: false, status: "open" });
+  const shown = Array.from(p.w.document.querySelectorAll(".ws-banner")).filter((b) => !b.hidden).map((b) => b.textContent).join(" ");
+  assert.doesNotMatch(shown, /Session full/, "an open session was called full");
+  assert.ok(!p.w.document.querySelector("[data-ws-switch-waitlist]"), "waitlist switch offered on an open session");
+  assert.notEqual(p.submit.textContent, "Join the waitlist");
 }
 
 console.log("workshops page: sold-out retry and token resume ok");
