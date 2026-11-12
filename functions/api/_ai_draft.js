@@ -150,8 +150,29 @@ export function usable(c) {
     arr("faq", 3) && c.faq.every(function (f) { return f && f.q && f.a; });
 }
 
+/* Time. Cloudflare closes any request that has not answered within 100 seconds
+   and hands the browser its own error page (HTTP 524) instead of ours. Four
+   models at 60 seconds each could take four minutes, so a slow free model
+   produced that page and the admin could only say "The change was refused."
+   The whole draft now fits a budget well inside the limit, and each model gets
+   at most what is left of it. */
+const BUDGET_MS = 80000, PER_MODEL_MS = 45000, MIN_TRY_MS = 8000;
+
+/* A model that just timed out or failed is tried last for a while, so the next
+   press does not wait on it again. Per isolate, which is enough. */
+const RECENT_FAIL_MS = 15 * 60 * 1000;
+const failedAt = new Map();
+function preferWorking(models, now) {
+  const recent = function (m) { const t = failedAt.get(m.id); return t && now - t < RECENT_FAIL_MS ? 1 : 0; };
+  return models.map(function (m, i) { return { m: m, i: i }; })
+    .sort(function (a, b) { return recent(a.m) - recent(b.m) || a.i - b.i; }).map(function (x) { return x.m; });
+}
+
 /** { ok: true, model, content } or { ok: false, error, tried }. Never throws. */
-export async function draftContent(env, input, origin) {
+export async function draftContent(env, input, origin, limits) {
+  const started = Date.now();
+  const budget = (limits && limits.budgetMs) || BUDGET_MS, perModel = (limits && limits.perModelMs) || PER_MODEL_MS;
+  const minTry = (limits && limits.minTryMs) || MIN_TRY_MS;
   if (!env.OPENROUTER_API_KEY) {
     return { ok: false, error: "AI drafting isn't connected. Add OPENROUTER_API_KEY to the Cloudflare Pages project (Production and Preview), then redeploy." };
   }
@@ -161,7 +182,9 @@ export async function draftContent(env, input, origin) {
   if (!models.length) return { ok: false, error: "OpenRouter lists no free models suitable for writing a page right now. Try again later." };
 
   const tried = [];
-  for (const m of models.slice(0, 4)) {
+  for (const m of preferWorking(models, Date.now()).slice(0, 4)) {
+    const left = budget - (Date.now() - started);
+    if (left < minTry) { tried.push("no time left for " + m.id); break; }
     const body = {
       model: m.id, max_tokens: 6000, temperature: 0.4,
       messages: [{ role: "system", content: RULES }, { role: "user", content: prompt(input) }]
@@ -169,7 +192,8 @@ export async function draftContent(env, input, origin) {
     if (m.structured) body.response_format = { type: "json_schema", json_schema: { name: "workshop_page", strict: true, schema: SCHEMA } };
     else if (m.json) body.response_format = { type: "json_object" };
     const ctl = new AbortController();
-    const timer = setTimeout(function () { ctl.abort(); }, 60000);
+    const timer = setTimeout(function () { ctl.abort(); }, Math.min(perModel, left));
+    let ok = false;
     try {
       const res = await fetch(api(env) + "/chat/completions", {
         method: "POST", signal: ctl.signal,
@@ -182,12 +206,16 @@ export async function draftContent(env, input, origin) {
       const msg = out && out.choices && out.choices[0] && out.choices[0].message;
       const content = parse(msg && msg.content);
       if (!usable(content)) { tried.push(m.id + " (incomplete draft)"); continue; }
+      ok = true;
       return { ok: true, model: (out && out.model) || m.id, content: content };
     } catch (err) {
       tried.push(m.id + (err && err.name === "AbortError" ? " (timed out)" : " (unreachable)"));
-    } finally { clearTimeout(timer); }
+    } finally {
+      clearTimeout(timer);
+      if (ok) failedAt.delete(m.id); else failedAt.set(m.id, Date.now());
+    }
   }
-  return { ok: false, error: "No free model produced a usable draft just now (" + tried.join(", ") + "). Try again in a few minutes.", tried: tried };
+  return { ok: false, error: "No free model produced a usable draft in time (" + tried.join(", ") + "). Nothing was changed. Press Generate again: models that just failed are tried last.", tried: tried };
 }
 
-export function resetModelCache() { cache = { at: 0, models: null }; }
+export function resetModelCache() { cache = { at: 0, models: null }; failedAt.clear(); }

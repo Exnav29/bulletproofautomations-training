@@ -334,6 +334,47 @@ Deno.test('Generate draft content: free models only, best first, past a bad draf
   assertEquals(asked.length, 0)
 })
 
+Deno.test('Generate draft content answers inside its time budget when models hang, and tries the failed ones last next time', opts, async () => {
+  ai.resetModelCache()
+  const hang = new Set(['flaky/thinker-120b:free', 'good/writer-70b:free'])
+  const prior = globalThis.fetch
+  const order: string[] = []
+  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url)
+    if (url.host === 'openrouter.ai' && url.pathname === '/api/v1/chat/completions') {
+      const model = JSON.parse(String(init!.body)).model
+      order.push(model)
+      if (hang.has(model)) {
+        // Never answers; only the abort ends it, as with a stalled free model.
+        return await new Promise<Response>((_, reject) => init!.signal!.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError'))))
+      }
+      return Response.json({ model, choices: [{ message: { content: JSON.stringify(DRAFT) } }] })
+    }
+    return prior(input, init)
+  }
+  try {
+    const input = { title: 'Who should you sell to', brief: 'Pick the clients worth your time.', duration_minutes: 180 }
+    const limits = { budgetMs: 400, perModelMs: 150, minTryMs: 120 }
+    const t0 = Date.now()
+    const first: Row = await ai.draftContent(ENV, input, 'https://example.test', limits)
+    const took = Date.now() - t0
+    assert(took < 600, 'stopped inside the budget, took ' + took + 'ms')
+    assertEquals(first.ok, false)
+    assert(/timed out/.test(first.error) && /Nothing was changed/.test(first.error), first.error)
+    assertEquals(order, ['flaky/thinker-120b:free', 'good/writer-70b:free'], 'the third model was not started without time for it')
+    // Next press: the two that just hung go last, so a working model answers first.
+    order.length = 0
+    const second: Row = await ai.draftContent(ENV, input, 'https://example.test', limits)
+    assertEquals(second.ok, true, second.error)
+    assertEquals(order[0] !== 'flaky/thinker-120b:free' && order[0] !== 'good/writer-70b:free', true, order.join(','))
+  } finally { globalThis.fetch = prior; ai.resetModelCache() }
+})
+
+Deno.test('the admin page explains an answer that never came from the site', opts, async () => {
+  const src = await Deno.readTextFile(u('../assets/js/admin-workshops.js'))
+  assert(/r\.status === 524/.test(src) && /took too long to answer/.test(src), 'a Cloudflare timeout is named, not reported as a refusal')
+})
+
 Deno.test('the release 7 rollback restores release 6 and the release applies again', opts, async () => {
   await pg.exec(await Deno.readTextFile(u('../supabase/migrations/rollback/20261114120000_workshop_admin_streamline_down.sql')))
   assertEquals((await rows(`select count(*)::int n from information_schema.columns where table_name = 'workshop_sessions' and column_name in ('meet_link','calendar_status')`))[0].n, 0)
