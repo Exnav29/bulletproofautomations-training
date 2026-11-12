@@ -20,6 +20,10 @@ test("the real rows publish one bookable workshop and nine coming-soon pages, in
   const w01 = p.route("/workshops/what-to-charge-for-automation", cat);
   assert.match(w01.body, /data-ws-short/);
   assert.match(w01.body, /data-price="350"/);
+  assert.match(w01.body, /<dt>Registration closes<\/dt><dd><strong>/);
+  assert.match(w01.body, /<dt>Places<\/dt><dd>30 people<\/dd>/);
+  assert.doesNotMatch(w01.body, /Seven days before the start\. No registrations after that, at any price\./);
+  assert.doesNotMatch(w01.body, /open places and \d+ reserved for Intermediate graduates/);
   assert.match(p.route("/workshops/what-to-charge-for-automation/register", cat).body, /data-ws-form/);
   assert.equal(p.when(cat.listed[0]).accra, "11:30 AM");
   assert.equal(p.when(cat.listed[0]).lagos, "12:30 PM");

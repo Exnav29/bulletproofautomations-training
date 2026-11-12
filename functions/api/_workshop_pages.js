@@ -140,11 +140,11 @@ function cta(s) { return s.price_ghs === 0 ? "Register for free" : "Register and
 function factsList(s, w) {
   return '<dl class="ws-facts">\n' +
     '  <dt>When</dt><dd><span class="ws-date">' + esc(w.long) + '</span><small>' + esc(w.accra) + ' in Accra<br>' + esc(w.lagos) + ' in Lagos</small></dd>\n' +
-    '  <dt>Registration closes</dt><dd><strong>' + esc(w.closes) + ' in Accra</strong><small>Seven days before the start. No registrations after that, at any price.</small></dd>\n' +
+    '  <dt>Registration closes</dt><dd><strong>' + esc(w.closes) + ' in Accra</strong></dd>\n' +
     '  <dt>Length</dt><dd>' + esc(duration(s.duration_minutes)) + ', ' + esc(s.format) + '</dd>\n' +
     '  <dt>Fee</dt><dd>' + esc(fee(s)) + (s.price_ghs > 0 ? '<small>MoMo or card, through Paystack</small>' : '') + '</dd>\n' +
     (s.capacity ? '  <dt>Places</dt><dd>' + esc(s.capacity + (s.reserved_graduate_seats || 0)) + ' people' +
-      (s.reserved_graduate_seats ? '<small>' + esc(s.capacity) + ' open places and ' + esc(s.reserved_graduate_seats) + ' reserved for Intermediate graduates</small>' : '') + '</dd>\n' : '') +
+      '</dd>\n' : '') +
     (s.audience ? '  <dt>For</dt><dd>' + esc(s.audience) + '</dd>\n' : '') + '</dl>';
 }
 
