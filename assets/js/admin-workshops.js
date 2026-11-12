@@ -762,7 +762,7 @@
     if (title.length < 3 || brief.length < 10) { note.textContent = "Give it a title, and a sentence or two about what it covers."; return; }
     var go = function () {
       btn.disabled = true;
-      note.textContent = "Writing a draft with a free AI model. This can take up to a minute.";
+      note.textContent = "Writing a draft with a free AI model. This usually takes about a minute, and can take up to three.";
       return apiPost({ action: "content_draft", title: title, brief: brief, kind: $("wse-k-webinar").checked ? "webinar" : "workshop",
         duration_minutes: Number($("wse-f-dur").value), series_slug: $("wse-f-series").value, series_number: Number($("wse-f-number").value) || 0 })
         .then(function (j) {
