@@ -57,7 +57,12 @@
     var go = current.expires_at && Date.now() > current.expires_at ? refresh().then(function (fresh) { return send(fresh.access_token); }) : send(current.access_token);
     return go.then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) {
       // The answer travels with the error, so a caller can offer Retry (release 7).
-      if (!r.ok || !j.ok) { var err = new Error(j.error || "The change was refused."); err.data = j; throw err; }
+      // No sentence from the site means the answer never came from it: a timeout
+      // or an error page from Cloudflare (AI drafting produced HTTP 524 here).
+      var fallback = r.ok ? "The change was refused." : r.status === 524 || r.status === 504 || r.status === 502
+        ? "The server took too long to answer (HTTP " + r.status + "). Nothing was changed. Try again."
+        : "The site could not complete that (HTTP " + r.status + "). Nothing was changed. Try again.";
+      if (!r.ok || !j.ok) { var err = new Error(j.error || fallback); err.data = j; throw err; }
       return j;
     }); });
   }
