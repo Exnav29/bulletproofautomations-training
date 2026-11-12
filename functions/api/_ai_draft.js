@@ -150,13 +150,15 @@ export function usable(c) {
     arr("faq", 3) && c.faq.every(function (f) { return f && f.q && f.a; });
 }
 
-/* Time. Cloudflare closes any request that has not answered within 100 seconds
-   and hands the browser its own error page (HTTP 524) instead of ours. Four
-   models at 60 seconds each could take four minutes, so a slow free model
-   produced that page and the admin could only say "The change was refused."
-   The whole draft now fits a budget well inside the limit, and each model gets
-   at most what is left of it. */
-const BUDGET_MS = 80000, PER_MODEL_MS = 45000, MIN_TRY_MS = 8000;
+/* Time and length, from the owner's OpenRouter activity on 12 November 2026.
+   The free models ranked first are reasoning models, and their thinking counts
+   as output: 11 of 23 calls stopped at exactly 6,000 tokens ("length"), cut off
+   mid-draft, after 25 to 50 seconds each; the good drafts used 5,100 to 6,000
+   tokens and took up to 56 seconds. So thinking is asked to stay low, the cap
+   leaves room for a whole page, and a model gets long enough to finish one.
+   The admin endpoint streams its answer (workshops.js), so Cloudflare's
+   100-second limit no longer bounds the total; this budget does. */
+const BUDGET_MS = 170000, PER_MODEL_MS = 90000, MIN_TRY_MS = 25000, MAX_TOKENS = 14000;
 
 /* A model that just timed out or failed is tried last for a while, so the next
    press does not wait on it again. Per isolate, which is enough. */
@@ -186,7 +188,9 @@ export async function draftContent(env, input, origin, limits) {
     const left = budget - (Date.now() - started);
     if (left < minTry) { tried.push("no time left for " + m.id); break; }
     const body = {
-      model: m.id, max_tokens: 6000, temperature: 0.4,
+      model: m.id, max_tokens: MAX_TOKENS, temperature: 0.4,
+      // OpenRouter's reasoning control; ignored by models that do not think.
+      reasoning: { effort: "low", exclude: true },
       messages: [{ role: "system", content: RULES }, { role: "user", content: prompt(input) }]
     };
     if (m.structured) body.response_format = { type: "json_schema", json_schema: { name: "workshop_page", strict: true, schema: SCHEMA } };
@@ -205,7 +209,8 @@ export async function draftContent(env, input, origin, limits) {
       if (!res.ok) { tried.push(m.id + " (" + res.status + ")"); continue; }
       const msg = out && out.choices && out.choices[0] && out.choices[0].message;
       const content = parse(msg && msg.content);
-      if (!usable(content)) { tried.push(m.id + " (incomplete draft)"); continue; }
+      const cut = out && out.choices && out.choices[0] && out.choices[0].finish_reason === "length";
+      if (!usable(content)) { tried.push(m.id + (cut ? " (ran out of length)" : " (incomplete draft)")); continue; }
       ok = true;
       return { ok: true, model: (out && out.model) || m.id, content: content };
     } catch (err) {

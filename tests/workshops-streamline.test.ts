@@ -89,8 +89,11 @@ const asked: Row[] = []
 function openRouter(url: URL, body: Row | null, headers: Row): Response {
   if (url.pathname === '/api/v1/models') return Response.json({ data: MODELS })
   if (url.pathname === '/api/v1/chat/completions') {
-    asked.push({ model: body!.model, auth: headers.Authorization, format: body!.response_format?.type, prompt: body!.messages[1].content })
-    if (body!.model === 'flaky/thinker-120b:free') return Response.json({ model: body!.model, choices: [{ message: { content: '{"summary":"too short"}' } }] })
+    asked.push({ model: body!.model, auth: headers.Authorization, format: body!.response_format?.type, prompt: body!.messages[1].content,
+      max_tokens: body!.max_tokens, reasoning: body!.reasoning })
+    // As on 12 November 2026: a reasoning model stops at the token cap mid-draft.
+    if (body!.model === 'flaky/thinker-120b:free') return Response.json({ model: body!.model,
+      choices: [{ finish_reason: 'length', message: { content: JSON.stringify(DRAFT).slice(0, 300) } }] })
     return Response.json({ model: body!.model, choices: [{ message: { content: '```json\n' + JSON.stringify(DRAFT) + '\n```' } }] })
   }
   return new Response('no', { status: 404 })
@@ -322,6 +325,10 @@ Deno.test('Generate draft content: free models only, best first, past a bad draf
   assertEquals(res.json.model, 'good/writer-70b:free', 'the incomplete draft was passed over')
   assertEquals(asked[0].auth, 'Bearer or-key')
   assertEquals(asked[0].format, 'json_schema')
+  assertEquals(asked[0].max_tokens, 14000, 'room for a whole page after any thinking')
+  assertEquals(asked[0].reasoning, { effort: 'low', exclude: true })
+  assertEquals(res.text.slice(0, 1), ' ', 'the answer is streamed, starting at once, so Cloudflare never waits 100 seconds for it')
+  assertEquals(res.json.ok, true)
   assert(asked[0].prompt.includes('Stop guessing what to charge.'), 'Workshop 01 is the model page')
   assertEquals(res.json.content.outcomes.length, 3)
   assertEquals(res.json.content.instructor, 'johnathan')

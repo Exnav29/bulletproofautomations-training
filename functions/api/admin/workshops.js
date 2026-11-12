@@ -184,11 +184,37 @@ async function calendarBeforePublish(env, admin, sid, origin) {
   return null;
 }
 
+/* A free model can take longer than Cloudflare's 100 seconds, after which the
+   browser gets Cloudflare's 524 page instead of our answer (measured on
+   12 November 2026). So the draft is streamed: headers at once, a space every
+   10 seconds while the models work, then the JSON. Leading spaces are valid
+   JSON, so the admin reads it as before. The status is 200 once streaming has
+   started; ok:false and error say what happened. */
+function streamed(work) {
+  const pipe = new TransformStream(), w = pipe.writable.getWriter(), enc = new TextEncoder();
+  const space = function () { w.write(enc.encode(" ")).catch(function () {}); };
+  space();
+  const beat = setInterval(space, 10000);
+  (async function () {
+    let text;
+    try { text = await (await work()).text(); }
+    catch (_) { text = JSON.stringify({ ok: false, error: "The draft could not be written. Nothing was changed. Try again." }); }
+    clearInterval(beat);
+    await w.write(enc.encode(text)).catch(function () {});
+    await w.close().catch(function () {});
+  })();
+  return new Response(pipe.readable, { status: 200, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
+}
+
 /* Generate draft page content (release 7). Nothing is saved here. */
 async function contentDraft(env, body, origin) {
   const title = s(body.title, 160), brief = s(body.brief, 1200);
   if (title.length < 3) return result({ ok: false, error: "Give the workshop a title first." }, 409);
   if (brief.length < 10) return result({ ok: false, error: "Write a sentence or two about what it covers." }, 409);
+  if (!env.OPENROUTER_API_KEY) return result({ ok: false, error: (await draftContent(env, {}, origin)).error }, 502);
+  return streamed(function () { return writeDraft(env, body, title, brief, origin); });
+}
+async function writeDraft(env, body, title, brief, origin) {
   const seriesSlug = s(body.series_slug, 80);
   const [ser, ex] = await Promise.all([
     seriesSlug ? rest(env, "workshop_series?select=name,positioning,intro&slug=eq." + encodeURIComponent(seriesSlug) + "&limit=1") : null,
