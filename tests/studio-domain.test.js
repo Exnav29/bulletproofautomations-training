@@ -53,3 +53,10 @@ test("one recipient and exactly matching PDF attachment with personalized detail
   assert.match(m.body, /Jane Doe Course BPA-TRN/);
   assert.equal(m.subject, "Congratulations Jane");
 });
+
+test("certificate course label avoids duplicated level", async () => {
+  const { certificateCourseLabel } = await import(file);
+  assert.equal(certificateCourseLabel("n8n Automation Studio: Intermediate", "Intermediate"), "n8n Automation Studio: Intermediate");
+  assert.equal(certificateCourseLabel("n8n Foundations", "Beginner"), "n8n Foundations — Beginner");
+  assert.equal(certificateCourseLabel("Automation Studio Intermediate", "Intermediate"), "Automation Studio Intermediate");
+});

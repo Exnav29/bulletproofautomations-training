@@ -87,3 +87,15 @@ export function emailMessage(g, snapshot, template) {
     attachment_name: g.credential_id + ".pdf",
   };
 }
+
+// Avoid repeating a level that is already part of the published course name.
+export function certificateCourseLabel(courseName, levelName) {
+  const name = String(courseName || "").trim();
+  const level = String(levelName || "").trim();
+  if (!level) return name;
+  const suffix = name.slice(-level.length).toLocaleLowerCase("en");
+  const before = name.slice(0, -level.length);
+  if (suffix === level.toLocaleLowerCase("en") &&
+      (!before || /[\s:—–-]$/.test(before))) return name;
+  return name ? name + " — " + level : level;
+}
