@@ -9,6 +9,8 @@
  *
  * Headers: _headers applies to static files only, never to a Function's
  * response, so the /workshops* rules are set here, identical to _headers.
+ * Permit Cloudflare Pages' automatically injected Web Analytics beacon;
+ * the existing connect-src 'self' allows same-origin analytics submission.
  *
  * A test-mode deployment (a test webinar key, i.e. Preview) sees test sessions
  * only, and every other deployment sees real ones only: the rule the session
@@ -24,7 +26,7 @@ export const HEADERS = {
   "X-Frame-Options": "DENY",
   "Permissions-Policy": "geolocation=(), microphone=(), camera=(), payment=(), interest-cohort=()",
   "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
-  "Content-Security-Policy": "default-src 'self'; script-src 'self' https://connect.facebook.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://www.facebook.com; font-src 'self'; connect-src 'self' https://www.facebook.com https://connect.facebook.net; form-action 'self' https://checkout.paystack.com; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests"
+  "Content-Security-Policy": "default-src 'self'; script-src 'self' https://connect.facebook.net https://static.cloudflareinsights.com/beacon.min.js; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://www.facebook.com; font-src 'self'; connect-src 'self' https://www.facebook.com https://connect.facebook.net; form-action 'self' https://checkout.paystack.com; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests"
 };
 
 // Public columns only.
