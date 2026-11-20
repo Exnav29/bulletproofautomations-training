@@ -74,7 +74,11 @@ export async function onRequestGet(context) {
   if (!page) return notFound(context);
   // Short browser cache, so an edit in the admin shows within a minute, while a
   // burst of advert traffic does not read the database once per visitor.
-  return new Response(fill(frame, page), { status: 200, headers: Object.assign({}, HEADERS, { "Cache-Control": "public, max-age=60" }) });
+  // The ASSETS-fetched shell already includes the Pages project's Analytics
+  // beacon. Preserve it and prevent a second zone-level injection into the
+  // Function's response; that second script has a different token and a
+  // versioned URL blocked by the deliberately narrow CSP.
+  return new Response(fill(frame, page), { status: 200, headers: Object.assign({}, HEADERS, { "Cache-Control": "public, max-age=60, no-transform" }) });
 }
 
 export async function onRequestHead(context) {
