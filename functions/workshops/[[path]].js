@@ -9,8 +9,8 @@
  *
  * Headers: _headers applies to static files only, never to a Function's
  * response, so the /workshops* rules are set here, identical to _headers.
- * Permit Cloudflare Pages' automatically injected Web Analytics beacon;
- * the existing connect-src 'self' allows same-origin analytics submission.
+ * Permit the Pages project's beacon and external cloudflareinsights.com
+ * reporting endpoint. Zone-level double injection is suppressed below.
  *
  * A test-mode deployment (a test webinar key, i.e. Preview) sees test sessions
  * only, and every other deployment sees real ones only: the rule the session
