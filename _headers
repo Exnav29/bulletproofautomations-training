@@ -22,8 +22,9 @@
 # The rebuild pages load no third-party application scripts; Cloudflare Pages
 # automatically injects its Web Analytics beacon after deployment. Permit only
 # the beacon script URL while retaining each page's existing strict CSP.
-# Cloudflare Pages automatic measurement posts to a same-origin endpoint, and
-# the existing connect-src 'self' allows that without a new external endpoint.
+# The Pages project's build-injected beacon sends metrics to the external
+# cloudflareinsights.com endpoint, so permit that reporting host in connect-src.
+# (Zone-level automatic injection uses a same-origin endpoint instead.)
 
 /*
   X-Content-Type-Options: nosniff
